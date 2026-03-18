@@ -1,85 +1,2020 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ImageBackground } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient'; // Renk Geçişi
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING } from '../theme';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+    Alert,
+    Dimensions,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { Audio, AVPlaybackStatus } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as DocumentPicker from 'expo-document-picker';
+import { Canvas, Circle, Line, Path, Rect, Skia } from '@shopify/react-native-skia';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
+import { SONG_LESSONS, SongLesson } from '../data/songLessons';
+import { AppSettings, getAppSettings } from '../services/appSettings';
+import PageTransitionView from '../components/PageTransitionView';
+import PremiumBackdrop from '../components/PremiumBackdrop';
+import PremiumCelebrationOverlay from '../components/PremiumCelebrationOverlay';
+import PremiumHeroStrip from '../components/PremiumHeroStrip';
+import ScreenSettingsButton from '../components/ScreenSettingsButton';
+import SkeletonBlock from '../components/SkeletonBlock';
+import { useCelebration } from '../hooks/useCelebration';
+import { detectPitchFromClip } from '../services/api';
+import { GamificationSnapshot, getGamificationSnapshot, rewardPracticeActivity } from '../services/gamification';
+import { importSongFromFiles, loadImportedSongs } from '../services/songLibrary';
+import { autoCorrelate, decodeAudioData, getNoteInfo, medianFrequency } from '../utils/pitchDetection';
+import { COLORS, SHADOWS } from '../theme';
 
-const DEMO_SONGS = [
-    { id: '1', title: 'Enter Sandman', artist: 'Metallica', difficulty: 'Hard', color: '#ef4444' }, // Kırmızı
-    { id: '2', title: 'Wonderwall', artist: 'Oasis', difficulty: 'Easy', color: '#22c55e' },       // Yeşil
-    { id: '3', title: 'Hotel California', artist: 'Eagles', difficulty: 'Medium', color: '#eab308' }, // Sarı
-    { id: '4', title: 'Smoke on the Water', artist: 'Deep Purple', difficulty: 'Easy', color: '#22c55e' },
-    { id: '5', title: 'Bohemian Rhapsody', artist: 'Queen', difficulty: 'Hard', color: '#ef4444' },
-];
+const { width } = Dimensions.get('window');
+const SCREEN_PADDING = 14;
+const SHELL_PADDING = 14;
+const LANE_WIDTH = width - (SCREEN_PADDING * 2) - (SHELL_PADDING * 2);
+const LANE_HEIGHT = 308;
+const PLAYHEAD_X = 84;
+const PIXELS_PER_SECOND = 112;
+const PERFECT_WINDOW_SEC = 0.2;
+const GOOD_WINDOW_SEC = 0.45;
+const GOOD_WEIGHT = 0.65;
+const MONO_FONT = Platform.select({ ios: 'Menlo', default: 'monospace', android: 'monospace' });
+const STRING_LABELS = ['e', 'B', 'G', 'D', 'A', 'E'];
+
+type SongPanel = 'chords' | 'tabs' | 'guide';
+
+const SONG_COLORS = {
+    backgroundA: COLORS.background,
+    backgroundB: COLORS.backgroundAlt,
+    panel: COLORS.panel,
+    panelRaised: COLORS.panelAlt,
+    rail: COLORS.panelInset,
+    railSoft: COLORS.backgroundAlt,
+    primary: COLORS.primary,
+    secondary: COLORS.secondary,
+    highlight: COLORS.accent,
+    miss: COLORS.danger,
+    text: COLORS.textStrong,
+    textDim: COLORS.textDim,
+    textMute: COLORS.text,
+    border: COLORS.pixelLine,
+};
+
+const RECORDING_OPTIONS: any = {
+    isMeteringEnabled: true,
+    android: {
+        extension: '.m4a',
+        outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+        audioEncoder: Audio.AndroidAudioEncoder.AAC,
+        sampleRate: 44100,
+        numberOfChannels: 1,
+        bitRate: 128000,
+    },
+    ios: {
+        extension: '.wav',
+        outputFormat: Audio.IOSOutputFormat.LINEARPCM,
+        audioQuality: Audio.IOSAudioQuality.MAX,
+        sampleRate: 44100,
+        numberOfChannels: 1,
+        bitRate: 128000,
+        linearPCMBitDepth: 16,
+        linearPCMIsBigEndian: false,
+        linearPCMIsFloat: false,
+    },
+    web: {
+        mimeType: 'audio/webm',
+        bitsPerSecond: 128000,
+    },
+};
+
+interface SongScore {
+    accuracy: number;
+    perfect: number;
+    good: number;
+    missed: number;
+    bestCombo: number;
+}
+
+interface HitResult {
+    label: 'PERFECT' | 'GOOD' | 'MISS';
+    color: string;
+}
+
+const CHORD_TONES: Record<string, string[]> = {
+    C: ['C', 'E', 'G'],
+    Dm: ['D', 'F', 'A'],
+    Em: ['E', 'G', 'B'],
+    F: ['F', 'A', 'C'],
+    G: ['G', 'B', 'D'],
+    Am: ['A', 'C', 'E'],
+    Bm: ['B', 'D', 'F#'],
+};
+
+const NOTE_SEQUENCE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const FLAT_EQUIVALENTS: Record<string, string> = {
+    Bb: 'A#',
+    Db: 'C#',
+    Eb: 'D#',
+    Gb: 'F#',
+    Ab: 'G#',
+    Cb: 'B',
+    Fb: 'E',
+};
+
+function withOpacity(hex: string, opacity: number) {
+    const safeOpacity = Math.max(0, Math.min(1, opacity));
+    const sanitized = hex.replace('#', '');
+    const fullHex = sanitized.length === 3
+        ? sanitized.split('').map((char) => `${char}${char}`).join('')
+        : sanitized;
+
+    const value = parseInt(fullHex, 16);
+    const r = (value >> 16) & 255;
+    const g = (value >> 8) & 255;
+    const b = value & 255;
+    return `rgba(${r}, ${g}, ${b}, ${safeOpacity})`;
+}
+
+function buildWaveBandPath(w: number, h: number, phase: number, baseline: number, amplitude: number, wavelength: number) {
+    const path = Skia.Path.Make();
+    path.moveTo(0, h);
+    path.lineTo(0, baseline);
+
+    for (let x = 0; x <= w; x += 10) {
+        const y = baseline
+            + (Math.sin((x + phase) / wavelength) * amplitude)
+            + (Math.cos((x + phase) / (wavelength * 0.64)) * amplitude * 0.35);
+        path.lineTo(x, y);
+    }
+
+    path.lineTo(w, h);
+    path.close();
+    return path;
+}
+
+function getChordColor(chord: string) {
+    const palette: Record<string, string> = {
+        C: COLORS.primary,
+        Dm: COLORS.secondary,
+        Em: COLORS.success,
+        F: COLORS.warning,
+        G: COLORS.accent,
+        Am: '#89A6FF',
+        Bm: '#95D3FF',
+    };
+
+    return palette[chord] ?? SONG_COLORS.primary;
+}
+
+function getAcceptedNotes(chord: string): string[] {
+    if (CHORD_TONES[chord]) {
+        return CHORD_TONES[chord];
+    }
+
+    const rootMatch = chord.match(/^([A-G](?:#|b)?)/);
+    if (!rootMatch) {
+        return [chord];
+    }
+
+    const rawRoot = rootMatch[1];
+    const root = FLAT_EQUIVALENTS[rawRoot] ?? rawRoot;
+    const suffix = chord.slice(rawRoot.length);
+    const rootIndex = NOTE_SEQUENCE.indexOf(root);
+    if (rootIndex === -1) {
+        return [root];
+    }
+
+    const shift = (semitones: number) => NOTE_SEQUENCE[(rootIndex + semitones + 12) % 12];
+
+    // Real songs bring richer chord names, so this gives us a useful note set even when the chord is new.
+    const isMinor = /^m(?!aj)/.test(suffix);
+    const isDiminished = suffix.includes('dim');
+    const isSuspended2 = suffix.includes('sus2');
+    const isSuspended4 = suffix.includes('sus4');
+
+    const notes = [root];
+
+    if (isSuspended2) {
+        notes.push(shift(2));
+    } else if (isSuspended4) {
+        notes.push(shift(5));
+    } else {
+        notes.push(shift(isMinor ? 3 : 4));
+    }
+
+    notes.push(shift(isDiminished ? 6 : 7));
+
+    if (suffix.includes('maj7')) {
+        notes.push(shift(11));
+    } else if (suffix.includes('7')) {
+        notes.push(shift(10));
+    }
+
+    if (suffix.includes('6')) {
+        notes.push(shift(9));
+    }
+
+    if (suffix.includes('add9') || suffix.includes('9')) {
+        notes.push(shift(2));
+    }
+
+    return [...new Set(notes)];
+}
+
+function getNoteClass(noteName: string) {
+    return noteName.replace(/-?\d+/g, '');
+}
+
+function getChordLaneY(row: number) {
+    return 82 + (row * 52);
+}
+
+function getStringY(index: number) {
+    return 62 + (index * 36);
+}
+
+function getNextTabLabel(song: SongLesson, playbackSec: number) {
+    const nextNote = song.tabNotes.find((note) => note.timeSec >= playbackSec - 0.05);
+    if (!nextNote) {
+        return '--';
+    }
+
+    return `${nextNote.fret}@${STRING_LABELS[nextNote.stringIndex]}`;
+}
 
 export default function SongScreen() {
+    const tabBarHeight = useBottomTabBarHeight();
+    const [permissionResponse, requestPermission] = Audio.usePermissions();
+    const [librarySongs, setLibrarySongs] = useState<SongLesson[]>([]);
+    const [selectedSong, setSelectedSong] = useState<SongLesson>(SONG_LESSONS[0]);
+    const [activePanel, setActivePanel] = useState<SongPanel>('chords');
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [isListening, setIsListening] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
+    const [playbackSec, setPlaybackSec] = useState(0);
+    const [perfectCount, setPerfectCount] = useState(0);
+    const [goodCount, setGoodCount] = useState(0);
+    const [missedCount, setMissedCount] = useState(0);
+    const [combo, setCombo] = useState(0);
+    const [bestCombo, setBestCombo] = useState(0);
+    const [score, setScore] = useState<SongScore | null>(null);
+    const [flashResult, setFlashResult] = useState<HitResult | null>(null);
+    const [detectedNote, setDetectedNote] = useState('--');
+    const [detectedHz, setDetectedHz] = useState<number | null>(null);
+    const [micStatus, setMicStatus] = useState('Mic idle');
+    const [usingBackendPitch, setUsingBackendPitch] = useState(false);
+    const [animationNow, setAnimationNow] = useState(Date.now());
+    const [gameSnapshot, setGameSnapshot] = useState<GamificationSnapshot | null>(null);
+    const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+    const [isBootLoading, setIsBootLoading] = useState(true);
+    const { celebration, showCelebration } = useCelebration();
+
+    const soundRef = useRef<Audio.Sound | null>(null);
+    const recordingRef = useRef<Audio.Recording | null>(null);
+    const loadedSongIdRef = useRef<string | null>(null);
+    const selectedSongRef = useRef<SongLesson>(selectedSong);
+    const judgedEventIndexesRef = useRef<Set<number>>(new Set());
+    const missedEventIndexesRef = useRef<Set<number>>(new Set());
+    const isLoopingRef = useRef(false);
+    const hasScoredRef = useRef(false);
+    const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pitchHistoryRef = useRef<number[]>([]);
+    const tickCountRef = useRef(0);
+    const pulseStartedAtRef = useRef<number | null>(null);
+    const playbackAnchorSecRef = useRef(0);
+    const playbackAnchorStampRef = useRef(Date.now());
+    const isPlayingRef = useRef(false);
+
+    const allSongs = useMemo(() => [...librarySongs, ...SONG_LESSONS], [librarySongs]);
+
+    const loadSessionPrefs = useCallback(async () => {
+        const [snapshot, settings] = await Promise.all([
+            getGamificationSnapshot(),
+            getAppSettings(),
+        ]);
+        setGameSnapshot(snapshot);
+        setAppSettings(settings);
+        setActivePanel(settings.songsPreferTabsDefault ? 'tabs' : 'chords');
+    }, []);
+
+    useEffect(() => {
+        selectedSongRef.current = selectedSong;
+    }, [selectedSong]);
+
+    useEffect(() => {
+        void (async () => {
+            if (permissionResponse?.status !== 'granted') {
+                await requestPermission();
+            }
+        })();
+
+        void (async () => {
+            try {
+                const [importedSongs] = await Promise.all([
+                    loadImportedSongs(),
+                    loadSessionPrefs(),
+                ]);
+                setLibrarySongs(importedSongs);
+            } finally {
+                setIsBootLoading(false);
+            }
+        })();
+
+        return () => {
+            void stopListening();
+            if (soundRef.current) {
+                void soundRef.current.unloadAsync();
+            }
+            if (flashTimeoutRef.current) {
+                clearTimeout(flashTimeoutRef.current);
+            }
+        };
+    }, [loadSessionPrefs]);
+
+    useFocusEffect(
+        useCallback(() => {
+            void loadSessionPrefs();
+        }, [loadSessionPrefs]),
+    );
+
+    useEffect(() => {
+        // This keeps the lane moving even between audio status updates.
+        const intervalId = setInterval(() => {
+            const now = Date.now();
+            setAnimationNow(now);
+
+            if (isPlayingRef.current) {
+                const projected = playbackAnchorSecRef.current + ((now - playbackAnchorStampRef.current) / 1000);
+                setPlaybackSec(Math.min(selectedSongRef.current.durationSec, projected));
+            }
+        }, 40);
+
+        return () => clearInterval(intervalId);
+    }, []);
+
+    useEffect(() => {
+        if (!isPlaying || activePanel !== 'chords') {
+            return;
+        }
+        markExpiredEvents(playbackSec);
+    }, [playbackSec, isPlaying, activePanel]);
+
+    useEffect(() => {
+        if (!isPlaying) {
+            return;
+        }
+
+        if (activePanel === 'chords' && !isListening && !hasScoredRef.current) {
+            void startListening();
+            return;
+        }
+
+        if (activePanel !== 'chords' && isListening) {
+            void stopListening();
+        }
+    }, [activePanel, isPlaying, isListening]);
+
+    const displayMode: Exclude<SongPanel, 'guide'> = activePanel === 'guide' ? 'tabs' : activePanel;
+    const progress = Math.min(1, playbackSec / selectedSong.durationSec);
+    const seekStepSeconds = appSettings?.songsSeekStepSeconds ?? 10;
+    const nextChord = useMemo(() => {
+        const next = selectedSong.chordEvents.find((event, index) => (
+            !judgedEventIndexesRef.current.has(index) &&
+            !missedEventIndexesRef.current.has(index) &&
+            event.timeSec >= playbackSec - 0.1
+        ));
+        return next?.chord ?? '--';
+    }, [selectedSong, playbackSec]);
+    const nextTabLabel = useMemo(() => getNextTabLabel(selectedSong, playbackSec), [selectedSong, playbackSec]);
+
+    const visibleChordEvents = selectedSong.chordEvents
+        .map((event, index) => ({ ...event, index }))
+        .filter((event) => {
+            const x = PLAYHEAD_X + ((event.timeSec - playbackSec) * PIXELS_PER_SECOND);
+            return x >= -90 && x <= LANE_WIDTH + 90;
+        });
+
+    const visibleTabNotes = selectedSong.tabNotes
+        .map((note, index) => ({ ...note, index }))
+        .filter((note) => {
+            const x = PLAYHEAD_X + ((note.timeSec - playbackSec) * PIXELS_PER_SECOND);
+            return x >= -90 && x <= LANE_WIDTH + 120;
+        });
+
+    const waveFrontPath = useMemo(
+        () => buildWaveBandPath(LANE_WIDTH, LANE_HEIGHT, animationNow / 5.6, LANE_HEIGHT - 70, 14, 30),
+        [animationNow],
+    );
+    const waveBackPath = useMemo(
+        () => buildWaveBandPath(LANE_WIDTH, LANE_HEIGHT, animationNow / 8.3, LANE_HEIGHT - 112, 20, 52),
+        [animationNow],
+    );
+
+    const rippleProgress = flashResult && pulseStartedAtRef.current
+        ? Math.min(1, (animationNow - pulseStartedAtRef.current) / 520)
+        : 1;
+
+    const engineLabel = activePanel === 'chords'
+        ? isListening
+            ? usingBackendPitch ? 'AI Assist' : 'Listening'
+            : 'Mic Idle'
+        : activePanel === 'tabs'
+            ? 'Timing Guide'
+            : 'Preview';
+
+    const engineText = activePanel === 'chords'
+        ? micStatus
+        : activePanel === 'tabs'
+            ? 'Tabs mode follows the backing track. Live scoring stays in Chords mode.'
+            : 'Guide mode shows how the lane works before you play.';
+
+    const showHitFlash = (result: HitResult) => {
+        if (flashTimeoutRef.current) {
+            clearTimeout(flashTimeoutRef.current);
+        }
+
+        pulseStartedAtRef.current = Date.now();
+        setFlashResult(result);
+
+        if (appSettings?.hapticsEnabled ?? true) {
+            if (result.label === 'PERFECT') {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            } else if (result.label === 'GOOD') {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            } else {
+                void Haptics.selectionAsync();
+            }
+        }
+
+        // Keep the flash short so it feels snappy.
+        flashTimeoutRef.current = setTimeout(() => {
+            setFlashResult(null);
+        }, 360);
+    };
+
+    const resetScoreState = () => {
+        judgedEventIndexesRef.current = new Set();
+        missedEventIndexesRef.current = new Set();
+        hasScoredRef.current = false;
+        setPerfectCount(0);
+        setGoodCount(0);
+        setMissedCount(0);
+        setCombo(0);
+        setBestCombo(0);
+        setScore(null);
+        setFlashResult(null);
+    };
+
+    const resetRunStats = () => {
+        resetScoreState();
+        pitchHistoryRef.current = [];
+        tickCountRef.current = 0;
+        playbackAnchorSecRef.current = 0;
+        playbackAnchorStampRef.current = Date.now();
+        isPlayingRef.current = false;
+        setPlaybackSec(0);
+        setDetectedNote('--');
+        setDetectedHz(null);
+        setMicStatus(activePanel === 'chords' ? 'Mic ready' : 'Timing guide ready');
+        setUsingBackendPitch(false);
+    };
+
+    const syncSongDuration = (songId: string, nextDuration: number) => {
+        if (!Number.isFinite(nextDuration) || nextDuration <= 0) {
+            return;
+        }
+
+        setSelectedSong((prev) => (prev.id === songId ? { ...prev, durationSec: nextDuration } : prev));
+        setLibrarySongs((prev) => prev.map((song) => (song.id === songId ? { ...song, durationSec: nextDuration } : song)));
+    };
+
+    const buildScore = (song: SongLesson): SongScore => {
+        const matched = perfectCount + goodCount;
+        const missed = Math.max(song.chordEvents.length - matched, 0);
+        const weightedHits = perfectCount + (goodCount * GOOD_WEIGHT);
+        const accuracy = song.chordEvents.length > 0
+            ? Math.round((weightedHits / song.chordEvents.length) * 100)
+            : 0;
+
+        return {
+            accuracy,
+            perfect: perfectCount,
+            good: goodCount,
+            missed,
+            bestCombo,
+        };
+    };
+
+    const getSongXpReward = (nextScore: SongScore | null) => {
+        if (activePanel === 'tabs') {
+            return 30;
+        }
+
+        if (!nextScore) {
+            return 24;
+        }
+
+        return Math.max(24, Math.round(28 + (nextScore.accuracy * 0.55) + (nextScore.bestCombo * 1.1)));
+    };
+
+    const prepareTrack = async (song: SongLesson) => {
+        if (loadedSongIdRef.current === song.id && soundRef.current) {
+            return;
+        }
+
+        if (soundRef.current) {
+            await soundRef.current.unloadAsync();
+            soundRef.current = null;
+        }
+
+        const { sound, status } = await Audio.Sound.createAsync(
+            song.backingTrack,
+            { shouldPlay: false, progressUpdateIntervalMillis: 40 },
+            onPlaybackStatusUpdate,
+        );
+        await sound.setProgressUpdateIntervalAsync(40);
+        soundRef.current = sound;
+        loadedSongIdRef.current = song.id;
+
+        if (status.isLoaded && status.durationMillis) {
+            syncSongDuration(song.id, status.durationMillis / 1000);
+        }
+    };
+
+    const markExpiredEvents = (currentTimeSec: number) => {
+        let newlyMissed = 0;
+
+        selectedSongRef.current.chordEvents.forEach((event, index) => {
+            if (judgedEventIndexesRef.current.has(index) || missedEventIndexesRef.current.has(index)) {
+                return;
+            }
+
+            if (currentTimeSec > event.timeSec + GOOD_WINDOW_SEC) {
+                missedEventIndexesRef.current.add(index);
+                newlyMissed += 1;
+            }
+        });
+
+        if (newlyMissed > 0) {
+            setMissedCount((prev) => prev + newlyMissed);
+            setCombo(0);
+            showHitFlash({ label: 'MISS', color: SONG_COLORS.miss });
+        }
+    };
+
+    const judgeDetectedNote = (noteClass: string) => {
+        if (!isPlaying || hasScoredRef.current || activePanel !== 'chords') {
+            return;
+        }
+
+        let bestMatchIndex = -1;
+        let bestDistance = Number.POSITIVE_INFINITY;
+
+        selectedSongRef.current.chordEvents.forEach((event, index) => {
+            if (judgedEventIndexesRef.current.has(index) || missedEventIndexesRef.current.has(index)) {
+                return;
+            }
+
+            const acceptedNotes = getAcceptedNotes(event.chord);
+            if (!acceptedNotes.includes(noteClass)) {
+                return;
+            }
+
+            const distance = Math.abs(event.timeSec - playbackSec);
+            if (distance <= GOOD_WINDOW_SEC && distance < bestDistance) {
+                bestDistance = distance;
+                bestMatchIndex = index;
+            }
+        });
+
+        if (bestMatchIndex === -1) {
+            return;
+        }
+
+        judgedEventIndexesRef.current.add(bestMatchIndex);
+
+        if (bestDistance <= PERFECT_WINDOW_SEC) {
+            setPerfectCount((prev) => prev + 1);
+            showHitFlash({ label: 'PERFECT', color: SONG_COLORS.primary });
+        } else {
+            setGoodCount((prev) => prev + 1);
+            showHitFlash({ label: 'GOOD', color: SONG_COLORS.highlight });
+        }
+
+        setCombo((prevCombo) => {
+            const nextCombo = prevCombo + 1;
+            setBestCombo((prevBest) => Math.max(prevBest, nextCombo));
+            return nextCombo;
+        });
+    };
+
+    const analyzeLocalClip = async (uri: string): Promise<number | null> => {
+        if (Platform.OS !== 'ios') {
+            return null;
+        }
+
+        try {
+            const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+            let float32Data = decodeAudioData(base64);
+            if (float32Data.length > 8192) {
+                float32Data = float32Data.slice(0, 8192);
+            }
+
+            const detectedFreq = autoCorrelate(float32Data, 44100, 55, 1100);
+            return detectedFreq > 0 ? detectedFreq : null;
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const analyzeBackendClip = async (uri: string) => {
+        const extension = Platform.OS === 'ios' ? '.wav' : '.m4a';
+        const result = await detectPitchFromClip(uri, `song-${Date.now()}${extension}`, 'Guitar');
+        if (result.status === 'success' && typeof result.frequency === 'number') {
+            return result.frequency as number;
+        }
+        return null;
+    };
+
+    const applyDetectedPitch = (frequency: number) => {
+        pitchHistoryRef.current = [...pitchHistoryRef.current.slice(-5), frequency];
+        const stableFrequency = medianFrequency(pitchHistoryRef.current) ?? frequency;
+        const noteInfo = getNoteInfo(stableFrequency);
+        const noteClass = getNoteClass(noteInfo.name);
+
+        setDetectedNote(noteInfo.name);
+        setDetectedHz(stableFrequency);
+        setMicStatus(`Hearing ${noteClass}`);
+        judgeDetectedNote(noteClass);
+    };
+
+    const analyzeLatestClip = async (uri: string) => {
+        tickCountRef.current += 1;
+
+        const preferBackendPitch = appSettings?.songsPreferBackendPitchAssist ?? true;
+        let frequency = preferBackendPitch ? await analyzeBackendClip(uri) : await analyzeLocalClip(uri);
+        let usedBackend = false;
+
+        if (preferBackendPitch) {
+            usedBackend = !!frequency;
+            if (!frequency) {
+                frequency = await analyzeLocalClip(uri);
+            }
+        } else if (!frequency || tickCountRef.current % 2 === 0) {
+            // When the local read gets shaky, the backend gives us a steadier answer.
+            const backendFrequency = await analyzeBackendClip(uri);
+            if (backendFrequency) {
+                frequency = backendFrequency;
+                usedBackend = true;
+            }
+        }
+
+        setUsingBackendPitch(usedBackend);
+
+        if (frequency) {
+            applyDetectedPitch(frequency);
+            return;
+        }
+
+        pitchHistoryRef.current = [];
+        setDetectedNote('--');
+        setDetectedHz(null);
+        setMicStatus(isPlaying ? 'Listening...' : 'Mic ready');
+    };
+
+    const tick = async () => {
+        if (!isLoopingRef.current || activePanel !== 'chords') {
+            return;
+        }
+
+        try {
+            const { recording } = await Audio.Recording.createAsync(RECORDING_OPTIONS);
+            recordingRef.current = recording;
+
+            await new Promise((resolve) => setTimeout(resolve, 180));
+
+            if (!isLoopingRef.current) {
+                try {
+                    await recording.stopAndUnloadAsync();
+                } catch (error) {
+                    // We are already stopping here.
+                }
+                return;
+            }
+
+            await recording.stopAndUnloadAsync();
+            const uri = recording.getURI();
+            if (uri) {
+                await analyzeLatestClip(uri);
+            }
+        } catch (error) {
+            setUsingBackendPitch(false);
+            setMicStatus(isPlaying ? 'Listening...' : 'Mic ready');
+        } finally {
+            recordingRef.current = null;
+            if (isLoopingRef.current && activePanel === 'chords') {
+                setTimeout(() => {
+                    void tick();
+                }, 70);
+            }
+        }
+    };
+
+    const startListening = async () => {
+        if (activePanel !== 'chords') {
+            return true;
+        }
+
+        if (isLoopingRef.current) {
+            return true;
+        }
+
+        const permission = permissionResponse?.status === 'granted'
+            ? permissionResponse
+            : await requestPermission();
+
+        if (permission.status !== 'granted') {
+            setMicStatus('Mic permission needed');
+            return false;
+        }
+
+        await Audio.setAudioModeAsync({
+            allowsRecordingIOS: true,
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: false,
+            shouldDuckAndroid: true,
+            playThroughEarpieceAndroid: false,
+        });
+
+        pitchHistoryRef.current = [];
+        tickCountRef.current = 0;
+        isLoopingRef.current = true;
+        setIsListening(true);
+        setMicStatus('Listening...');
+        void tick();
+        return true;
+    };
+
+    const stopListening = async () => {
+        isLoopingRef.current = false;
+        setIsListening(false);
+
+        if (recordingRef.current) {
+            try {
+                await recordingRef.current.stopAndUnloadAsync();
+            } catch (error) {
+                // The recorder can already be closed when we stop quickly.
+            }
+            recordingRef.current = null;
+        }
+
+        pitchHistoryRef.current = [];
+        tickCountRef.current = 0;
+        setUsingBackendPitch(false);
+
+        await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: false,
+            shouldDuckAndroid: true,
+            playThroughEarpieceAndroid: false,
+        });
+
+        setDetectedNote('--');
+        setDetectedHz(null);
+        setMicStatus('Mic idle');
+    };
+
+    const seekToTime = async (targetSec: number) => {
+        try {
+            await prepareTrack(selectedSongRef.current);
+            if (!soundRef.current) {
+                return;
+            }
+
+            const clamped = Math.max(0, Math.min(selectedSongRef.current.durationSec, targetSec));
+
+            // Seeking changes the practice point, so we clear the old score run.
+            resetScoreState();
+            playbackAnchorSecRef.current = clamped;
+            playbackAnchorStampRef.current = Date.now();
+            setPlaybackSec(clamped);
+            await soundRef.current.setPositionAsync(clamped * 1000);
+
+            if (activePanel === 'chords') {
+                if (isPlayingRef.current) {
+                    await stopListening();
+                    const micReady = await startListening();
+                    if (!micReady) {
+                        return;
+                    }
+                } else {
+                    setMicStatus('Mic ready');
+                }
+            } else {
+                setMicStatus(isPlayingRef.current ? 'Timeline moved' : 'Ready to seek');
+            }
+        } catch (error) {
+            setMicStatus('Seek missed');
+        }
+    };
+
+    const seekBy = async (deltaSec: number) => {
+        await seekToTime(playbackSec + deltaSec);
+    };
+
+    const importSong = async () => {
+        setIsImporting(true);
+
+        try {
+            const audioResult = await DocumentPicker.getDocumentAsync({
+                type: 'audio/*',
+                copyToCacheDirectory: true,
+            });
+
+            if (audioResult.canceled) {
+                return;
+            }
+
+            const chartResult = await DocumentPicker.getDocumentAsync({
+                type: ['application/json', 'text/json', 'public.json'],
+                copyToCacheDirectory: true,
+            });
+
+            if (chartResult.canceled) {
+                return;
+            }
+
+            const importedSong = await importSongFromFiles(audioResult.assets[0], chartResult.assets[0]);
+            setLibrarySongs((prev) => [importedSong, ...prev.filter((song) => song.id !== importedSong.id)]);
+            await selectSong(importedSong);
+            showCelebration({
+                title: 'Song imported',
+                subtitle: `${importedSong.title} is ready in your library.`,
+                variant: 'confetti',
+            }, 2200);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not import that song package.';
+            Alert.alert('Import failed', message);
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
+    const finishSession = async (song: SongLesson) => {
+        if (hasScoredRef.current) {
+            return;
+        }
+
+        hasScoredRef.current = true;
+        isPlayingRef.current = false;
+
+        if (soundRef.current) {
+            await soundRef.current.pauseAsync();
+        }
+
+        await stopListening();
+        setIsPlaying(false);
+        const nextScore = activePanel === 'chords' ? buildScore(song) : null;
+        setScore(nextScore);
+
+        const completionRatio = song.durationSec > 0 ? (playbackSec / song.durationSec) : 0;
+        const earnedEnoughRunTime = completionRatio >= 0.55 || playbackSec >= Math.min(song.durationSec, 45);
+        const earnedStrongScore = !!nextScore && nextScore.accuracy >= 45;
+        const shouldAwardReward = activePanel === 'tabs'
+            ? earnedEnoughRunTime
+            : earnedEnoughRunTime || earnedStrongScore;
+
+        if (!shouldAwardReward) {
+            setMicStatus('Play a bit longer to earn XP from this run');
+            return;
+        }
+
+        try {
+            const xpReward = getSongXpReward(nextScore);
+            const result = await rewardPracticeActivity(xpReward, { kind: 'song', id: song.id });
+            setGameSnapshot(result.snapshot);
+            setMicStatus(`Session complete • +${xpReward} XP`);
+
+            if (result.newBadges.length > 0) {
+                showCelebration({
+                    title: 'Badge unlocked',
+                    subtitle: result.newBadges.map((badge) => badge.title).join(' • '),
+                    variant: 'confetti',
+                }, 2200);
+            } else {
+                showCelebration({
+                    title: 'Session complete',
+                    subtitle: nextScore
+                        ? `${nextScore.accuracy}% accuracy • +${xpReward} XP`
+                        : `Playback run logged for +${xpReward} XP`,
+                    variant: nextScore && nextScore.accuracy >= 80 ? 'confetti' : 'success',
+                }, 2000);
+            }
+        } catch (error) {
+            setMicStatus('Session complete');
+        }
+    };
+
+    const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
+        if (!status.isLoaded) {
+            return;
+        }
+
+        const currentTimeSec = status.positionMillis / 1000;
+        playbackAnchorSecRef.current = currentTimeSec;
+        playbackAnchorStampRef.current = Date.now();
+        isPlayingRef.current = status.isPlaying;
+
+        if (!status.isPlaying) {
+            setPlaybackSec(currentTimeSec);
+        }
+
+        setIsPlaying(status.isPlaying);
+
+        if (status.didJustFinish) {
+            void finishSession(selectedSongRef.current);
+        }
+    };
+
+    const startFromTop = async () => {
+        resetRunStats();
+        await prepareTrack(selectedSong);
+
+        if (!soundRef.current) {
+            return;
+        }
+
+        await soundRef.current.setPositionAsync(0);
+        playbackAnchorSecRef.current = 0;
+        playbackAnchorStampRef.current = Date.now();
+        setPlaybackSec(0);
+
+        if (displayMode === 'chords') {
+            const micReady = await startListening();
+            if (!micReady) {
+                return;
+            }
+        } else {
+            await stopListening();
+            setMicStatus(activePanel === 'guide' ? 'Preview ready' : 'Timing guide ready');
+        }
+
+        await soundRef.current.playAsync();
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+    };
+
+    const resumeSong = async () => {
+        await prepareTrack(selectedSong);
+        if (!soundRef.current) {
+            return;
+        }
+
+        if (displayMode === 'chords') {
+            const micReady = await startListening();
+            if (!micReady) {
+                return;
+            }
+        } else {
+            await stopListening();
+            setMicStatus(activePanel === 'guide' ? 'Preview playing' : 'Timing guide playing');
+        }
+
+        playbackAnchorStampRef.current = Date.now();
+        await soundRef.current.playAsync();
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+    };
+
+    const togglePlayback = async () => {
+        try {
+            if (isPlaying) {
+                if (soundRef.current) {
+                    await soundRef.current.pauseAsync();
+                }
+                isPlayingRef.current = false;
+                await stopListening();
+                setIsPlaying(false);
+                setMicStatus(activePanel === 'chords' ? 'Mic ready' : 'Playback paused');
+                return;
+            }
+
+            const isFreshStart = !soundRef.current || hasScoredRef.current || score || playbackSec <= 0.02 || playbackSec >= selectedSong.durationSec - 0.08;
+            if (isFreshStart) {
+                await startFromTop();
+            } else {
+                await resumeSong();
+            }
+        } catch (error) {
+            setMicStatus('Session could not start');
+        }
+    };
+
+    const restartSong = async () => {
+        try {
+            await startFromTop();
+        } catch (error) {
+            setMicStatus('Restart missed');
+        }
+    };
+
+    const selectSong = async (song: SongLesson) => {
+        if (song.id === selectedSong.id) {
+            return;
+        }
+
+        isPlayingRef.current = false;
+
+        if (soundRef.current) {
+            await soundRef.current.unloadAsync();
+            soundRef.current = null;
+        }
+
+        await stopListening();
+        loadedSongIdRef.current = null;
+        setSelectedSong(song);
+        setIsPlaying(false);
+        setPlaybackSec(0);
+        setScore(null);
+        hasScoredRef.current = false;
+        judgedEventIndexesRef.current = new Set();
+        missedEventIndexesRef.current = new Set();
+        setCombo(0);
+        setBestCombo(0);
+        setPerfectCount(0);
+        setGoodCount(0);
+        setMissedCount(0);
+        setMicStatus(activePanel === 'chords' ? 'Mic ready' : 'Timing guide ready');
+    };
+
     return (
-        <View style={styles.container}>
-            {/* Arka Plan Gradient */}
-            <LinearGradient
-                colors={[COLORS.background, '#1a103c']} // Siyah -> koyu mor geçiş
-                style={StyleSheet.absoluteFill}
-            />
+        <LinearGradient
+            colors={[SONG_COLORS.panelRaised, SONG_COLORS.backgroundA, SONG_COLORS.backgroundB]}
+            start={{ x: 0.02, y: 0 }}
+            end={{ x: 0.98, y: 1 }}
+            style={styles.screen}
+        >
+            <PremiumBackdrop variant="song" />
+            <PageTransitionView style={styles.screen}>
+            <ScrollView
+                contentContainerStyle={[styles.container, { paddingBottom: tabBarHeight + 28 }]}
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={styles.backGlowMint} />
+                <View style={styles.backGlowAmber} />
 
-            <Text style={styles.header}>Repertuvar 🎵</Text>
+                <View style={styles.headerRow}>
+                    <View style={styles.headerTextWrap}>
+                        <Text style={styles.header}>Song Flow</Text>
+                        <Text style={styles.subHeader}>Smooth chord and tab playback with a Songsterr-style player shell.</Text>
+                    </View>
+                    <ScreenSettingsButton />
+                </View>
 
-            <FlatList
-                data={DEMO_SONGS}
-                keyExtractor={item => item.id}
-                contentContainerStyle={{ paddingBottom: 100 }} // Tab barın altında kalmasın diye boşluk
-                renderItem={({ item }) => (
-                    <TouchableOpacity activeOpacity={0.8}>
-                        <LinearGradient
-                            colors={[COLORS.cardBg, '#27272a']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.card}
-                        >
-                            {/* Sol Çizgi (Zorluk Rengi) */}
-                            <View style={[styles.indicator, { backgroundColor: item.color }]} />
+                <PremiumHeroStrip
+                    icon="disc-outline"
+                    eyebrow="Performance Mode"
+                    title="A smoother song player with a more premium stage feel."
+                    body="Chords, tabs, imports, and score tracking stay in the same place, but the entry experience now feels more intentional and more expensive."
+                    metrics={[
+                        { label: 'Songs', value: `${allSongs.length}` },
+                        { label: 'View', value: activePanel === 'guide' ? 'Guide' : activePanel === 'tabs' ? 'Tabs' : 'Chords' },
+                        { label: 'Playback', value: isPlaying ? 'Live' : 'Ready' },
+                    ]}
+                    dark
+                    colors={['#1C2529', '#243138', '#172026']}
+                />
 
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.songTitle}>{item.title}</Text>
-                                <Text style={styles.artist}>{item.artist}</Text>
+                {isBootLoading ? (
+                    <>
+                        <View style={styles.streakBanner}>
+                            <SkeletonBlock style={{ width: 112, height: 12, marginBottom: 8 }} />
+                            <SkeletonBlock style={{ width: '84%', height: 14 }} />
+                        </View>
+
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.songPickerRow}>
+                            {[0, 1, 2].map((index) => (
+                                <View key={`song-skeleton-${index}`} style={styles.songChip}>
+                                    <SkeletonBlock style={{ width: '58%', height: 15, marginBottom: 8 }} />
+                                    <SkeletonBlock style={{ width: '82%', height: 12, marginBottom: 10 }} />
+                                    <SkeletonBlock style={{ width: 54, height: 12 }} />
+                                </View>
+                            ))}
+                        </ScrollView>
+
+                        <View style={styles.playerShell}>
+                            <View style={styles.songMetaRow}>
+                                <View style={styles.songMetaMain}>
+                                    <SkeletonBlock style={{ width: 150, height: 20, marginBottom: 8 }} />
+                                    <SkeletonBlock style={{ width: 110, height: 12 }} />
+                                </View>
+                                <SkeletonBlock style={{ width: 76, height: 34 }} />
                             </View>
 
-                            <View style={styles.rightContent}>
-                                <Text style={[styles.difficulty, { color: item.color }]}>{item.difficulty}</Text>
-                                <Ionicons name="play-circle" size={32} color={COLORS.primary} style={{ marginTop: 4 }} />
+                            <View style={styles.hudRibbon}>
+                                {[0, 1, 2].map((index) => (
+                                    <View key={`hud-skeleton-${index}`} style={styles.hudPill}>
+                                        <SkeletonBlock style={{ width: 48, height: 10, marginBottom: 8 }} />
+                                        <SkeletonBlock style={{ width: 82, height: 14 }} />
+                                    </View>
+                                ))}
                             </View>
-                        </LinearGradient>
-                    </TouchableOpacity>
+
+                            <SkeletonBlock style={{ width: '100%', height: 14, marginBottom: 10 }} />
+                            <SkeletonBlock style={{ width: '100%', height: LANE_HEIGHT, marginBottom: 14 }} />
+
+                            <View style={styles.transportRow}>
+                                {Array.from({ length: 5 }).map((_, index) => (
+                                    <SkeletonBlock key={`transport-skeleton-${index}`} style={{ flex: 1, height: 46 }} />
+                                ))}
+                            </View>
+
+                            <View style={styles.statusPanel}>
+                                <SkeletonBlock style={{ width: 84, height: 26, marginBottom: 12 }} />
+                                <SkeletonBlock style={{ width: '72%', height: 18, marginBottom: 14 }} />
+                                <View style={styles.statusMetricsRow}>
+                                    {[0, 1, 2].map((index) => (
+                                        <SkeletonBlock key={`status-skeleton-${index}`} style={{ flex: 1, height: 72 }} />
+                                    ))}
+                                </View>
+                            </View>
+                        </View>
+                    </>
+                ) : (
+                <>
+                {gameSnapshot && appSettings?.songsShowStreakBanner !== false && (
+                    <View style={styles.streakBanner}>
+                        <Text style={styles.streakBannerTitle}>{gameSnapshot.streakDays}-day streak</Text>
+                        <Text style={styles.streakBannerText}>{gameSnapshot.streakMessage}</Text>
+                    </View>
                 )}
-            />
-        </View>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.songPickerRow}>
+                    <TouchableOpacity
+                        style={[styles.songChip, styles.importChip]}
+                        onPress={() => void importSong()}
+                        disabled={isImporting}
+                    >
+                        <Text style={styles.importChipTitle}>{isImporting ? 'Importing...' : 'Import Song'}</Text>
+                        <Text style={styles.importChipMeta}>Pick audio + JSON tabs/chords</Text>
+                        <Text style={styles.importChipTag}>YOUR LIBRARY</Text>
+                    </TouchableOpacity>
+
+                    {allSongs.map((song) => (
+                        <TouchableOpacity
+                            key={song.id}
+                            style={[styles.songChip, selectedSong.id === song.id && styles.songChipActive]}
+                            onPress={() => void selectSong(song)}
+                        >
+                            <Text style={styles.songChipTitle}>{song.title}</Text>
+                            <Text style={styles.songChipMeta}>
+                                {song.artist}{song.isImported ? ' • Imported' : ' • Starter'}
+                            </Text>
+                            <Text style={styles.songChipDifficulty}>{song.difficulty}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                <View style={styles.playerShell}>
+                    <View style={styles.songMetaRow}>
+                        <View style={styles.songMetaMain}>
+                            <Text style={styles.songTitle}>{selectedSong.title}</Text>
+                            <Text style={styles.songArtist}>{selectedSong.artist}</Text>
+                        </View>
+                        <View style={styles.difficultyPill}>
+                            <Text style={styles.difficultyText}>{selectedSong.difficulty}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.hudRibbon}>
+                        <View style={styles.hudPill}>
+                            <Text style={styles.hudLabel}>TIME</Text>
+                            <Text style={styles.hudValue}>{playbackSec.toFixed(1)}s / {selectedSong.durationSec.toFixed(1)}s</Text>
+                        </View>
+                        <View style={styles.hudPill}>
+                            <Text style={styles.hudLabel}>NEXT</Text>
+                            <Text style={styles.hudValue}>{displayMode === 'tabs' ? nextTabLabel : nextChord}</Text>
+                        </View>
+                        <View style={styles.hudPill}>
+                            <Text style={styles.hudLabel}>{displayMode === 'chords' ? 'COMBO' : 'NOTES'}</Text>
+                            <Text style={styles.hudValue}>{displayMode === 'chords' ? combo : selectedSong.tabNotes.length}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.seekHeaderRow}>
+                        <Text style={styles.seekHeaderText}>Tap the bar or jump with the seek buttons.</Text>
+                        <Text style={styles.seekHeaderText}>{Math.round(progress * 100)}%</Text>
+                    </View>
+                    <Pressable style={styles.seekTrack} onPress={(event) => void seekToTime((event.nativeEvent.locationX / LANE_WIDTH) * selectedSong.durationSec)}>
+                        <View style={[styles.seekFill, { width: `${progress * 100}%` }]} />
+                        <View style={[styles.seekThumb, { left: Math.max(0, Math.min(LANE_WIDTH - 16, (progress * LANE_WIDTH) - 8)) }]} />
+                    </Pressable>
+
+                    <View style={styles.segmentedRow}>
+                        {(['chords', 'tabs', 'guide'] as SongPanel[]).map((panel) => {
+                            const isActive = activePanel === panel;
+                            return (
+                                <TouchableOpacity
+                                    key={panel}
+                                    style={[styles.segmentButton, isActive && styles.segmentButtonActive]}
+                                    onPress={() => setActivePanel(panel)}
+                                >
+                                    <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
+                                        {panel.charAt(0).toUpperCase() + panel.slice(1)}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+
+                    <View style={styles.laneWrap}>
+                        <Canvas style={{ width: LANE_WIDTH, height: LANE_HEIGHT }}>
+                            <Rect x={0} y={0} width={LANE_WIDTH} height={LANE_HEIGHT} color={SONG_COLORS.panelRaised} />
+                            <Rect x={0} y={0} width={LANE_WIDTH} height={LANE_HEIGHT} color={withOpacity(SONG_COLORS.railSoft, 0.32)} />
+                            <Rect x={0} y={0} width={LANE_WIDTH} height={LANE_HEIGHT} color={withOpacity(SONG_COLORS.backgroundA, 0.16)} />
+                            <Path path={waveBackPath} color={withOpacity(SONG_COLORS.secondary, 0.12)} />
+                            <Path path={waveFrontPath} color={withOpacity(SONG_COLORS.primary, 0.18)} />
+
+                            {[0, 1, 2].map((shimmerIndex) => {
+                                const shimmerX = (((animationNow / 18) + (shimmerIndex * 180)) % (LANE_WIDTH + 160)) - 80;
+                                return (
+                                    <Rect
+                                        key={`shimmer-${shimmerIndex}`}
+                                        x={shimmerX}
+                                        y={0}
+                                        width={20}
+                                        height={LANE_HEIGHT}
+                                        color={withOpacity(SONG_COLORS.highlight, 0.04)}
+                                    />
+                                );
+                            })}
+
+                            {displayMode === 'tabs'
+                                ? [0, 1, 2, 3, 4, 5].map((stringIndex) => {
+                                    const y = getStringY(stringIndex);
+                                    return (
+                                        <Line
+                                            key={`string-${stringIndex}`}
+                                            p1={{ x: 14, y }}
+                                            p2={{ x: LANE_WIDTH - 16, y }}
+                                            color={withOpacity(SONG_COLORS.textDim, stringIndex === 0 || stringIndex === 5 ? 0.42 : 0.28)}
+                                            strokeWidth={stringIndex === 0 || stringIndex === 5 ? 2 : 1.4}
+                                        />
+                                    );
+                                })
+                                : [0, 1, 2, 3].map((laneRow) => {
+                                    const y = getChordLaneY(laneRow);
+                                    return (
+                                        <Line
+                                            key={`chord-lane-${laneRow}`}
+                                            p1={{ x: 18, y }}
+                                            p2={{ x: LANE_WIDTH - 16, y }}
+                                            color={withOpacity(SONG_COLORS.textDim, 0.18)}
+                                            strokeWidth={1.5}
+                                        />
+                                    );
+                                })}
+
+                            {displayMode === 'chords' && visibleChordEvents.map((event) => {
+                                const x = PLAYHEAD_X + ((event.timeSec - playbackSec) * PIXELS_PER_SECOND);
+                                const y = getChordLaneY(event.laneRow) + (Math.sin((animationNow / 210) + (event.index * 0.7)) * 4);
+                                const baseColor = getChordColor(event.chord);
+                                const wasHit = judgedEventIndexesRef.current.has(event.index);
+                                const wasMissed = missedEventIndexesRef.current.has(event.index);
+                                const bodyColor = wasHit
+                                    ? withOpacity(SONG_COLORS.primary, 0.2)
+                                    : wasMissed
+                                        ? withOpacity(SONG_COLORS.miss, 0.28)
+                                        : baseColor;
+
+                                return (
+                                    <React.Fragment key={`chord-shape-${selectedSong.id}-${event.index}`}>
+                                        <Rect
+                                            x={x - 34}
+                                            y={y - 18}
+                                            width={68}
+                                            height={36}
+                                            color={withOpacity(baseColor, wasHit ? 0.12 : 0.22)}
+                                        />
+                                        <Rect
+                                            x={x - 29}
+                                            y={y - 14}
+                                            width={58}
+                                            height={28}
+                                            color={bodyColor}
+                                        />
+                                    </React.Fragment>
+                                );
+                            })}
+
+                            {displayMode === 'tabs' && visibleTabNotes.map((note) => {
+                                const x = PLAYHEAD_X + ((note.timeSec - playbackSec) * PIXELS_PER_SECOND);
+                                const y = getStringY(note.stringIndex) + (Math.sin((animationNow / 250) + (note.index * 0.8)) * 2.5);
+                                const tailWidth = Math.max(18, (note.durationSec ?? 0.18) * PIXELS_PER_SECOND);
+                                const noteColor = note.fret >= 5 ? SONG_COLORS.highlight : SONG_COLORS.primary;
+
+                                return (
+                                    <React.Fragment key={`tab-shape-${selectedSong.id}-${note.index}`}>
+                                        <Rect
+                                            x={x}
+                                            y={y - 2}
+                                            width={tailWidth}
+                                            height={4}
+                                            color={withOpacity(noteColor, 0.42)}
+                                        />
+                                        <Rect
+                                            x={x - 13}
+                                            y={y - 13}
+                                            width={26}
+                                            height={26}
+                                            color={withOpacity(SONG_COLORS.panel, 0.95)}
+                                        />
+                                        <Rect
+                                            x={x - 11}
+                                            y={y - 11}
+                                            width={22}
+                                            height={22}
+                                            color={noteColor}
+                                        />
+                                    </React.Fragment>
+                                );
+                            })}
+
+                            <Rect x={PLAYHEAD_X - 10} y={0} width={20} height={LANE_HEIGHT} color={withOpacity(SONG_COLORS.primary, 0.09)} />
+                            <Rect x={PLAYHEAD_X - 2} y={14} width={4} height={LANE_HEIGHT - 28} color={SONG_COLORS.primary} />
+                            <Circle cx={PLAYHEAD_X} cy={30} r={9} color={SONG_COLORS.highlight} />
+                            <Circle cx={PLAYHEAD_X} cy={30} r={18} color={withOpacity(SONG_COLORS.highlight, 0.12)} />
+
+                            {rippleProgress < 1 && flashResult && (
+                                <>
+                                    <Circle
+                                        cx={PLAYHEAD_X}
+                                        cy={LANE_HEIGHT / 2}
+                                        r={18 + (rippleProgress * 58)}
+                                        color={withOpacity(flashResult.color, Math.max(0, 0.22 - (rippleProgress * 0.2)))}
+                                    />
+                                    <Circle
+                                        cx={PLAYHEAD_X}
+                                        cy={LANE_HEIGHT / 2}
+                                        r={8 + (rippleProgress * 34)}
+                                        color={withOpacity(flashResult.color, Math.max(0, 0.32 - (rippleProgress * 0.28)))}
+                                    />
+                                </>
+                            )}
+                        </Canvas>
+
+                        <View pointerEvents="none" style={styles.labelOverlay}>
+                            {displayMode === 'chords' && visibleChordEvents.map((event) => {
+                                const x = PLAYHEAD_X + ((event.timeSec - playbackSec) * PIXELS_PER_SECOND);
+                                const y = getChordLaneY(event.laneRow) + (Math.sin((animationNow / 210) + (event.index * 0.7)) * 4);
+                                const wasHit = judgedEventIndexesRef.current.has(event.index);
+                                const wasMissed = missedEventIndexesRef.current.has(event.index);
+
+                                return (
+                                    <Text
+                                        key={`chord-label-${selectedSong.id}-${event.index}`}
+                                        style={[
+                                            styles.chordLabel,
+                                            {
+                                                left: x - 16,
+                                                top: y - 11,
+                                                color: wasMissed ? SONG_COLORS.text : SONG_COLORS.backgroundA,
+                                            },
+                                            wasHit && styles.chordLabelHit,
+                                        ]}
+                                    >
+                                        {event.chord}
+                                    </Text>
+                                );
+                            })}
+
+                            {displayMode === 'tabs' && visibleTabNotes.map((note) => {
+                                const x = PLAYHEAD_X + ((note.timeSec - playbackSec) * PIXELS_PER_SECOND);
+                                const y = getStringY(note.stringIndex) + (Math.sin((animationNow / 250) + (note.index * 0.8)) * 2.5);
+
+                                return (
+                                    <Text
+                                        key={`tab-label-${selectedSong.id}-${note.index}`}
+                                        style={[
+                                            styles.tabLabel,
+                                            {
+                                                left: x - 7,
+                                                top: y - 9,
+                                            },
+                                        ]}
+                                    >
+                                        {note.fret}
+                                    </Text>
+                                );
+                            })}
+
+                            {displayMode === 'tabs' && (
+                                <View style={styles.stringLegendWrap}>
+                                    {STRING_LABELS.map((label, index) => (
+                                        <Text
+                                            key={`legend-${label}`}
+                                            style={[styles.stringLegend, { top: getStringY(index) - 8 }]}
+                                        >
+                                            {label}
+                                        </Text>
+                                    ))}
+                                </View>
+                            )}
+
+                            {activePanel === 'guide' && (
+                                <View style={styles.guideOverlayCard}>
+                                    <Text style={styles.guideOverlayTitle}>Read the line, then play into it</Text>
+                                    <Text style={styles.guideOverlayText}>Chords mode listens and scores.</Text>
+                                    <Text style={styles.guideOverlayText}>Tabs mode scrolls the frets cleanly with the track.</Text>
+                                </View>
+                            )}
+
+                            {flashResult && activePanel !== 'guide' && (
+                                <View style={styles.flashBadge}>
+                                    <Text style={[styles.flashText, { color: flashResult.color }]}>{flashResult.label}</Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={styles.transportRow}>
+                        <TouchableOpacity
+                            style={[styles.transportButton, styles.transportPrimary]}
+                            onPress={() => void togglePlayback()}
+                        >
+                            <Text style={styles.transportPrimaryText}>{isPlaying ? 'Pause' : 'Play'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.transportButton}
+                            onPress={() => void restartSong()}
+                        >
+                            <Text style={styles.transportText}>Restart</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.transportButton}
+                            onPress={() => void seekBy(-seekStepSeconds)}
+                        >
+                            <Text style={styles.transportText}>-{seekStepSeconds}s</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.transportButton}
+                            onPress={() => void seekBy(seekStepSeconds)}
+                        >
+                            <Text style={styles.transportText}>+{seekStepSeconds}s</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.transportButton}
+                            onPress={() => void finishSession(selectedSong)}
+                        >
+                            <Text style={styles.transportText}>Finish</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.statusPanel}>
+                        <View style={styles.statusHeadRow}>
+                            <View style={styles.enginePill}>
+                                <Text style={styles.enginePillText}>{engineLabel}</Text>
+                            </View>
+                            {activePanel === 'chords' && (
+                                <Text style={styles.statusMiniText}>{detectedHz ? `${detectedHz.toFixed(1)} Hz` : 'Waiting for a clean read'}</Text>
+                            )}
+                            {activePanel === 'tabs' && (
+                                <Text style={styles.statusMiniText}>Live scoring stays in Chords mode.</Text>
+                            )}
+                        </View>
+
+                        <Text style={styles.statusTitle}>{engineText}</Text>
+
+                        <View style={styles.statusMetricsRow}>
+                            <View style={styles.statusMetricBox}>
+                                <Text style={styles.statusMetricLabel}>{activePanel === 'tabs' ? 'NEXT TAB' : 'NEXT CHORD'}</Text>
+                                <Text style={styles.statusMetricValue}>{displayMode === 'tabs' ? nextTabLabel : nextChord}</Text>
+                            </View>
+                            <View style={styles.statusMetricBox}>
+                                <Text style={styles.statusMetricLabel}>{activePanel === 'chords' ? 'HEARD' : 'MODE'}</Text>
+                                <Text style={styles.statusMetricValue}>{activePanel === 'chords' ? detectedNote : activePanel === 'tabs' ? 'Guided' : 'Preview'}</Text>
+                            </View>
+                            <View style={styles.statusMetricBox}>
+                                <Text style={styles.statusMetricLabel}>{activePanel === 'chords' ? 'BEST' : 'TRACK'}</Text>
+                                <Text style={styles.statusMetricValue}>{activePanel === 'chords' ? `${bestCombo}` : `${selectedSong.durationSec}s`}</Text>
+                            </View>
+                        </View>
+
+                        {activePanel === 'chords' && score && (
+                            <View style={styles.scoreStrip}>
+                                <Text style={styles.scoreStripText}>{score.accuracy}%</Text>
+                                <Text style={styles.scoreStripMeta}>Perfect {score.perfect} • Good {score.good} • Missed {score.missed}</Text>
+                            </View>
+                        )}
+
+                        {activePanel === 'guide' && (
+                            <View style={styles.guideList}>
+                                <Text style={styles.guideLine}>1. Chords = live mic scoring and combo tracking.</Text>
+                                <Text style={styles.guideLine}>2. Tabs = six-string timing view with fret markers and sustain tails.</Text>
+                                <Text style={styles.guideLine}>3. Hit when the note crosses the mint line on the left.</Text>
+                                <Text style={styles.guideLine}>4. Import uses two files: one audio file and one JSON file with chordEvents and tabNotes.</Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+                </>
+                )}
+            </ScrollView>
+            </PageTransitionView>
+            <PremiumCelebrationOverlay {...celebration} />
+        </LinearGradient>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, paddingTop: 60, paddingHorizontal: SPACING.m },
-    header: { color: COLORS.text, fontSize: 32, fontWeight: 'bold', marginBottom: SPACING.l },
-    card: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: SPACING.m,
-        borderRadius: 16,
-        marginBottom: SPACING.m,
-        // Hafif gölge
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4.65,
-        elevation: 8,
-        overflow: 'hidden' // Indicator taşmasın diye
+    screen: {
+        flex: 1,
     },
-    indicator: {
-        width: 4,
-        height: '200%', // Kartın boyunu aşsın
+    container: {
+        paddingTop: 54,
+        paddingHorizontal: SCREEN_PADDING,
+    },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    headerTextWrap: {
+        flex: 1,
+    },
+    backGlowMint: {
+        position: 'absolute',
+        top: 120,
+        left: -50,
+        width: 180,
+        height: 180,
+        borderRadius: 90,
+        backgroundColor: withOpacity(SONG_COLORS.primary, 0.12),
+    },
+    backGlowAmber: {
+        position: 'absolute',
+        top: 28,
+        right: -44,
+        width: 220,
+        height: 220,
+        borderRadius: 110,
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.08),
+    },
+    header: {
+        color: SONG_COLORS.text,
+        fontSize: 32,
+        fontWeight: '900',
+        letterSpacing: 0.4,
+    },
+    subHeader: {
+        color: SONG_COLORS.textDim,
+        marginTop: 3,
+        marginBottom: 12,
+        fontSize: 12,
+        fontWeight: '600',
+        lineHeight: 18,
+    },
+    streakBanner: {
+        marginBottom: 12,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.primary, 0.08),
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        ...SHADOWS.soft,
+    },
+    streakBannerTitle: {
+        color: SONG_COLORS.primary,
+        fontSize: 12,
+        fontWeight: '900',
+        marginBottom: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+    },
+    streakBannerText: {
+        color: SONG_COLORS.text,
+        fontSize: 13,
+        lineHeight: 19,
+    },
+    songPickerRow: {
+        gap: 10,
+        paddingBottom: 12,
+    },
+    songChip: {
+        minWidth: 156,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.95),
+        paddingHorizontal: 13,
+        paddingVertical: 13,
+        ...SHADOWS.soft,
+    },
+    songChipActive: {
+        borderColor: SONG_COLORS.primary,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.98),
+        shadowColor: SONG_COLORS.primary,
+        shadowOpacity: 0.18,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 0 },
+    },
+    importChip: {
+        borderColor: withOpacity(SONG_COLORS.secondary, 0.3),
+        backgroundColor: withOpacity(SONG_COLORS.secondary, 0.08),
+    },
+    songChipTitle: {
+        color: SONG_COLORS.text,
+        fontWeight: '800',
+        fontSize: 14,
+    },
+    songChipMeta: {
+        color: SONG_COLORS.textDim,
+        fontSize: 11,
+        marginTop: 3,
+    },
+    songChipDifficulty: {
+        color: SONG_COLORS.highlight,
+        fontSize: 10,
+        marginTop: 7,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+    },
+    importChipTitle: {
+        color: SONG_COLORS.secondary,
+        fontWeight: '900',
+        fontSize: 14,
+    },
+    importChipMeta: {
+        color: SONG_COLORS.textDim,
+        fontSize: 11,
+        marginTop: 4,
+        lineHeight: 16,
+    },
+    importChipTag: {
+        color: SONG_COLORS.text,
+        fontSize: 10,
+        marginTop: 7,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+    },
+    playerShell: {
+        borderRadius: 28,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.96),
+        padding: 16,
+        marginBottom: 16,
+        overflow: 'hidden',
+        ...SHADOWS.card,
+    },
+    songMetaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    songMetaMain: {
+        flex: 1,
+        paddingRight: 10,
+    },
+    songTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 24,
+        fontWeight: '900',
+        letterSpacing: 0.4,
+    },
+    songArtist: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        marginTop: 2,
+        fontWeight: '600',
+    },
+    difficultyPill: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.primary, 0.25),
+        backgroundColor: withOpacity(SONG_COLORS.primary, 0.1),
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+    },
+    difficultyText: {
+        color: SONG_COLORS.primary,
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+    },
+    hudRibbon: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 12,
+        marginBottom: 12,
+    },
+    hudPill: {
+        flex: 1,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.94),
+        paddingHorizontal: 10,
+        paddingVertical: 9,
+        ...SHADOWS.soft,
+    },
+    hudLabel: {
+        color: SONG_COLORS.textMute,
+        fontSize: 10,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+    },
+    hudValue: {
+        color: SONG_COLORS.text,
+        fontSize: 13,
+        fontWeight: '800',
+        marginTop: 3,
+    },
+    segmentedRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 12,
+    },
+    seekHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    seekHeaderText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    seekTrack: {
+        width: LANE_WIDTH,
+        height: 14,
+        borderRadius: 999,
+        backgroundColor: withOpacity(SONG_COLORS.rail, 0.95),
+        marginBottom: 12,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+    },
+    seekFill: {
         position: 'absolute',
         left: 0,
+        top: 0,
+        bottom: 0,
+        backgroundColor: withOpacity(SONG_COLORS.secondary, 0.4),
     },
-    songTitle: { color: COLORS.text, fontSize: 18, fontWeight: 'bold', marginLeft: SPACING.s },
-    artist: { color: COLORS.textDim, fontSize: 14, marginTop: 4, marginLeft: SPACING.s },
-    rightContent: { alignItems: 'flex-end' },
-    difficulty: { fontSize: 12, fontWeight: 'bold' }
+    seekThumb: {
+        position: 'absolute',
+        top: -1,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: SONG_COLORS.primary,
+        borderWidth: 2,
+        borderColor: SONG_COLORS.panel,
+    },
+    segmentButton: {
+        flex: 1,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.72),
+        paddingVertical: 11,
+        alignItems: 'center',
+        ...SHADOWS.soft,
+    },
+    segmentButtonActive: {
+        borderColor: SONG_COLORS.primary,
+        backgroundColor: withOpacity(SONG_COLORS.primary, 0.12),
+    },
+    segmentText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        fontWeight: '800',
+    },
+    segmentTextActive: {
+        color: SONG_COLORS.text,
+    },
+    laneWrap: {
+        borderRadius: 22,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: SONG_COLORS.panelRaised,
+        ...SHADOWS.card,
+    },
+    labelOverlay: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    chordLabel: {
+        position: 'absolute',
+        width: 32,
+        textAlign: 'center',
+        fontWeight: '900',
+        fontSize: 12,
+    },
+    chordLabelHit: {
+        color: SONG_COLORS.backgroundA,
+    },
+    tabLabel: {
+        position: 'absolute',
+        width: 16,
+        textAlign: 'center',
+        color: SONG_COLORS.backgroundA,
+        fontWeight: '900',
+        fontSize: 12,
+        fontFamily: MONO_FONT,
+    },
+    stringLegendWrap: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    stringLegend: {
+        position: 'absolute',
+        left: 12,
+        color: SONG_COLORS.textMute,
+        fontSize: 11,
+        fontWeight: '800',
+        fontFamily: MONO_FONT,
+    },
+    guideOverlayCard: {
+        position: 'absolute',
+        left: 88,
+        right: 22,
+        top: 98,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.primary, 0.3),
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.9),
+        padding: 16,
+        ...SHADOWS.soft,
+    },
+    guideOverlayTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 18,
+        fontWeight: '900',
+    },
+    guideOverlayText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        marginTop: 5,
+        lineHeight: 18,
+        fontWeight: '600',
+    },
+    flashBadge: {
+        position: 'absolute',
+        top: 14,
+        right: 14,
+        borderRadius: 999,
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.88),
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        ...SHADOWS.soft,
+    },
+    flashText: {
+        fontSize: 12,
+        fontWeight: '900',
+        letterSpacing: 1,
+    },
+    transportRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 12,
+    },
+    transportButton: {
+        flex: 1,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.9),
+        paddingVertical: 12,
+        alignItems: 'center',
+        ...SHADOWS.soft,
+    },
+    transportPrimary: {
+        borderColor: withOpacity(SONG_COLORS.secondary, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.secondary, 0.12),
+    },
+    transportText: {
+        color: SONG_COLORS.text,
+        fontSize: 12,
+        fontWeight: '800',
+    },
+    transportPrimaryText: {
+        color: SONG_COLORS.secondary,
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    statusPanel: {
+        marginTop: 12,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.94),
+        padding: 12,
+        ...SHADOWS.soft,
+    },
+    statusHeadRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    enginePill: {
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        backgroundColor: withOpacity(SONG_COLORS.secondary, 0.12),
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.secondary, 0.3),
+    },
+    enginePillText: {
+        color: SONG_COLORS.secondary,
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
+    },
+    statusMiniText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 11,
+        fontWeight: '600',
+        marginLeft: 10,
+        flex: 1,
+        textAlign: 'right',
+    },
+    statusTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 15,
+        fontWeight: '800',
+        marginTop: 10,
+        lineHeight: 22,
+    },
+    statusMetricsRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 12,
+    },
+    statusMetricBox: {
+        flex: 1,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.86),
+        paddingHorizontal: 10,
+        paddingVertical: 9,
+        ...SHADOWS.soft,
+    },
+    statusMetricLabel: {
+        color: SONG_COLORS.textMute,
+        fontSize: 10,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+    },
+    statusMetricValue: {
+        color: SONG_COLORS.text,
+        fontSize: 13,
+        fontWeight: '800',
+        marginTop: 4,
+    },
+    scoreStrip: {
+        marginTop: 12,
+        borderRadius: 14,
+        paddingHorizontal: 12,
+        paddingVertical: 11,
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.11),
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.24),
+        alignItems: 'center',
+        ...SHADOWS.soft,
+    },
+    scoreStripText: {
+        color: SONG_COLORS.highlight,
+        fontSize: 28,
+        fontWeight: '900',
+    },
+    scoreStripMeta: {
+        color: SONG_COLORS.text,
+        fontSize: 12,
+        fontWeight: '700',
+        marginTop: 2,
+        textAlign: 'center',
+    },
+    guideList: {
+        marginTop: 12,
+        gap: 8,
+    },
+    guideLine: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        lineHeight: 18,
+        fontWeight: '600',
+    },
 });

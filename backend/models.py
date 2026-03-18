@@ -2,19 +2,19 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import List, Optional
 
-# --- KULLANICI MODELİ (Roadmap Gün 10 - Users) ---
+# User profile data
 class UserProfile(BaseModel):
     email: str
     instrument: str  # 'guitar', 'piano', 'drums'
-    level: int = 1   # Varsayılan başlangıç seviyesi
-    xp: int = 0      # Varsayılan puan
+    level: int = 1   # starting level
+    xp: int = 0      # starting points
 
-# --- TRAFİK VERİ MODELİ (Roadmap Gün 7 - TrafficData) ---
-# Bunu da buraya ekliyoruz ki yapımız hazır olsun.
+# Marker for a specific moment in a song
 class TrafficMarker(BaseModel):
     time: float
     label: str
 
+# Full analysis data for a song
 class TrafficData(BaseModel):
     filename: str
     bpm: float

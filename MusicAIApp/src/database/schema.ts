@@ -1,9 +1,9 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb'
 
 export const mySchema = appSchema({
-    version: 1, // Veritabanı versiyonu (Değişiklik yapınca artıracağız)
+    version: 1,
     tables: [
-        // 1. Şarkılar Tablosu
+        // Songs table
         tableSchema({
             name: 'songs',
             columns: [
@@ -11,10 +11,10 @@ export const mySchema = appSchema({
                 { name: 'artist', type: 'string' },
                 { name: 'duration', type: 'number' },
                 { name: 'is_analyzed', type: 'boolean' },
-                { name: 'created_at', type: 'number' }, // Tarihleri sayı (timestamp) olarak tutarız
+                { name: 'created_at', type: 'number' },
             ],
         }),
-        // 2. Kullanıcı İlerleme Tablosu
+        // User progress table
         tableSchema({
             name: 'progress',
             columns: [

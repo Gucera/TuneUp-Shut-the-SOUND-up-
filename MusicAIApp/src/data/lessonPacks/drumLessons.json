@@ -1,0 +1,322 @@
+[
+  {
+    "id": "drm-01-setup-grip",
+    "instrument": "Drums",
+    "tier": "Beginner",
+    "title": "Setup and Stick Grip",
+    "subtitle": "Good drumming starts with balance, not force.",
+    "durationMin": 18,
+    "goal": "Set throne height, relaxed grip, and a centered stroke path so the kit feels comfortable.",
+    "focusTags": [
+      "setup",
+      "grip",
+      "relaxation"
+    ],
+    "warmup": [
+      "Sit tall with feet planted and shoulders soft.",
+      "Bounce each stick lightly on the snare without squeezing."
+    ],
+    "lessonSteps": [
+      "Check that the stick pivots instead of getting trapped.",
+      "Play single hits on snare, hi-hat, and kick with equal control.",
+      "Keep motion compact and repeatable."
+    ],
+    "practiceLoop": [
+      "One minute per surface, then one minute alternating between them.",
+      "Reset posture if the shoulders creep up."
+    ],
+    "coachNotes": [
+      "Loose hands create consistent rebound.",
+      "Comfort first, speed later."
+    ],
+    "checkpoint": "The kit feels balanced and your hands stay relaxed while playing basic hits."
+  },
+  {
+    "id": "drm-02-single-strokes",
+    "instrument": "Drums",
+    "tier": "Beginner",
+    "title": "Single Stroke Grid",
+    "subtitle": "Build the basic engine for every future groove.",
+    "durationMin": 20,
+    "goal": "Develop even right-left stick motion and dynamic consistency with single strokes.",
+    "focusTags": [
+      "rudiments",
+      "single strokes",
+      "evenness"
+    ],
+    "warmup": [
+      "Play R-L-R-L on the snare at a slow tempo.",
+      "Match the sound of both hands closely."
+    ],
+    "lessonSteps": [
+      "Move the pattern to hi-hat and then toms.",
+      "Accent every fourth note without speeding up.",
+      "Finish with one minute of soft singles and one minute of medium singles."
+    ],
+    "practiceLoop": [
+      "Three rounds of one minute playing, 20 seconds rest.",
+      "Last round: count out loud the whole time."
+    ],
+    "coachNotes": [
+      "Even strokes sound professional immediately.",
+      "Stay relaxed enough that rebound does the work."
+    ],
+    "checkpoint": "Both hands sound matched through a full minute of singles."
+  },
+  {
+    "id": "drm-03-backbeat-foundation",
+    "instrument": "Drums",
+    "tier": "Beginner",
+    "title": "Backbeat Foundation",
+    "subtitle": "Lock in the basic beat that powers countless songs.",
+    "durationMin": 22,
+    "goal": "Play a steady eighth-note hi-hat groove with snare on 2 and 4 and consistent kick placement.",
+    "focusTags": [
+      "groove",
+      "backbeat",
+      "time"
+    ],
+    "warmup": [
+      "Count 1-and-2-and-3-and-4-and while tapping hi-hat.",
+      "Add snare only on 2 and 4."
+    ],
+    "lessonSteps": [
+      "Introduce kick on 1 and 3 first.",
+      "Keep the hi-hat volume steady even when the kick enters.",
+      "Play without fills or extra notes."
+    ],
+    "practiceLoop": [
+      "Run the groove for 2 minutes without stopping.",
+      "Repeat once and focus only on stronger time feel."
+    ],
+    "coachNotes": [
+      "The hi-hat is the ruler of the groove.",
+      "If the beat wobbles, simplify and rebuild."
+    ],
+    "checkpoint": "Your backbeat stays centered and even for two full minutes."
+  },
+  {
+    "id": "drm-04-hi-hat-control",
+    "instrument": "Drums",
+    "tier": "Beginner",
+    "title": "Hi-Hat Control",
+    "subtitle": "Teach the hands and foot to share the groove.",
+    "durationMin": 22,
+    "goal": "Control hi-hat openness, tight chick sounds, and basic hand-foot coordination.",
+    "focusTags": [
+      "hi-hat",
+      "foot control",
+      "coordination"
+    ],
+    "warmup": [
+      "Close the hi-hat cleanly with the foot only.",
+      "Alternate closed eighth notes with one short open note."
+    ],
+    "lessonSteps": [
+      "Place the open hi-hat on the and of 4 and close it on 1.",
+      "Keep snare backbeats strong while the foot closes the hats.",
+      "Avoid washing over the groove with too much open sound."
+    ],
+    "practiceLoop": [
+      "8 bars closed hats, 8 bars one open accent, repeat four times.",
+      "Finish with one recorded pass."
+    ],
+    "coachNotes": [
+      "Small hi-hat details make grooves feel much more polished.",
+      "The open sound should be a choice, not an accident."
+    ],
+    "checkpoint": "You can place one controlled open hi-hat accent and close it cleanly."
+  },
+  {
+    "id": "drm-05-kick-consistency",
+    "instrument": "Drums",
+    "tier": "Beginner",
+    "title": "Kick Consistency",
+    "subtitle": "Make the low end dependable.",
+    "durationMin": 20,
+    "goal": "Strengthen kick timing and volume so the groove feels grounded instead of random.",
+    "focusTags": [
+      "kick drum",
+      "consistency",
+      "pulse"
+    ],
+    "warmup": [
+      "Play quarter notes on the kick alone.",
+      "Match the volume of every note as closely as possible."
+    ],
+    "lessonSteps": [
+      "Add hi-hat eighth notes over the kick pulse.",
+      "Place extra kick notes on simple offbeats without flamming.",
+      "Return to the basic pulse and compare the feel."
+    ],
+    "practiceLoop": [
+      "One minute basic pulse, one minute simple pattern, repeat three times.",
+      "Rest if the leg tightens up."
+    ],
+    "coachNotes": [
+      "Consistency beats cleverness.",
+      "Strong kick control makes every groove feel more expensive."
+    ],
+    "checkpoint": "The kick lands evenly and supports the groove without rushing."
+  },
+  {
+    "id": "drm-06-ghost-note-entry",
+    "instrument": "Drums",
+    "tier": "Early Intermediate",
+    "title": "Ghost Note Entry",
+    "subtitle": "Add detail without disturbing the pocket.",
+    "durationMin": 24,
+    "goal": "Use very soft snare ghost notes between backbeats while keeping the main pulse clear.",
+    "focusTags": [
+      "ghost notes",
+      "dynamics",
+      "pocket"
+    ],
+    "warmup": [
+      "Play loud snare on 2 and 4 only first.",
+      "Tap tiny ghost notes on the snare while whisper-counting the subdivision."
+    ],
+    "lessonSteps": [
+      "Keep the contrast between ghost notes and backbeats obvious.",
+      "Add the kick and hi-hat only after the snare balance feels right.",
+      "Treat ghost notes like texture, not extra backbeats."
+    ],
+    "practiceLoop": [
+      "Play an 8-bar groove with ghost notes, then 8 bars without.",
+      "Notice how the pocket changes."
+    ],
+    "coachNotes": [
+      "Ghost notes should feel like seasoning.",
+      "If they distract from the groove, they are too loud or too busy."
+    ],
+    "checkpoint": "Your ghost notes add motion without weakening beats 2 and 4."
+  },
+  {
+    "id": "drm-07-fill-construction",
+    "instrument": "Drums",
+    "tier": "Early Intermediate",
+    "title": "Fill Construction",
+    "subtitle": "Build fills that lead back into the groove cleanly.",
+    "durationMin": 24,
+    "goal": "Create short fills that keep time and return to beat 1 without panic.",
+    "focusTags": [
+      "fills",
+      "transitions",
+      "form"
+    ],
+    "warmup": [
+      "Count one full bar of groove plus one beat of fill.",
+      "Play simple 8th-note fills on snare and toms only."
+    ],
+    "lessonSteps": [
+      "Keep the subdivision identical between groove and fill.",
+      "Start with one-beat fills before trying two-beat fills.",
+      "Crash back into beat 1 with intention and balance."
+    ],
+    "practiceLoop": [
+      "Four bars groove, one-beat fill, repeat for 10 cycles.",
+      "Then try a second fill choice and compare which lands cleaner."
+    ],
+    "coachNotes": [
+      "A simple fill that lands is better than a flashy fill that derails the band.",
+      "Always know where beat 1 is."
+    ],
+    "checkpoint": "You can insert short fills without losing the pulse."
+  },
+  {
+    "id": "drm-08-shuffle-feel",
+    "instrument": "Drums",
+    "tier": "Intermediate",
+    "title": "Shuffle Feel",
+    "subtitle": "Teach the groove to lean and swing.",
+    "durationMin": 26,
+    "goal": "Play a basic shuffle with triplet subdivision awareness and confident backbeat placement.",
+    "focusTags": [
+      "shuffle",
+      "triplets",
+      "feel"
+    ],
+    "warmup": [
+      "Say trip-let trip-let while tapping the hi-hat.",
+      "Play the long-short shuffle subdivision on one surface first."
+    ],
+    "lessonSteps": [
+      "Add snare on 2 and 4 with a relaxed bounce.",
+      "Introduce a simple kick pattern that supports the swing feel.",
+      "Keep the shuffle skipping forward instead of dragging."
+    ],
+    "practiceLoop": [
+      "Two minutes hi-hat only, then two minutes full groove.",
+      "Finish with one recorded take."
+    ],
+    "coachNotes": [
+      "Shuffle comes from internal subdivision more than from the limbs.",
+      "Let the groove bounce."
+    ],
+    "checkpoint": "Your shuffle groove feels swung instead of straight."
+  },
+  {
+    "id": "drm-09-linear-groove-basics",
+    "instrument": "Drums",
+    "tier": "Intermediate",
+    "title": "Linear Groove Basics",
+    "subtitle": "Learn to make space inside busy patterns.",
+    "durationMin": 28,
+    "goal": "Build simple linear grooves where no two limbs hit together and the flow still feels musical.",
+    "focusTags": [
+      "linear grooves",
+      "coordination",
+      "spacing"
+    ],
+    "warmup": [
+      "Play single strokes moving between hi-hat, snare, and kick.",
+      "Keep every note the same subdivision at first."
+    ],
+    "lessonSteps": [
+      "Arrange a short pattern where each limb takes one slot at a time.",
+      "Repeat the phrase until it loops cleanly.",
+      "Add one accent to give the pattern shape."
+    ],
+    "practiceLoop": [
+      "Loop one linear phrase for 3 minutes.",
+      "Then return to a basic backbeat and notice how much easier it feels."
+    ],
+    "coachNotes": [
+      "Linear grooves only sound good when the spacing is confident.",
+      "Do not rush the kick notes into the next beat."
+    ],
+    "checkpoint": "You can repeat one simple linear groove without collisions or timing drift."
+  },
+  {
+    "id": "drm-10-song-form-drummer",
+    "instrument": "Drums",
+    "tier": "Intermediate",
+    "title": "Song Form Drummer",
+    "subtitle": "Practice making a whole arrangement feel intentional.",
+    "durationMin": 30,
+    "goal": "Use groove choices, fills, and dynamics to shape intro, verse, chorus, bridge, and outro.",
+    "focusTags": [
+      "song form",
+      "arrangement",
+      "musicality"
+    ],
+    "warmup": [
+      "Map a simple song form on paper before playing.",
+      "Choose one main groove and one bigger chorus groove."
+    ],
+    "lessonSteps": [
+      "Keep the verse restrained and the chorus more open.",
+      "Use fills only to point at transitions.",
+      "End the song cleanly instead of trailing off."
+    ],
+    "practiceLoop": [
+      "Play the full form twice and adjust only one section at a time.",
+      "Record the second take and check whether each section feels different."
+    ],
+    "coachNotes": [
+      "The drummer tells the band how the section should feel.",
+      "Big music comes from section contrast, not nonstop activity."
+    ],
+    "checkpoint": "You can shape a full song form with clear dynamic changes and transitions."
+  }
+]

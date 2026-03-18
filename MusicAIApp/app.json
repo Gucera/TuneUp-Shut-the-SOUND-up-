@@ -39,7 +39,8 @@
         {
           "microphonePermission": "Gitarını ve çaldığın notaları duymak için mikrofon iznine ihtiyacımız var."
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

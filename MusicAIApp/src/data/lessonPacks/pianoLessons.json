@@ -1,0 +1,642 @@
+[
+  {
+    "id": "pn-01-posture-hand-shape",
+    "instrument": "Piano",
+    "tier": "Beginner",
+    "title": "Posture and Hand Shape",
+    "subtitle": "A premium piano sound starts before the first note.",
+    "durationMin": 20,
+    "goal": "Build bench position, relaxed shoulders, curved fingers, and a calm wrist.",
+    "focusTags": [
+      "posture",
+      "hand shape",
+      "touch"
+    ],
+    "warmup": [
+      "Sit so the elbows are slightly in front of the torso.",
+      "Drop the hand onto five neighboring keys and let the fingers stay rounded."
+    ],
+    "lessonSteps": [
+      "Play five-note patterns slowly with each hand alone.",
+      "Check that the wrist floats instead of collapsing.",
+      "Listen for even tone from finger 1 to finger 5."
+    ],
+    "practiceLoop": [
+      "One minute right hand, one minute left hand, repeat three times.",
+      "Finish by playing both hands softly together."
+    ],
+    "coachNotes": [
+      "Comfort creates consistency at the piano.",
+      "If the knuckles flatten, reset before repeating."
+    ],
+    "checkpoint": "Both hands can play a five-note pattern with balanced tone."
+  },
+  {
+    "id": "pn-02-keyboard-geography",
+    "instrument": "Piano",
+    "tier": "Beginner",
+    "title": "Keyboard Geography",
+    "subtitle": "Learn the map so reading and improvising become easier.",
+    "durationMin": 18,
+    "goal": "Find all C, F, and G notes quickly and understand the black-key groups across the keyboard.",
+    "focusTags": [
+      "keyboard map",
+      "note names",
+      "orientation"
+    ],
+    "warmup": [
+      "Point to every two-black-key group and name the C beside it.",
+      "Do the same for F near each three-black-key group."
+    ],
+    "lessonSteps": [
+      "Play C, F, and G in several octaves with one finger.",
+      "Say the note name before touching the key.",
+      "Keep the eyes moving ahead of the hand."
+    ],
+    "practiceLoop": [
+      "60 seconds finding C, then F, then G.",
+      "Finish with a slow walk from low C to high C."
+    ],
+    "coachNotes": [
+      "Fast orientation saves mental energy later.",
+      "Use landmarks, not guesswork."
+    ],
+    "checkpoint": "You can locate C, F, and G anywhere on the keyboard on demand."
+  },
+  {
+    "id": "pn-03-five-finger-control",
+    "instrument": "Piano",
+    "tier": "Beginner",
+    "title": "Five-Finger Control",
+    "subtitle": "Make each finger useful instead of relying on the easy ones.",
+    "durationMin": 22,
+    "goal": "Strengthen finger independence with five-note patterns in C and G position.",
+    "focusTags": [
+      "finger control",
+      "coordination",
+      "evenness"
+    ],
+    "warmup": [
+      "Play 1-2-3-4-5 and back down in one hand.",
+      "Keep every fingertip close to the keys."
+    ],
+    "lessonSteps": [
+      "Repeat the pattern in both hands separately.",
+      "Play both hands together at a soft volume.",
+      "Accent finger 4 lightly to wake up the weaker side of the hand."
+    ],
+    "practiceLoop": [
+      "Two minutes hands separate, two minutes hands together.",
+      "End with one ultra-slow clean pass."
+    ],
+    "coachNotes": [
+      "Control beats force.",
+      "The quieter you can play evenly, the more control you have."
+    ],
+    "checkpoint": "Both hands stay steady through a five-finger pattern with no finger collapse."
+  },
+  {
+    "id": "pn-04-c-major-foundation",
+    "instrument": "Piano",
+    "tier": "Beginner",
+    "title": "C Major Foundation",
+    "subtitle": "Use the easiest key to teach motion and phrasing.",
+    "durationMin": 24,
+    "goal": "Play the C major scale with correct fingering and shape one musical line from it.",
+    "focusTags": [
+      "scale",
+      "fingering",
+      "phrasing"
+    ],
+    "warmup": [
+      "Speak the fingering before you play.",
+      "Practice the thumb-under move slowly without tension."
+    ],
+    "lessonSteps": [
+      "Play the scale up and down one octave in the right hand.",
+      "Repeat in the left hand with mirrored fingering awareness.",
+      "Finish with both hands one octave apart at a slow tempo."
+    ],
+    "practiceLoop": [
+      "Three clean scale passes, then one pass with a small crescendo up and down.",
+      "Repeat the cycle twice."
+    ],
+    "coachNotes": [
+      "Good fingering makes future keys easier.",
+      "Phrase the scale like a sentence instead of a drill."
+    ],
+    "checkpoint": "You can play C major smoothly with reliable thumb turns."
+  },
+  {
+    "id": "pn-05-left-hand-roots",
+    "instrument": "Piano",
+    "tier": "Beginner",
+    "title": "Left-Hand Roots and Fifths",
+    "subtitle": "Give the left hand a simple job it can do well.",
+    "durationMin": 20,
+    "goal": "Build steady left-hand support with root-fifth patterns for basic chord progressions.",
+    "focusTags": [
+      "left hand",
+      "accompaniment",
+      "stability"
+    ],
+    "warmup": [
+      "Play C and G as low single notes first.",
+      "Open the hand into root-fifth shapes slowly."
+    ],
+    "lessonSteps": [
+      "Alternate root and fifth on whole notes.",
+      "Move through C, G, Am, and F without rushing the change.",
+      "Keep the left hand soft so it supports instead of dominates."
+    ],
+    "practiceLoop": [
+      "Loop a four-chord progression for 3 minutes.",
+      "Record one take and check if the bass stays even."
+    ],
+    "coachNotes": [
+      "A dependable left hand makes the whole arrangement sound more mature.",
+      "If the leap feels wide, look at the target before moving."
+    ],
+    "checkpoint": "Your left hand can hold a root-fifth groove for one full progression."
+  },
+  {
+    "id": "pn-06-broken-chords",
+    "instrument": "Piano",
+    "tier": "Beginner",
+    "title": "Broken Chords for Ballads",
+    "subtitle": "Turn static harmony into movement.",
+    "durationMin": 24,
+    "goal": "Use simple broken-chord patterns in the right hand and left hand to create flowing accompaniment.",
+    "focusTags": [
+      "broken chords",
+      "ballad style",
+      "coordination"
+    ],
+    "warmup": [
+      "Play C-E-G slowly as separate notes.",
+      "Do the same with Am and F."
+    ],
+    "lessonSteps": [
+      "Use a repeating 1-3-5 pattern in the right hand.",
+      "Anchor the left hand on single bass notes.",
+      "Switch chords every bar while keeping the pattern calm and even."
+    ],
+    "practiceLoop": [
+      "Play 8 bars of broken chords without stopping.",
+      "Repeat once more with a softer touch."
+    ],
+    "coachNotes": [
+      "Think smooth and connected, not percussive.",
+      "Broken chords sound premium when the rhythm is steady and the touch is gentle."
+    ],
+    "checkpoint": "You can support a four-chord loop with a clean broken-chord texture."
+  },
+  {
+    "id": "pn-07-triads-in-root-position",
+    "instrument": "Piano",
+    "tier": "Beginner",
+    "title": "Root Position Triads",
+    "subtitle": "Build the three-note shapes behind most pop harmony.",
+    "durationMin": 22,
+    "goal": "Memorize major and minor triads in root position and hear the emotional difference between them.",
+    "focusTags": [
+      "triads",
+      "harmony",
+      "ear training"
+    ],
+    "warmup": [
+      "Play C major and A minor back to back.",
+      "Say root-third-fifth aloud."
+    ],
+    "lessonSteps": [
+      "Build major triads on C, F, and G.",
+      "Build minor triads on Am, Dm, and Em.",
+      "Notice how the third changes the mood."
+    ],
+    "practiceLoop": [
+      "Three rounds major set, then three rounds minor set.",
+      "Finish by mixing the triads randomly and naming them."
+    ],
+    "coachNotes": [
+      "Naming the notes helps the ears catch up faster.",
+      "The third is the color note; listen for it."
+    ],
+    "checkpoint": "You can build six common triads without guessing."
+  },
+  {
+    "id": "pn-08-pedal-basics",
+    "instrument": "Piano",
+    "tier": "Beginner",
+    "title": "Pedal Basics",
+    "subtitle": "Use sustain to add polish without creating mud.",
+    "durationMin": 20,
+    "goal": "Learn when to change the sustain pedal and how to keep harmony clean.",
+    "focusTags": [
+      "pedal",
+      "tone",
+      "clarity"
+    ],
+    "warmup": [
+      "Press and release the pedal silently a few times.",
+      "Play one chord and listen to how long the sound blooms."
+    ],
+    "lessonSteps": [
+      "Change pedal right after the new chord lands.",
+      "Use short progressions and listen for blurred bass notes.",
+      "Combine light pedal with a slow ballad pattern."
+    ],
+    "practiceLoop": [
+      "8 bars no pedal, 8 bars with clean pedal changes, compare both.",
+      "Repeat until the change timing feels automatic."
+    ],
+    "coachNotes": [
+      "The pedal should support the harmony, not hide sloppy changes.",
+      "When in doubt, use less pedal."
+    ],
+    "checkpoint": "Your chord changes stay clear even with the pedal down."
+  },
+  {
+    "id": "pn-09-pop-comping-1",
+    "instrument": "Piano",
+    "tier": "Early Intermediate",
+    "title": "Pop Comping I",
+    "subtitle": "Make simple chords feel radio-ready.",
+    "durationMin": 26,
+    "goal": "Use right-hand triads and left-hand bass notes to comp a common pop progression with groove.",
+    "focusTags": [
+      "comping",
+      "pop piano",
+      "coordination"
+    ],
+    "warmup": [
+      "Clap the rhythm pattern before you play it.",
+      "Play left-hand roots alone for one progression."
+    ],
+    "lessonSteps": [
+      "Add right-hand chord stabs on beats 2 and 4.",
+      "Keep the left hand steady while the right hand changes rhythm.",
+      "Use short releases so the groove breathes."
+    ],
+    "practiceLoop": [
+      "Play the progression for 16 bars.",
+      "Try one repeat with slightly stronger chorus accents."
+    ],
+    "coachNotes": [
+      "Comping works when the rhythm is confident and uncluttered.",
+      "A short chord played in time sounds better than a long messy one."
+    ],
+    "checkpoint": "You can comp a pop loop with clear left-right coordination."
+  },
+  {
+    "id": "pn-10-inversions-flow",
+    "instrument": "Piano",
+    "tier": "Early Intermediate",
+    "title": "Inversions for Smooth Flow",
+    "subtitle": "Stop jumping more than the harmony needs.",
+    "durationMin": 28,
+    "goal": "Use first and second inversions to keep chord progressions close and elegant.",
+    "focusTags": [
+      "inversions",
+      "voice leading",
+      "efficiency"
+    ],
+    "warmup": [
+      "Play C major in root position, first inversion, and second inversion.",
+      "Notice which notes stay close when moving to G and Am."
+    ],
+    "lessonSteps": [
+      "Choose the nearest inversion for each chord in a progression.",
+      "Keep the top voice moving stepwise when possible.",
+      "Compare wide jumps versus smooth inversion-based movement."
+    ],
+    "practiceLoop": [
+      "Play one progression with roots only, then with inversions.",
+      "Record both and hear the difference."
+    ],
+    "coachNotes": [
+      "Smooth voice leading sounds expensive even at a basic level.",
+      "Let your eyes look for the smallest move, not the most familiar shape."
+    ],
+    "checkpoint": "Your right hand can move through a progression with minimal jumping."
+  },
+  {
+    "id": "pn-11-major-scales-two-keys",
+    "instrument": "Piano",
+    "tier": "Early Intermediate",
+    "title": "Major Scales: G and F",
+    "subtitle": "Expand beyond C without losing confidence.",
+    "durationMin": 28,
+    "goal": "Learn G major and F major scales with correct fingering and key awareness.",
+    "focusTags": [
+      "scales",
+      "key signatures",
+      "fingering"
+    ],
+    "warmup": [
+      "Review where F# and Bb live on the keyboard.",
+      "Play the key signatures alone before the full scale."
+    ],
+    "lessonSteps": [
+      "Play G major hands separately, then F major hands separately.",
+      "Focus on fingering more than tempo.",
+      "End with one slow hands-together pass in each key."
+    ],
+    "practiceLoop": [
+      "Two clean reps of G, two clean reps of F, then one alternating cycle.",
+      "Add a gentle crescendo toward the top note."
+    ],
+    "coachNotes": [
+      "New keys feel easier when you know exactly which note changed.",
+      "Do not rush the thumb under in new keys."
+    ],
+    "checkpoint": "You can play G and F major with reliable fingering and note awareness."
+  },
+  {
+    "id": "pn-12-minor-sound-world",
+    "instrument": "Piano",
+    "tier": "Early Intermediate",
+    "title": "Natural Minor Sound World",
+    "subtitle": "Hear the darker color and use it musically.",
+    "durationMin": 26,
+    "goal": "Play A minor and D minor material while hearing how minor harmony shapes mood.",
+    "focusTags": [
+      "minor key",
+      "sound color",
+      "chords"
+    ],
+    "warmup": [
+      "Play A natural minor slowly and listen to the 3rd, 6th, and 7th.",
+      "Alternate A minor and C major to compare color."
+    ],
+    "lessonSteps": [
+      "Build Am, Dm, and Em triads.",
+      "Use a simple broken-chord pattern in A minor.",
+      "Create one short left-hand-right-hand texture that feels reflective."
+    ],
+    "practiceLoop": [
+      "8 bars of A minor groove, 8 bars of D minor groove.",
+      "Finish by improvising with only A minor scale notes."
+    ],
+    "coachNotes": [
+      "Minor music is not just sad; it is focused and colored differently.",
+      "Keep the sound connected and intentional."
+    ],
+    "checkpoint": "You can play a short minor-key texture that sounds stylistically clear."
+  },
+  {
+    "id": "pn-13-syncopation-groove",
+    "instrument": "Piano",
+    "tier": "Early Intermediate",
+    "title": "Syncopation and Offbeat Chords",
+    "subtitle": "Teach the right hand to sit around the beat instead of always on it.",
+    "durationMin": 28,
+    "goal": "Develop offbeat chord placement and simple syncopation for modern accompaniment.",
+    "focusTags": [
+      "syncopation",
+      "groove",
+      "rhythm"
+    ],
+    "warmup": [
+      "Clap rests and offbeats before touching the keyboard.",
+      "Play bass notes on the beat and chords on the and of 2 and 4."
+    ],
+    "lessonSteps": [
+      "Use a two-chord loop and keep the pattern light.",
+      "Do not fill every gap; let the syncopation speak.",
+      "Add one anticipatory chord before the bar line."
+    ],
+    "practiceLoop": [
+      "Two minutes clapping, then three minutes playing.",
+      "Record one pass and check whether the groove still feels stable."
+    ],
+    "coachNotes": [
+      "Syncopation should feel playful, not rushed.",
+      "If it sounds late or messy, simplify the pattern."
+    ],
+    "checkpoint": "Your offbeat chords land confidently against the pulse."
+  },
+  {
+    "id": "pn-14-lead-sheet-reading",
+    "instrument": "Piano",
+    "tier": "Intermediate",
+    "title": "Lead Sheet Reading Basics",
+    "subtitle": "Read symbols and build a usable part fast.",
+    "durationMin": 30,
+    "goal": "Translate chord symbols into clean voicings and a simple accompaniment pattern in real time.",
+    "focusTags": [
+      "lead sheets",
+      "chord symbols",
+      "practical piano"
+    ],
+    "warmup": [
+      "Name the chord quality before you play it.",
+      "Practice quick triad building from symbols only."
+    ],
+    "lessonSteps": [
+      "Read a four-chord lead sheet and choose one voicing for each chord.",
+      "Add a left-hand root or root-fifth pattern.",
+      "Keep the rhythm simple so symbol reading stays the main skill."
+    ],
+    "practiceLoop": [
+      "Play the chart three times through.",
+      "On the second pass, use inversions for smoother movement."
+    ],
+    "coachNotes": [
+      "A useful reading pass beats a fancy one that falls apart.",
+      "Look one symbol ahead whenever possible."
+    ],
+    "checkpoint": "You can turn a basic chord chart into a playable accompaniment."
+  },
+  {
+    "id": "pn-15-arpeggio-ladders",
+    "instrument": "Piano",
+    "tier": "Intermediate",
+    "title": "Arpeggio Ladders",
+    "subtitle": "Train the hands to climb harmony cleanly.",
+    "durationMin": 30,
+    "goal": "Use one- and two-octave arpeggios to improve hand shaping, fingering, and harmonic awareness.",
+    "focusTags": [
+      "arpeggios",
+      "technique",
+      "harmony"
+    ],
+    "warmup": [
+      "Play C, Am, F, and G arpeggios separately.",
+      "Notice which fingers begin and end each shape."
+    ],
+    "lessonSteps": [
+      "Keep the arm moving smoothly over the thumb crossings.",
+      "Use a metronome and stay relaxed through the turn.",
+      "Finish by linking arpeggios into a pop progression."
+    ],
+    "practiceLoop": [
+      "Two clean reps per arpeggio, then two progression loops.",
+      "End with a softer expressive pass."
+    ],
+    "coachNotes": [
+      "Arpeggios are about flow more than force.",
+      "The wrist should help the hand travel, not freeze."
+    ],
+    "checkpoint": "Your arpeggios move continuously without jerky thumb turns."
+  },
+  {
+    "id": "pn-16-sus-add-color",
+    "instrument": "Piano",
+    "tier": "Intermediate",
+    "title": "Sus and Add Chord Color",
+    "subtitle": "Make simple harmony sound more contemporary.",
+    "durationMin": 26,
+    "goal": "Add suspended and add9 colors to familiar progressions without overcrowding the arrangement.",
+    "focusTags": [
+      "extensions",
+      "color tones",
+      "contemporary voicing"
+    ],
+    "warmup": [
+      "Play a plain C chord, then Csus2, then Cadd9.",
+      "Listen to how the color changes without losing the root feeling."
+    ],
+    "lessonSteps": [
+      "Apply sus2, sus4, and add9 colors to two chords in a progression.",
+      "Resolve suspended chords on purpose so the tension means something.",
+      "Keep the voicings light and singable."
+    ],
+    "practiceLoop": [
+      "Loop one progression and test one color at a time.",
+      "Choose the two colors that sound most musical and keep only those."
+    ],
+    "coachNotes": [
+      "Color tones work best when they are chosen, not sprayed everywhere.",
+      "A little color goes a long way in pop and worship styles."
+    ],
+    "checkpoint": "You can upgrade a basic progression with tasteful suspended or added tones."
+  },
+  {
+    "id": "pn-17-gospel-walkups",
+    "instrument": "Piano",
+    "tier": "Intermediate",
+    "title": "Gospel-Style Walkups",
+    "subtitle": "Add energy between chords with confidence.",
+    "durationMin": 30,
+    "goal": "Use passing bass movement and simple right-hand voicings to create a gospel-influenced transition feel.",
+    "focusTags": [
+      "walkups",
+      "bass motion",
+      "style"
+    ],
+    "warmup": [
+      "Play bass notes C-D-E under a held C harmony.",
+      "Feel the difference between target chords and passing tones."
+    ],
+    "lessonSteps": [
+      "Use a walkup into a IV chord and a V chord.",
+      "Keep the right hand simple so the bass motion is clear.",
+      "Resolve each walkup cleanly to avoid sounding random."
+    ],
+    "practiceLoop": [
+      "Practice two walkups for 3 minutes each.",
+      "Finish with a short eight-bar progression that uses both."
+    ],
+    "coachNotes": [
+      "Passing tones should lead somewhere.",
+      "If the bass line is strong, the right hand can stay elegant and simple."
+    ],
+    "checkpoint": "You can use a short walkup that sounds intentional and stylistic."
+  },
+  {
+    "id": "pn-18-reading-rhythm-stack",
+    "instrument": "Piano",
+    "tier": "Upper Intermediate",
+    "title": "Reading Rhythm Stacks",
+    "subtitle": "Coordinate tied notes, rests, and layered patterns.",
+    "durationMin": 32,
+    "goal": "Improve rhythmic reading by combining held notes in one hand with moving figures in the other.",
+    "focusTags": [
+      "rhythm reading",
+      "coordination",
+      "independence"
+    ],
+    "warmup": [
+      "Count tied notes aloud before playing.",
+      "Practice the left-hand rhythm alone first."
+    ],
+    "lessonSteps": [
+      "Add the right-hand figure only after the left hand feels secure.",
+      "Hold long notes fully while the other hand continues moving.",
+      "Use slow tempo and clear counting."
+    ],
+    "practiceLoop": [
+      "Four repetitions hands separate, four repetitions hands together.",
+      "Then record one clean attempt."
+    ],
+    "coachNotes": [
+      "Rhythmic reading improves when you respect every rest and tie.",
+      "Count with your voice until the body understands it."
+    ],
+    "checkpoint": "You can keep one hand still while the other continues in time."
+  },
+  {
+    "id": "pn-19-accompaniment-arranging",
+    "instrument": "Piano",
+    "tier": "Upper Intermediate",
+    "title": "Accompaniment Arranging",
+    "subtitle": "Choose the right texture for the song instead of one default pattern.",
+    "durationMin": 30,
+    "goal": "Learn to switch between block chords, broken chords, pads, and rhythmic stabs based on section energy.",
+    "focusTags": [
+      "arranging",
+      "texture",
+      "section contrast"
+    ],
+    "warmup": [
+      "Play the same progression with block chords first.",
+      "Repeat it with a broken-chord texture."
+    ],
+    "lessonSteps": [
+      "Assign one texture to verse and another to chorus.",
+      "Keep the left hand simpler when the right hand gets busier.",
+      "Make the chorus bigger without simply playing louder all the time."
+    ],
+    "practiceLoop": [
+      "Create a 16-bar arrangement with verse and chorus contrast.",
+      "Repeat once and refine the texture choices."
+    ],
+    "coachNotes": [
+      "Arrangement is about role and space.",
+      "The best texture is the one that supports the moment."
+    ],
+    "checkpoint": "Your verse and chorus feel like different sections, not one repeated loop."
+  },
+  {
+    "id": "pn-20-performance-touch",
+    "instrument": "Piano",
+    "tier": "Upper Intermediate",
+    "title": "Performance Touch and Phrasing",
+    "subtitle": "Pull the full sound together like a finished player.",
+    "durationMin": 32,
+    "goal": "Combine touch, timing, voicings, pedal, and dynamics into one polished performance study.",
+    "focusTags": [
+      "performance",
+      "touch",
+      "phrasing"
+    ],
+    "warmup": [
+      "Play one simple progression and shape the top note as a melody.",
+      "Test soft, medium, and full chorus dynamic levels."
+    ],
+    "lessonSteps": [
+      "Use pedal only where it adds bloom.",
+      "Balance the right-hand melody above the accompaniment.",
+      "Perform the full arrangement twice and choose the stronger take."
+    ],
+    "practiceLoop": [
+      "One repair pass on the weakest phrase, then one full uninterrupted take.",
+      "Write down one musical choice that improved the performance most."
+    ],
+    "coachNotes": [
+      "Polish comes from balance and intention.",
+      "Every section should have a reason for sounding the way it does."
+    ],
+    "checkpoint": "You can deliver one short piano performance with shape, balance, and control."
+  }
+]

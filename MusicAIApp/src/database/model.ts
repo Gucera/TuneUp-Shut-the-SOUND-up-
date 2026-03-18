@@ -1,12 +1,10 @@
 import { Model } from '@nozbe/watermelondb'
 import { field, date, readonly } from '@nozbe/watermelondb/decorators'
 
-// Şarkı Modeli
+// Song model — stores info about each song
 export class Song extends Model {
     static table = 'songs'
 
-    // Sonuna '!' koyarak "Boş olmayacak, söz veriyorum" diyoruz.
-    // Yanına ': string' koyarak türünü belirtiyoruz.
     @field('title') title!: string
     @field('artist') artist!: string
     @field('duration') duration!: number
@@ -14,7 +12,7 @@ export class Song extends Model {
     @date('created_at') createdAt!: Date
 }
 
-// İlerleme Modeli
+// Progress model — tracks the user's XP and level
 export class Progress extends Model {
     static table = 'progress'
 

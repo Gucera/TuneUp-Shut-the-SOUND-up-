@@ -1,0 +1,642 @@
+[
+  {
+    "id": "gtr-01-posture-tone",
+    "instrument": "Guitar",
+    "tier": "Beginner",
+    "title": "Foundations: Posture and Clean Tone",
+    "subtitle": "Set the hands before you chase speed.",
+    "durationMin": 20,
+    "goal": "Build a stable sitting position, relaxed fretting hand, and a clean open-string tone with the pick.",
+    "focusTags": [
+      "posture",
+      "pick control",
+      "tone"
+    ],
+    "warmup": [
+      "Roll the shoulders down and let both wrists stay loose.",
+      "Play six open strings slowly and listen for equal volume."
+    ],
+    "lessonSteps": [
+      "Check pick angle and keep only 2-3 mm of the tip showing.",
+      "Fret one note at the fifth fret on each string and release without squeaks.",
+      "Alternate down-up on one string at 60 BPM for one minute without tensing up."
+    ],
+    "practiceLoop": [
+      "8 bars open strings, 8 bars fretted notes, repeat three times.",
+      "Record one pass and listen for weak notes or scratchy attacks."
+    ],
+    "coachNotes": [
+      "Small relaxed motions beat big dramatic ones.",
+      "If the note buzzes, move closer to the fret before pressing harder."
+    ],
+    "checkpoint": "You can play all six strings evenly with no accidental muting."
+  },
+  {
+    "id": "gtr-02-fretboard-anchors",
+    "instrument": "Guitar",
+    "tier": "Beginner",
+    "title": "Left-Hand Anchors",
+    "subtitle": "Teach the hand where home is.",
+    "durationMin": 22,
+    "goal": "Learn fingertip placement, thumb support, and simple finger independence on frets 1-4.",
+    "focusTags": [
+      "fretting hand",
+      "finger independence",
+      "accuracy"
+    ],
+    "warmup": [
+      "Tap fingers 1-2-3-4 on a table with even spacing.",
+      "Play chromatic notes on the first string from fret 1 to 4."
+    ],
+    "lessonSteps": [
+      "Keep the thumb behind the neck and the palm open.",
+      "Play 1-2-3-4 on every string, then reverse 4-3-2-1.",
+      "Lift fingers only a little above the string so the hand stays calm."
+    ],
+    "practiceLoop": [
+      "Run the exercise across all six strings twice at 55 BPM.",
+      "Rest, then repeat at 65 BPM with the same clean sound."
+    ],
+    "coachNotes": [
+      "The hand should feel balanced, not squeezed.",
+      "Watch the knuckles: they should stay rounded instead of collapsing."
+    ],
+    "checkpoint": "You can complete a full 1-2-3-4 cycle without extra finger movement."
+  },
+  {
+    "id": "gtr-03-open-chords-core",
+    "instrument": "Guitar",
+    "tier": "Beginner",
+    "title": "Open Chords Core Set",
+    "subtitle": "Build the first four chords that unlock real songs.",
+    "durationMin": 24,
+    "goal": "Memorize C, G, Am, and Fmaj7 shapes and switch between them in time.",
+    "focusTags": [
+      "open chords",
+      "shape memory",
+      "timing"
+    ],
+    "warmup": [
+      "Name each chord before you fret it.",
+      "Place each shape once, then release and reset."
+    ],
+    "lessonSteps": [
+      "Build the shapes from the lowest finger to the highest finger.",
+      "Strum each chord four times with slow downstrokes.",
+      "Switch C-G-Am-Fmaj7 at 50 BPM and stay ahead of the beat."
+    ],
+    "practiceLoop": [
+      "Play the four-chord loop for 3 minutes without stopping.",
+      "Circle the change that feels slowest and isolate only that move for 90 seconds."
+    ],
+    "coachNotes": [
+      "Do not stare at every finger for too long; train quick snapshots.",
+      "A half-clean change in time is better than a perfect change that arrives late."
+    ],
+    "checkpoint": "You can keep the progression moving for 16 bars."
+  },
+  {
+    "id": "gtr-04-chord-change-engine",
+    "instrument": "Guitar",
+    "tier": "Beginner",
+    "title": "Chord Change Engine",
+    "subtitle": "Turn shapes into usable timing.",
+    "durationMin": 24,
+    "goal": "Improve the mechanics of switching between common open chords without freezing the strumming hand.",
+    "focusTags": [
+      "transitions",
+      "rhythm",
+      "coordination"
+    ],
+    "warmup": [
+      "Air-switch between two chord shapes without touching the strings.",
+      "Mute the strings and strum steady quarter notes."
+    ],
+    "lessonSteps": [
+      "Practice anchor-finger moves, especially C-Am and G-Em style motions.",
+      "Use the one-minute change test for C to G, G to D, and Am to Fmaj7.",
+      "Count aloud while changing so the rhythm never disappears."
+    ],
+    "practiceLoop": [
+      "30 seconds one chord, 30 seconds the other, 1 minute switching.",
+      "Finish with a four-chord loop at a slow song tempo."
+    ],
+    "coachNotes": [
+      "The right hand is the drummer; keep it moving.",
+      "Look for fingers that can stay down or move together as a pair."
+    ],
+    "checkpoint": "You can land the next chord by beat 1 more than 80% of the time."
+  },
+  {
+    "id": "gtr-05-strumming-basics",
+    "instrument": "Guitar",
+    "tier": "Beginner",
+    "title": "Strumming Basics",
+    "subtitle": "Make the right hand feel like one smooth wheel.",
+    "durationMin": 20,
+    "goal": "Develop a relaxed quarter-note and eighth-note strumming motion with simple accents.",
+    "focusTags": [
+      "strumming",
+      "time feel",
+      "accent control"
+    ],
+    "warmup": [
+      "Clap quarter notes with a metronome at 72 BPM.",
+      "Strum muted strings with only downstrokes for 16 counts."
+    ],
+    "lessonSteps": [
+      "Add down-up eighth notes while the wrist stays loose.",
+      "Accent beat 2 and beat 4 without changing the tempo.",
+      "Move across one chord for two bars, then a second chord for two bars."
+    ],
+    "practiceLoop": [
+      "Play one minute of eighth notes, rest 20 seconds, then repeat three times.",
+      "Finish with a simple pop pattern on C and G."
+    ],
+    "coachNotes": [
+      "The motion should continue even on rests; just miss the strings.",
+      "Let the forearm guide the groove and the wrist keep it soft."
+    ],
+    "checkpoint": "Your eighth-note groove stays even for a full minute."
+  },
+  {
+    "id": "gtr-06-arpeggio-clarity",
+    "instrument": "Guitar",
+    "tier": "Beginner",
+    "title": "Arpeggio Clarity",
+    "subtitle": "Separate the strings so each chord sounds expensive.",
+    "durationMin": 22,
+    "goal": "Pick through open chord shapes cleanly and keep string-crossing controlled.",
+    "focusTags": [
+      "arpeggios",
+      "string crossing",
+      "control"
+    ],
+    "warmup": [
+      "Play thumb-index-middle-ring on open strings slowly.",
+      "Mute all strings and practice crossing from string 6 to 1 without catching extra strings."
+    ],
+    "lessonSteps": [
+      "Use Am and C shapes for simple broken-chord picking.",
+      "Keep the pick path short and close to the next string.",
+      "Repeat a four-note arpeggio until each note speaks at equal volume."
+    ],
+    "practiceLoop": [
+      "Two bars Am arpeggio, two bars C arpeggio, repeat five times.",
+      "Record one pass and listen for missed strings or volume jumps."
+    ],
+    "coachNotes": [
+      "Slow arpeggios reveal every tiny movement.",
+      "If one note pops out too hard, lighten only that stroke instead of changing everything."
+    ],
+    "checkpoint": "You can arpeggiate two chord shapes without stray strings ringing."
+  },
+  {
+    "id": "gtr-07-power-chords",
+    "instrument": "Guitar",
+    "tier": "Early Intermediate",
+    "title": "Power Chords and Palm Muting",
+    "subtitle": "Get the rock rhythm engine online.",
+    "durationMin": 26,
+    "goal": "Learn movable power-chord shapes and basic palm muting for tighter riffs.",
+    "focusTags": [
+      "power chords",
+      "palm muting",
+      "riff playing"
+    ],
+    "warmup": [
+      "Mute the low E string near the bridge and test the tone.",
+      "Slide a fifth-shape power chord between frets 3, 5, and 7."
+    ],
+    "lessonSteps": [
+      "Play root-fifth shapes on the 6th and 5th string sets.",
+      "Alternate between open chugs and full power chords.",
+      "Use short rests so the groove breathes instead of blurring together."
+    ],
+    "practiceLoop": [
+      "Play 8 bars of chugs plus 8 bars of voiced chords, then repeat.",
+      "Finish with a simple two-riff mini etude at 90 BPM."
+    ],
+    "coachNotes": [
+      "Palm muting is about placement, not pressing hard.",
+      "When the chord moves, the muting hand should barely change."
+    ],
+    "checkpoint": "You can keep power chords tight and rhythmically clear at 90 BPM."
+  },
+  {
+    "id": "gtr-08-twelve-bar-blues",
+    "instrument": "Guitar",
+    "tier": "Early Intermediate",
+    "title": "12-Bar Blues Builder",
+    "subtitle": "Connect rhythm guitar to a real form.",
+    "durationMin": 25,
+    "goal": "Understand the I-IV-V structure and play a steady shuffle-friendly rhythm part in A.",
+    "focusTags": [
+      "form",
+      "blues",
+      "shuffle"
+    ],
+    "warmup": [
+      "Count a 12-bar cycle out loud before playing.",
+      "Strum A7, D7, and E7 once each and say their bar numbers."
+    ],
+    "lessonSteps": [
+      "Play the full 12-bar form with slow quarter-note strums.",
+      "Add a swing feel by slightly delaying the offbeat.",
+      "Finish each chorus cleanly and restart without losing count."
+    ],
+    "practiceLoop": [
+      "Play three full choruses back to back.",
+      "On the final chorus, accent the chord changes more clearly."
+    ],
+    "coachNotes": [
+      "If you lose the form, stop and count the bars again.",
+      "The goal is not flashy playing; it is strong form awareness."
+    ],
+    "checkpoint": "You can complete three clean 12-bar choruses without getting lost."
+  },
+  {
+    "id": "gtr-09-major-scale-map",
+    "instrument": "Guitar",
+    "tier": "Early Intermediate",
+    "title": "Major Scale Map: One Position",
+    "subtitle": "Start seeing melody as a shape, not random notes.",
+    "durationMin": 27,
+    "goal": "Memorize one major scale pattern and connect finger numbers to sound and direction.",
+    "focusTags": [
+      "major scale",
+      "fretboard map",
+      "melody"
+    ],
+    "warmup": [
+      "Speak the scale degrees 1 through 7 before playing.",
+      "Play the shape ascending once and descending once very slowly."
+    ],
+    "lessonSteps": [
+      "Use strict alternate picking through the position.",
+      "Pause on scale degrees 1, 3, and 5 so they sound like targets.",
+      "Improvise a four-note answer phrase after each ascent."
+    ],
+    "practiceLoop": [
+      "Two clean reps of the scale, then one free phrase.",
+      "Repeat that cycle six times."
+    ],
+    "coachNotes": [
+      "Do not race the scale. Learn the lane lines first.",
+      "Landing on chord tones makes even simple lines sound musical."
+    ],
+    "checkpoint": "You can play the full shape from memory and name the root notes."
+  },
+  {
+    "id": "gtr-10-pentatonic-phrasing",
+    "instrument": "Guitar",
+    "tier": "Early Intermediate",
+    "title": "Minor Pentatonic Phrasing",
+    "subtitle": "Make the box shape start sounding like music.",
+    "durationMin": 28,
+    "goal": "Use the minor pentatonic scale for short call-and-response phrases with bends and slides.",
+    "focusTags": [
+      "pentatonic",
+      "phrasing",
+      "expression"
+    ],
+    "warmup": [
+      "Play the box shape once without any expressive techniques.",
+      "Sing a tiny two-note phrase before playing it."
+    ],
+    "lessonSteps": [
+      "Add slides into target notes on beats 1 and 3.",
+      "Introduce one quarter-step feel bend, then one full controlled bend.",
+      "Leave space after every phrase so it sounds intentional."
+    ],
+    "practiceLoop": [
+      "Play four 2-bar phrases, rest one bar, then repeat the cycle.",
+      "End by recording a 30-second mini solo."
+    ],
+    "coachNotes": [
+      "Space is part of the phrase.",
+      "A controlled bend with good intonation is worth more than five fast notes."
+    ],
+    "checkpoint": "Your phrases sound distinct instead of like one long scale run."
+  },
+  {
+    "id": "gtr-11-barre-chord-entry",
+    "instrument": "Guitar",
+    "tier": "Early Intermediate",
+    "title": "Barre Chord Entry",
+    "subtitle": "Build strength without fighting the guitar.",
+    "durationMin": 28,
+    "goal": "Learn how to set up the index finger, wrist angle, and support needed for clean major and minor barre chords.",
+    "focusTags": [
+      "barre chords",
+      "hand setup",
+      "endurance"
+    ],
+    "warmup": [
+      "Barre two strings first before trying all six.",
+      "Shake the hand out between attempts."
+    ],
+    "lessonSteps": [
+      "Place the index slightly on its side and stack the other fingers after it.",
+      "Test only the middle four strings first, then add the outer strings.",
+      "Move between one open chord and one barre chord to keep the hand relaxed."
+    ],
+    "practiceLoop": [
+      "20 seconds holding shape, 20 seconds rest, six rounds.",
+      "Finish with a slow four-bar progression using one barre shape."
+    ],
+    "coachNotes": [
+      "Barre chords come from leverage and angle, not from panic squeezing.",
+      "If the hand burns too quickly, reset your thumb and elbow position."
+    ],
+    "checkpoint": "One full barre shape rings clearly at least once in three tries."
+  },
+  {
+    "id": "gtr-12-triad-navigation",
+    "instrument": "Guitar",
+    "tier": "Intermediate",
+    "title": "Triad Navigation",
+    "subtitle": "Shrink big chord shapes into elegant rhythm parts.",
+    "durationMin": 30,
+    "goal": "Find and use major and minor triads on the top three strings for cleaner pop and worship comping.",
+    "focusTags": [
+      "triads",
+      "voicings",
+      "comping"
+    ],
+    "warmup": [
+      "Play three-note shapes on strings 1-2-3 only.",
+      "Say root-third-fifth while fretting each inversion."
+    ],
+    "lessonSteps": [
+      "Map one major chord across three inversions.",
+      "Move the same shape family to a new key.",
+      "Comp a simple progression using only top-string triads."
+    ],
+    "practiceLoop": [
+      "Two minutes mapping inversions, two minutes using them in a progression.",
+      "End with a recorded 16-bar comping pass."
+    ],
+    "coachNotes": [
+      "Small shapes sound polished because they leave space for the vocal.",
+      "Voice-leading matters more than big strums in this lesson."
+    ],
+    "checkpoint": "You can comp a four-chord progression using triads only."
+  },
+  {
+    "id": "gtr-13-fingerstyle-patterns",
+    "instrument": "Guitar",
+    "tier": "Intermediate",
+    "title": "Fingerstyle Patterns",
+    "subtitle": "Separate bass and melody with control.",
+    "durationMin": 30,
+    "goal": "Develop a steady thumb pulse and simple fingerstyle roll patterns over open-chord shapes.",
+    "focusTags": [
+      "fingerstyle",
+      "thumb independence",
+      "coordination"
+    ],
+    "warmup": [
+      "Tap the thumb pulse on beats 1 and 3 while counting.",
+      "Play bass notes only on a C chord."
+    ],
+    "lessonSteps": [
+      "Add index and middle fingers to create a repeating roll.",
+      "Keep the bass notes steady even when the top notes change.",
+      "Switch between two chord shapes without losing the thumb pulse."
+    ],
+    "practiceLoop": [
+      "90 seconds one pattern, rest, then repeat on a second chord pair.",
+      "Finish with an 8-bar fingerstyle etude."
+    ],
+    "coachNotes": [
+      "The thumb is your drummer here.",
+      "If the pattern collapses, simplify the top notes but keep the bass steady."
+    ],
+    "checkpoint": "Your thumb pulse stays consistent while the upper notes move."
+  },
+  {
+    "id": "gtr-14-rhythm-accents",
+    "instrument": "Guitar",
+    "tier": "Intermediate",
+    "title": "Rhythm Accents and Ghost Strums",
+    "subtitle": "Turn a plain pattern into a groove.",
+    "durationMin": 26,
+    "goal": "Use accents, ghost strums, and muted hits to create a more modern rhythm feel.",
+    "focusTags": [
+      "groove",
+      "accents",
+      "muted strums"
+    ],
+    "warmup": [
+      "Mute the strings and count 1-and-2-and-3-and-4-and.",
+      "Accent only beat 2 and 4 for one minute."
+    ],
+    "lessonSteps": [
+      "Add ghost strums on selected offbeats.",
+      "Use left-hand release to create short percussive hits.",
+      "Apply the pattern to a two-chord loop without speeding up."
+    ],
+    "practiceLoop": [
+      "Play 16 bars with accents, then 16 bars with accents plus ghost strokes.",
+      "Record one take and check if the groove still feels relaxed."
+    ],
+    "coachNotes": [
+      "Muted motion should feel light and bouncy, not stiff.",
+      "The groove comes from contrast between loud and soft."
+    ],
+    "checkpoint": "Your strumming pattern feels dynamic instead of flat."
+  },
+  {
+    "id": "gtr-15-dynamics-tone-shaping",
+    "instrument": "Guitar",
+    "tier": "Intermediate",
+    "title": "Dynamics and Tone Shaping",
+    "subtitle": "Learn to sound bigger without playing more notes.",
+    "durationMin": 24,
+    "goal": "Control attack, pickup position, and palm muting depth to shape tone inside one progression.",
+    "focusTags": [
+      "dynamics",
+      "tone",
+      "musicianship"
+    ],
+    "warmup": [
+      "Play one chord quietly, then medium, then strong.",
+      "Move the picking hand from bridge area toward the neck and compare tone."
+    ],
+    "lessonSteps": [
+      "Use the same riff with three different attack levels.",
+      "Alternate full open strums with lightly muted strums.",
+      "Decide where the chorus should feel wider and where the verse should feel tighter."
+    ],
+    "practiceLoop": [
+      "Perform a 16-bar arrangement with soft verse and stronger chorus.",
+      "Repeat until the contrast is obvious on playback."
+    ],
+    "coachNotes": [
+      "Dynamics are a musical choice, not an accident.",
+      "If every section is loud, nothing feels exciting."
+    ],
+    "checkpoint": "The same progression now has a clear verse and chorus personality."
+  },
+  {
+    "id": "gtr-16-lead-target-notes",
+    "instrument": "Guitar",
+    "tier": "Upper Intermediate",
+    "title": "Lead Lines with Target Notes",
+    "subtitle": "Aim phrases at harmony instead of wandering.",
+    "durationMin": 30,
+    "goal": "Outline chord changes by landing on strong chord tones inside simple lead phrases.",
+    "focusTags": [
+      "lead guitar",
+      "target notes",
+      "harmony"
+    ],
+    "warmup": [
+      "Play a backing loop and speak the chord names ahead of time.",
+      "Find one safe target note for each chord."
+    ],
+    "lessonSteps": [
+      "Start each phrase with a scale note and end it on a chord tone.",
+      "Use slides and bends only if the final pitch lands cleanly.",
+      "Create four phrases that each point clearly at the next chord."
+    ],
+    "practiceLoop": [
+      "Loop a four-chord progression and play one idea per chord.",
+      "Record and mark which phrase sounds most connected to the harmony."
+    ],
+    "coachNotes": [
+      "Good phrasing sounds like you knew where the chord was going.",
+      "Target notes make simple lines sound informed."
+    ],
+    "checkpoint": "You can hear and hit one strong chord tone per chord change."
+  },
+  {
+    "id": "gtr-17-double-stops-hooks",
+    "instrument": "Guitar",
+    "tier": "Upper Intermediate",
+    "title": "Double Stops and Hook Writing",
+    "subtitle": "Add width to pop and indie lead parts.",
+    "durationMin": 28,
+    "goal": "Use thirds, sixths, and unison-style hooks to build memorable guitar lines.",
+    "focusTags": [
+      "double stops",
+      "hooks",
+      "arrangement"
+    ],
+    "warmup": [
+      "Play two-note shapes slowly and listen for tuning.",
+      "Slide into a double stop from one fret below."
+    ],
+    "lessonSteps": [
+      "Build a short hook using repeated rhythm and changing intervals.",
+      "Alternate single-note pickup notes with double-stop resolutions.",
+      "Keep the phrase singable and repeatable."
+    ],
+    "practiceLoop": [
+      "Write a 2-bar hook and loop it over a progression for 3 minutes.",
+      "Make one cleaner variation instead of many random edits."
+    ],
+    "coachNotes": [
+      "Hooks win because they are clear, not because they are complex.",
+      "Check tuning on every double stop before chasing speed."
+    ],
+    "checkpoint": "You finish with one repeatable hook that sounds song-ready."
+  },
+  {
+    "id": "gtr-18-chord-melody-basics",
+    "instrument": "Guitar",
+    "tier": "Upper Intermediate",
+    "title": "Chord Melody Basics",
+    "subtitle": "Let the top note carry the story.",
+    "durationMin": 32,
+    "goal": "Combine simple chord voicings with a melody note on top for solo arrangement practice.",
+    "focusTags": [
+      "chord melody",
+      "arrangement",
+      "top voice"
+    ],
+    "warmup": [
+      "Sing the melody phrase first.",
+      "Find the melody notes on the top two strings."
+    ],
+    "lessonSteps": [
+      "Harmonize the melody with the smallest chord shape possible.",
+      "Keep the melody as the highest sounding note every time.",
+      "Play slowly enough that the listener clearly hears the top voice."
+    ],
+    "practiceLoop": [
+      "Arrange four bars, then repeat them until they feel settled.",
+      "Add the next four bars only after the first phrase is stable."
+    ],
+    "coachNotes": [
+      "The melody is the boss.",
+      "Choose easy voicings over ambitious voicings that bury the tune."
+    ],
+    "checkpoint": "The top note is always clear and the harmony stays underneath it."
+  },
+  {
+    "id": "gtr-19-groove-pocket-session",
+    "instrument": "Guitar",
+    "tier": "Upper Intermediate",
+    "title": "Pocket Session Guitar",
+    "subtitle": "Practice sounding reliable inside a band mix.",
+    "durationMin": 26,
+    "goal": "Lock a rhythm part to the click with clean starts, clean stops, and consistent subdivision.",
+    "focusTags": [
+      "pocket",
+      "ensemble playing",
+      "consistency"
+    ],
+    "warmup": [
+      "Clap quarter notes and eighth notes with the click.",
+      "Mute the strings and strum only the rhythm pattern."
+    ],
+    "lessonSteps": [
+      "Play a two-bar rhythm figure for 90 seconds without fills.",
+      "Use rests and dead strokes exactly as written.",
+      "Restart instantly if the groove drifts."
+    ],
+    "practiceLoop": [
+      "Three rounds of 90 seconds steady playing with 30 seconds rest.",
+      "Last round: record it and check whether your stops are as clean as your strums."
+    ],
+    "coachNotes": [
+      "Reliable rhythm guitar sounds simple from the outside and disciplined from the inside.",
+      "The audience feels your timing before they notice your chord voicings."
+    ],
+    "checkpoint": "Your rhythm part feels stable enough to sit under a singer."
+  },
+  {
+    "id": "gtr-20-performance-polish",
+    "instrument": "Guitar",
+    "tier": "Upper Intermediate",
+    "title": "Performance Polish Set",
+    "subtitle": "Turn practice material into stage-ready playing.",
+    "durationMin": 30,
+    "goal": "Combine tone, timing, transitions, and dynamics in one final performance-focused lesson.",
+    "focusTags": [
+      "performance",
+      "consistency",
+      "musicality"
+    ],
+    "warmup": [
+      "Warm up with the one exercise that usually fixes your weak spot fastest.",
+      "Play your chosen progression once with no pressure just to settle in."
+    ],
+    "lessonSteps": [
+      "Run a full arrangement with intro, verse, chorus, and ending.",
+      "Mark one weak transition and repair it in isolation.",
+      "Perform the full take again without stopping for small mistakes."
+    ],
+    "practiceLoop": [
+      "Two full takes with one targeted repair between them.",
+      "Choose the better take and write one note about what still needs work."
+    ],
+    "coachNotes": [
+      "A polished performance is controlled energy.",
+      "Do not break the flow for tiny slips; finish the phrase like a musician."
+    ],
+    "checkpoint": "You can perform one complete piece with shape, confidence, and control."
+  }
+]

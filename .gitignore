@@ -1,0 +1,105 @@
+# ----------------------------
+# OS / editor noise
+# ----------------------------
+.DS_Store
+Thumbs.db
+Icon?
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ----------------------------
+# Secrets / credentials
+# ----------------------------
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p8
+*.p12
+*.jks
+*.mobileprovision
+serviceAccountKey.json
+**/serviceAccountKey.json
+firebase-adminsdk*.json
+
+# ----------------------------
+# Logs / temp
+# ----------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+tmp/
+temp/
+.tmp/
+
+# ----------------------------
+# Node / Expo / React Native
+# ----------------------------
+node_modules/
+**/node_modules/
+.expo/
+**/.expo/
+.expo-shared/
+dist/
+build/
+web-build/
+.metro-health-check*
+expo-env.d.ts
+*.tsbuildinfo
+coverage/
+
+# Generated native projects
+android/
+ios/
+MusicAIApp/android/
+MusicAIApp/ios/
+
+# ----------------------------
+# Python / FastAPI
+# ----------------------------
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+venv/
+**/venv/
+.venv/
+**/.venv/
+env/
+ENV/
+
+# ----------------------------
+# Runtime / uploads / local data
+# ----------------------------
+uploads/
+**/uploads/
+*.sqlite3
+*.db
+*.pid
+
+# Keep local backend runtime data off GitHub
+backend/traffic_db.json
+
+# ----------------------------
+# Optional build artifacts
+# ----------------------------
+*.apk
+*.aab
+*.ipa
+*.xcarchive

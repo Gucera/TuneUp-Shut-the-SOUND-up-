@@ -1,222 +1,306 @@
-import os
+from fastapi import FastAPI, UploadFile, File, Form
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime, timezone
 import shutil
-import numpy as np
+import os
 import librosa
+import numpy as np
+import random
 import firebase_admin
 from firebase_admin import credentials, firestore
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
+import sklearn.cluster
 
-# Modelleri diğer dosyadan çekiyoruz
-from models import UserProfile, TrafficData 
+app = FastAPI()
 
-# --- FIREBASE BAĞLANTISI ---
-# serviceAccountKey.json dosyasının bu dosya ile aynı yerde olduğundan emin ol.
+# Connect to Firebase (only if not already connected)
 if not firebase_admin._apps:
     cred = credentials.Certificate("serviceAccountKey.json")
     firebase_admin.initialize_app(cred)
 
+# Database client
 db = firestore.client()
 
-# --- UYGULAMA AYARLARI ---
-app = FastAPI(
-    title="Music AI Backend",
-    description="MP3 analiz ve Firebase entegrasyonu.",
-    version="1.2.0"
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-UPLOAD_DIR = "temp_files"
+# Folder for uploaded files
+UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# --- ENDPOINTLER ---
+# Colors used for song section markers
+SECTION_COLORS = {
+    "INTRO": "#00ff9d",
+    "VERSE 1": "#00d2ff",
+    "CHORUS": "#ff00ff",
+    "VERSE 2": "#5599ff",
+    "BRIDGE": "#ffd700",
+    "OUTRO": "#ff4444",
+    "SECTION": "#aaaaaa",
+    "AUTO": "#ffaa00"
+}
 
+# Data models for the API
+class MoodRequest(BaseModel):
+    mood: str
+
+class Marker(BaseModel):
+    id: int
+    label: str
+    color: str
+    x: float
+
+class TrafficData(BaseModel):
+    song_name: str
+    duration: float
+    markers: List[Marker]
+    user_id: Optional[str] = None
+
+
+class LeaderboardProfile(BaseModel):
+    user_id: str
+    display_name: str
+    xp: int
+    level: int
+    streak_days: int = 0
+    longest_streak: int = 0
+    badges: List[str] = []
+    completed_lessons: int = 0
+    completed_songs: int = 0
+    completed_quizzes: int = 0
+
+
+PITCH_RANGES = {
+    "Guitar": (60.0, 420.0),
+    "Bass": (30.0, 180.0),
+    "Ukulele": (180.0, 500.0),
+    "Drums": (40.0, 1200.0),
+}
+
+# Simple mood-to-song database
+SONG_DATABASE = {
+    "Happy": [{"title": "Happy", "artist": "Pharrell", "bpm": 160}],
+    "Sad": [{"title": "Someone Like You", "artist": "Adele", "bpm": 67}],
+    "Energetic": [{"title": "Eye of the Tiger", "artist": "Survivor", "bpm": 109}]
+}
+
+# Health check endpoint
 @app.get("/")
-async def read_root():
-    return {"status": "active", "message": "Backend Hazır!"}
+def read_root():
+    return {"message": "Music AI Backend + Firebase + Color Brain Ready! 🧠🔥"}
 
-@app.post("/test-firebase")
-async def test_firebase_connection():
-    try:
-        doc_ref = db.collection("test_logs").document("connection_check")
-        doc_ref.set({
-            "status": "connected",
-            "timestamp": datetime.now()
-        })
-        return {"status": "success", "detail": "Firebase bağlantısı başarılı!"}
-    except Exception as e:
-        return HTTPException(status_code=500, detail=f"Firebase Hatası: {str(e)}")
+# Recommend a song based on mood
+@app.post("/recommend")
+def recommend_song(data: MoodRequest):
+    songs = SONG_DATABASE.get(data.mood, [])
+    if not songs: return {"error": "No songs found"}
+    return {"status": "success", "recommendation": random.choice(songs)}
 
-@app.post("/analyze-song")
-async def analyze_song(file: UploadFile = File(...)):
-    """
-    Roadmap Gün 25-30: Profesyonel Key Tespiti.
-    Tuning (Akort) düzeltmesi ve Chroma CENS kullanarak hatayı minimize eder.
-    """
-    safe_filename = file.filename.replace(" ", "_")
-    temp_file_path = os.path.join(UPLOAD_DIR, safe_filename)
-    
+# Simple BPM analysis from an audio file
+@app.post("/analyze-bpm")
+async def analyze_bpm(file: UploadFile = File(...)):
     try:
-        # 1. Dosyayı Kaydet
-        with open(temp_file_path, "wb") as buffer:
+        file_path = f"{UPLOAD_DIR}/{file.filename}"
+        with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 2. Yükle (Librosa)
-        y, sr = librosa.load(temp_file_path, sr=None)
-        
-        # --- BPM & SÜRE ---
+        y, sr = librosa.load(file_path, sr=None)
         onset_env = librosa.onset.onset_strength(y=y, sr=sr)
         tempo, _ = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
-        duration = librosa.get_duration(y=y, sr=sr)
         
-        if isinstance(tempo, np.ndarray):
-            tempo = tempo[0]
+        bpm = float(tempo) if np.ndim(tempo) == 0 else float(tempo[0])
+        os.remove(file_path)
+        
+        return {"status": "success", "bpm": round(bpm, 1), "message": f"{round(bpm)} BPM"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
-        # --- PROFESYONEL KEY TESPİTİ ---
-        
-        # A) Harmonik Sesi Ayır (Davulları çöpe at)
-        y_harmonic, _ = librosa.effects.hpss(y)
-        
-        # B) Tuning (Akort) Sapmasını Hesapla
-        # Şarkı standarttan ne kadar sapmış? (Örn: +0.2 ton)
-        tuning_offset = librosa.estimate_tuning(y=y_harmonic, sr=sr)
-        
-        # C) Chroma CENS (Chroma Energy Normalized Statistics)
-        # Bu yöntem gürültüye karşı çok daha dayanıklıdır ve tuning bilgisini kullanır.
-        chroma_cens = librosa.feature.chroma_cens(y=y_harmonic, sr=sr, tuning=tuning_offset)
-        
-        # D) Tüm şarkı boyunca notaların ortalamasını al
-        chroma_vals = np.mean(chroma_cens, axis=1)
-        
-        # E) Krumhansl-Schmuckler Profilleri (Standart)
-        major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
-        minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
-        
-        pitches = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-        key_correlations = []
-        
-        # F) Korelasyon Döngüsü
-        for i in range(12):
-            rotated_major = np.roll(major_profile, i)
-            rotated_minor = np.roll(minor_profile, i)
-            
-            # Korelasyon hesabı
-            corr_major = np.corrcoef(chroma_vals, rotated_major)[0, 1]
-            corr_minor = np.corrcoef(chroma_vals, rotated_minor)[0, 1]
-            
-            key_correlations.append((pitches[i] + " Major", corr_major))
-            key_correlations.append((pitches[i] + " Minor", corr_minor))
-            
-        # En iyi eşleşmeyi seç
-        best_key, best_score = max(key_correlations, key=lambda item: item[1])
 
-        # 3. Veriyi Hazırla
-        song_data = {
-            "filename": file.filename,
-            "bpm": round(float(tempo), 2),
-            "duration": round(float(duration), 2),
-            "sample_rate": sr,
-            "key": best_key, 
-            "created_at": datetime.now(), 
-            "markers": [] 
-        }
+@app.post("/detect-pitch")
+async def detect_pitch(file: UploadFile = File(...), instrument: str = Form("Guitar")):
+    file_path = f"{UPLOAD_DIR}/{file.filename}"
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-        # 4. Veritabanına Yaz
-        update_time, doc_ref = db.collection("traffic_data").add(song_data)
+        y, sr = librosa.load(file_path, sr=22050, mono=True, duration=1.2)
+        y, _ = librosa.effects.trim(y, top_db=28)
+
+        if y.size < 2048:
+            return {"status": "error", "message": "Signal too short"}
+
+        fmin, fmax = PITCH_RANGES.get(instrument, PITCH_RANGES["Guitar"])
+        pitches = librosa.yin(
+            y,
+            fmin=fmin,
+            fmax=fmax,
+            sr=sr,
+            frame_length=2048,
+            hop_length=128,
+        )
+
+        valid = pitches[np.isfinite(pitches)]
+        if valid.size == 0:
+            return {"status": "error", "message": "No stable pitch found"}
+
+        median_pitch = float(np.median(valid))
+        stable = valid[np.abs(valid - median_pitch) < max(4.0, median_pitch * 0.08)]
+        detected_pitch = float(np.median(stable)) if stable.size > 0 else median_pitch
 
         return {
             "status": "success",
-            "db_id": doc_ref.id,
-            "data": song_data
+            "frequency": round(detected_pitch, 2),
         }
-
     except Exception as e:
-        return HTTPException(status_code=500, detail=f"Analiz Hatası: {str(e)}")
-    
+        return {"status": "error", "message": str(e)}
     finally:
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
-
-@app.post("/signup-simulation")
-async def signup_simulation(user: UserProfile):
-    """
-    Roadmap Gün 10: Kullanıcı Kayıt Simülasyonu.
-    Girdi olarak UserProfile (models.py) bekler.
-    """
+# Save traffic analysis to Firebase
+@app.post("/save-traffic")
+def save_traffic(data: TrafficData):
     try:
-        user_data = user.dict()
-        user_data["created_at"] = datetime.now()
-        
-        # Firestore 'users' koleksiyonuna ekle
-        update_time, doc_ref = db.collection("users").add(user_data)
-        
-        return {
-            "status": "success",
-            "user_id": doc_ref.id,
-            "message": f"{user.email} kullanıcısı oluşturuldu."
-        }
-
+        doc_data = data.dict()
+        doc_data["created_at"] = datetime.now(timezone.utc).isoformat()
+        db.collection("traffic_analyses").add(doc_data)
+        return {"status": "success", "message": f"{data.song_name} saved to Firebase! 🔥"}
     except Exception as e:
-        return HTTPException(status_code=500, detail=f"Kayıt Hatası: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
-
-@app.post("/experiment-drum-detection")
-async def detect_drums(file: UploadFile = File(...)):
-    """
-    Roadmap 3. Hafta (DSP): Basit RMS (Ses Şiddeti) tabanlı vuruş algılama.
-    Bateri gibi ani yükselen sesleri yakalamaya çalışır.
-    """
-    safe_filename = "drum_test_" + file.filename.replace(" ", "_")
-    temp_file_path = os.path.join(UPLOAD_DIR, safe_filename)
-    
+# Get all saved traffic analyses
+@app.get("/get-traffic")
+def get_traffic(user_id: Optional[str] = None):
     try:
-        # 1. Dosyayı Kaydet
-        with open(temp_file_path, "wb") as buffer:
+        query = db.collection("traffic_analyses")
+        docs = query.where("user_id", "==", user_id).stream() if user_id else query.stream()
+        results = []
+        for doc in docs:
+            results.append(doc.to_dict())
+        return results
+    except Exception as e:
+        return []
+
+
+@app.post("/sync-leaderboard")
+def sync_leaderboard(profile: LeaderboardProfile):
+    try:
+        payload = profile.dict()
+        payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+        db.collection("leaderboard_profiles").document(profile.user_id).set(payload, merge=True)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/leaderboard")
+def get_leaderboard(limit: int = 8):
+    try:
+        safe_limit = max(1, min(limit, 20))
+        docs = (
+            db.collection("leaderboard_profiles")
+            .order_by("xp", direction=firestore.Query.DESCENDING)
+            .limit(safe_limit)
+            .stream()
+        )
+
+        leaderboard = []
+        for doc in docs:
+            payload = doc.to_dict() or {}
+            leaderboard.append(payload)
+
+        return {"status": "success", "leaderboard": leaderboard}
+    except Exception as e:
+        return {"status": "error", "leaderboard": [], "message": str(e)}
+
+# Full AI analysis — finds BPM and song sections with colors
+@app.post("/analyze-full")
+async def analyze_full(file: UploadFile = File(...)):
+    print(f"--- ANALYSIS STARTED: {file.filename} ---")
+    try:
+        # Save the uploaded file temporarily
+        file_path = f"{UPLOAD_DIR}/{file.filename}"
+        with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 2. Yükle
-        y, sr = librosa.load(temp_file_path, sr=None)
-        
-        # 3. RMS (Root Mean Square) - Sesin enerjisini hesapla
-        # hop_length: Analiz penceresi boyutu (daha küçük = daha hassas zamanlama)
-        hop_length = 512
-        rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop_length)[0]
-        
-        # 4. Basit Algoritma: Ortalama sesin 2 katına çıkan yerleri "Vuruş" say
-        threshold = np.mean(rms) * 1.5  # Eşik değeri (Hassasiyet ayarı)
-        
-        # RMS dizisinde eşiği geçen noktaları bul
-        # librosa.frames_to_time: Çerçeve numarasını saniyeye çevirir
-        peaks = librosa.util.peak_pick(rms, pre_max=5, post_max=5, pre_avg=5, post_avg=5, delta=0.02, wait=10)
-        peak_times = librosa.frames_to_time(peaks, sr=sr, hop_length=hop_length)
-        
-        # Saniyeleri listeye çevir (JSON uyumu için)
-        beats = [round(float(t), 2) for t in peak_times]
+        # Load the audio (cap at 3 minutes for speed)
+        y, sr = librosa.load(file_path, sr=None, duration=180) 
+        print("File loaded, processing audio...")
 
+        # Find the BPM
+        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+        tempo, _ = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
+        bpm = float(tempo) if np.ndim(tempo) == 0 else float(tempo[0])
+        print(f"BPM found: {bpm}")
+        
+        # Find song sections using segmentation
+        ai_markers = []
+        try:
+            print("Trying segmentation...")
+            
+            # Use CQT for musical structure analysis
+            chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+            
+            # Split the song into 6 main parts (Intro, Verse, Chorus, etc.)
+            bounds = librosa.segment.agglomerative(chroma, 6) 
+            bound_times = librosa.frames_to_time(bounds, sr=sr)
+            
+            bound_times = sorted(list(bound_times))
+            print(f"Raw boundaries found: {bound_times}")
+
+            section_names = ["INTRO", "VERSE 1", "CHORUS", "VERSE 2", "BRIDGE", "OUTRO"]
+            
+            # Keep track of spacing so markers don't overlap
+            last_time = -10.0
+            name_index = 0
+
+            for t in bound_times:
+                # Only place markers between 5s and 175s, with at least 15s gap
+                if t > 5.0 and t < 175.0 and (t - last_time > 15.0):
+                    
+                    label_name = section_names[name_index] if name_index < len(section_names) else "SECTION"
+                    marker_color = SECTION_COLORS.get(label_name, "#ffffff")
+
+                    ai_markers.append({
+                        "id": int(t * 10000) + random.randint(0,999),
+                        "label": label_name,
+                        "color": marker_color, 
+                        "x": 0,
+                        "time": float(t)
+                    })
+                    
+                    last_time = t
+                    name_index += 1
+
+            # Fallback: if AI found no sections, add default markers
+            if len(ai_markers) == 0:
+                print("⚠️ AI found no sections, adding default markers...")
+                steps = [30.0, 60.0, 90.0, 120.0]
+                labels = ["VERSE 1", "CHORUS", "VERSE 2", "CHORUS"]
+                
+                for i, t in enumerate(steps):
+                    lbl = labels[i]
+                    ai_markers.append({
+                        "id": int(t * 1000),
+                        "label": lbl,
+                        "color": SECTION_COLORS.get(lbl, "#ffaa00"),
+                        "x": 0,
+                        "time": float(t)
+                    })
+
+        except Exception as e:
+            print(f"❌ Segmentation error: {e}")
+        
+        # Clean up the temp file
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        print(f"Markers sent to frontend: {len(ai_markers)}")
+        
         return {
             "status": "success",
-            "algorithm": "RMS-Energy",
-            "total_beats_detected": len(beats),
-            "beat_times_seconds": beats[:50] # Çok uzun olmasın diye ilk 50 vuruşu gösterelim
+            "bpm": round(bpm),
+            "markers": ai_markers,
+            "message": f"Tempo: {round(bpm)} BPM | {len(ai_markers)} Sections"
         }
-
+        
     except Exception as e:
-        return HTTPException(status_code=500, detail=f"DSP Hatası: {str(e)}")
-    
-    finally:
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+        print(f"General Error: {e}")
+        return {"status": "error", "message": str(e)}
