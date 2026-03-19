@@ -130,7 +130,8 @@ A structure-analysis workspace for song study and arrangement thinking.
 
 **Highlights**
 - Load a song file from the device
-- Run backend-assisted BPM + section analysis
+- Start an async backend BPM + section analysis job
+- Poll lightweight task status updates while the backend scans
 - Review waveform chunks with markers
 - Save studies and surface them later in Profile
 - Browse **built-in traffic studies** for reference material
@@ -521,9 +522,12 @@ TuneUp/
 | Method | Endpoint | Purpose |
 |---|---|---|
 | `GET` | `/` | health / readiness message |
+| `GET` | `/healthz` | backend + storage health status |
 | `POST` | `/recommend` | mood-based song recommendation demo |
 | `POST` | `/analyze-bpm` | simple BPM detection |
 | `POST` | `/detect-pitch` | backend pitch detection fallback |
+| `POST` | `/upload-audio` | create a background song-analysis job |
+| `GET` | `/task-status/{task_id}` | poll analysis job status/results |
 | `POST` | `/save-traffic` | save a traffic analysis |
 | `GET` | `/get-traffic` | fetch saved traffic analyses |
 | `POST` | `/sync-leaderboard` | sync leaderboard profile |
@@ -580,7 +584,7 @@ Song import is handled by [`MusicAIApp/src/services/songLibrary.ts`](./MusicAIAp
 ### Backend
 - Python 3.11+ recommended
 - virtual environment support
-- Firebase service account JSON for Firestore-backed features
+- Firebase credentials for Firestore-backed features if you want durable cloud storage
 
 ---
 
@@ -604,14 +608,22 @@ source venv/bin/activate
 pip install fastapi uvicorn python-multipart librosa numpy scikit-learn firebase-admin
 ```
 
-### Firebase credential requirement
-Place your Firebase Admin SDK key locally at:
+### Backend environment setup
+
+The backend now supports both local-file credentials and environment-based deployment credentials.
+
+You can configure Firebase in either of these ways:
+- put a local Admin SDK key at `backend/serviceAccountKey.json`
+- set `FIREBASE_SERVICE_ACCOUNT_JSON` in your deployment environment
+- set `GOOGLE_APPLICATION_CREDENTIALS` to a mounted JSON key path
+
+Example values live in:
 
 ```text
-backend/serviceAccountKey.json
+backend/.env.example
 ```
 
-This file is **required locally** for Firestore-backed features and **must never be committed**.
+If Firebase is unavailable, the backend still boots and falls back to local JSON storage for traffic saves and leaderboard data.
 
 ### Run the backend
 
@@ -640,10 +652,18 @@ You can then open:
 
 ### 4. Configure frontend API access
 
-The backend URL is configured in:
-- [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts)
+The frontend reads the backend URL from:
+- `MusicAIApp/.env`
+- falling back to the hardcoded URL in [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts)
+
+Start by using the example file:
+
+```text
+MusicAIApp/.env.example
+```
 
 ### Typical values
+- Render: `https://YOUR_RENDER_SERVICE.onrender.com`
 - iOS simulator: `http://127.0.0.1:8000`
 - Android emulator: `http://10.0.2.2:8000`
 - physical phone: `http://YOUR_LOCAL_IP:8000`
@@ -664,6 +684,7 @@ Security is critical for this project because it contains mobile app code, backe
 - `.env`
 - `.env.*`
 - `serviceAccountKey.json`
+- `backend/leaderboard_db.json`
 - `node_modules/`
 - `venv/`
 - `.venv/`
@@ -675,6 +696,7 @@ Security is critical for this project because it contains mobile app code, backe
 ### Included protections
 - a root-level `.gitignore` should block sensitive and bulky files
 - `backend/serviceAccountKey.json` is intended to stay local only
+- backend JSON fallback stores are runtime data and should stay local only
 - uploads and generated caches should stay out of version control
 
 ### Recommended security practices
@@ -702,12 +724,19 @@ cd backend
 python3 -m py_compile main.py
 ```
 
+API smoke checks:
+
+```bash
+curl http://127.0.0.1:8000/
+curl http://127.0.0.1:8000/healthz
+```
+
 ---
 
 ## 🚚 Deployment Notes
 
 ### Mobile app
-This project is currently optimized for local Expo development.
+This project is optimized for Expo development, but the API layer now supports environment-based backend URLs for Render or other hosted backends.
 
 A production release path would typically include:
 - EAS Build for mobile binaries
@@ -730,6 +759,13 @@ Production hardening would include:
 - request limits / abuse protection
 - monitoring and logs
 - storage cleanup policies for uploaded files
+
+### Render-specific notes
+- set `FIREBASE_SERVICE_ACCOUNT_JSON` if you want Firestore-backed traffic saves and leaderboard sync
+- set `CORS_ALLOW_ORIGINS` if you are calling the API from web origins
+- point the mobile app to the live backend with `EXPO_PUBLIC_API_BASE_URL`
+- Studio Grid scans now use `POST /upload-audio` plus `GET /task-status/{task_id}` polling instead of one long blocking request
+- if Firebase is misconfigured, the backend falls back to local JSON storage so analysis and save flows keep responding
 
 ---
 

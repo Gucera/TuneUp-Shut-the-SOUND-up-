@@ -95,6 +95,7 @@ uploads/
 
 # Keep local backend runtime data off GitHub
 backend/traffic_db.json
+backend/leaderboard_db.json
 
 # ----------------------------
 # Optional build artifacts

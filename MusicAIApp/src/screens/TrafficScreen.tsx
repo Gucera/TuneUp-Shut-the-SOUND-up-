@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as DocumentPicker from 'expo-document-picker';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
-import { saveTrafficData, analyzeSongFile } from '../services/api';
+import { saveTrafficData } from '../services/api';
 import { AppSettings, getAppSettings } from '../services/appSettings';
 import PageTransitionView from '../components/PageTransitionView';
 import PremiumBackdrop from '../components/PremiumBackdrop';
@@ -17,6 +17,7 @@ import SkeletonBlock from '../components/SkeletonBlock';
 import { COLORS, SHADOWS } from '../theme';
 import { TRAFFIC_ANALYSIS_LIBRARY, TrafficAnalysisPreset } from '../data/trafficAnalysisLibrary';
 import { getGamificationSnapshot } from '../services/gamification';
+import { useAudioAnalysisJob } from '../hooks/useAudioAnalysisJob';
 import { useCelebration } from '../hooks/useCelebration';
 
 const { width } = Dimensions.get('window');
@@ -44,7 +45,6 @@ export default function TrafficScreen() {
     const [duration, setDuration] = useState(0);
     const [fileUri, setFileUri] = useState<string | null>(null);
     const [bpm, setBpm] = useState<number | null>(null);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [markers, setMarkers] = useState<MarkerItem[]>([]);
     const [activePresetId, setActivePresetId] = useState<string | null>(null);
@@ -56,6 +56,16 @@ export default function TrafficScreen() {
         new Array(10).fill(0).map(() => new Array(POINTS_PER_CHUNK).fill(0).map(() => Math.random() * 40)),
     );
     const { celebration, showCelebration } = useCelebration();
+    const {
+        isScanning: isAnalyzing,
+        progressText: analysisProgressText,
+        result: analysisResult,
+        error: analysisError,
+        startScan,
+        clearResult,
+        clearError,
+        resetJob,
+    } = useAudioAnalysisJob({ pollIntervalMs: 4000 });
 
     const flatListRef = useRef<FlatList<number[]>>(null);
     const scrollX = useRef(0);
@@ -85,6 +95,38 @@ export default function TrafficScreen() {
         }, [loadSettings]),
     );
 
+    useEffect(() => {
+        if (!analysisResult) {
+            return;
+        }
+
+        setBpm(analysisResult.bpm);
+        const nextMarkers = analysisResult.markers.map((marker) => ({
+            id: marker.id || Date.now() + Math.random(),
+            label: marker.label,
+            color: marker.color,
+            x: marker.time * PIXELS_PER_SECOND,
+        }));
+        setMarkers(nextMarkers);
+
+        Alert.alert('Analysis Complete', analysisResult.message);
+        showCelebration({
+            title: 'Analysis ready',
+            subtitle: analysisResult.message,
+            variant: 'success',
+        });
+        clearResult();
+    }, [analysisResult, clearResult, showCelebration]);
+
+    useEffect(() => {
+        if (!analysisError) {
+            return;
+        }
+
+        Alert.alert('Error', `Analysis failed: ${analysisError}`);
+        clearError();
+    }, [analysisError, clearError]);
+
     const totalWaveWidth = useMemo(() => chunks.length * CHUNK_WIDTH, [chunks.length]);
 
     const pickSong = async () => {
@@ -98,6 +140,7 @@ export default function TrafficScreen() {
                 return;
             }
 
+            resetJob();
             const file = result.assets[0];
             setSongName(file.name);
             setFileUri(file.uri);
@@ -227,6 +270,7 @@ export default function TrafficScreen() {
     };
 
     const loadPreset = async (preset: TrafficAnalysisPreset) => {
+        resetJob();
         if (sound) {
             await sound.unloadAsync();
             setSound(null);
@@ -257,34 +301,9 @@ export default function TrafficScreen() {
             return;
         }
 
-        setIsAnalyzing(true);
-        const result = await analyzeSongFile(fileUri, songName);
-        setIsAnalyzing(false);
-
-        if (result.status === 'success') {
-            setBpm(result.bpm);
-
-            if (result.markers && result.markers.length > 0) {
-                const newMarkers = result.markers.map((marker: any) => ({
-                    id: marker.id || Date.now() + Math.random(),
-                    label: marker.label,
-                    color: marker.color,
-                    x: marker.time * PIXELS_PER_SECOND,
-                }));
-
-                setMarkers((prev) => [...prev, ...newMarkers]);
-            }
-
-            Alert.alert('Analysis Complete', result.message);
-            showCelebration({
-                title: 'Analysis ready',
-                subtitle: result.message,
-                variant: 'success',
-            });
-            return;
-        }
-
-        Alert.alert('Error', `Analysis failed: ${result.message}`);
+        setMarkers([]);
+        setBpm(null);
+        await startScan({ fileUri, fileName: songName });
     };
 
     const handleSave = async () => {
@@ -305,7 +324,10 @@ export default function TrafficScreen() {
                 variant: 'confetti',
             }, 2100);
         } else {
-            Alert.alert('Error', 'Something went wrong while saving.');
+            const message = result && typeof result.message === 'string'
+                ? result.message
+                : 'Something went wrong while saving.';
+            Alert.alert('Error', message);
         }
     };
 
@@ -437,6 +459,11 @@ export default function TrafficScreen() {
 
                     {isAnalyzing && (
                         <View style={styles.analysisOverlay}>
+                            <Text style={styles.analysisKicker}>BACKGROUND SCAN</Text>
+                            <Text style={styles.analysisTitle}>{analysisProgressText}</Text>
+                            <Text style={styles.analysisCaption}>
+                                You can switch apps while the backend works. Polling resumes automatically when TuneUp is active again.
+                            </Text>
                             <SkeletonBlock style={{ width: '62%', height: 16, marginBottom: 12 }} />
                             <SkeletonBlock style={{ width: '88%', height: 12, marginBottom: 8 }} />
                             <SkeletonBlock style={{ width: '76%', height: 12, marginBottom: 18 }} />
@@ -515,7 +542,7 @@ const styles = StyleSheet.create({
         width: 150,
         height: 150,
         borderRadius: 75,
-        backgroundColor: 'rgba(110, 124, 255, 0.12)',
+        backgroundColor: 'rgba(116, 0, 184, 0.12)',
     },
     glowB: {
         position: 'absolute',
@@ -524,7 +551,7 @@ const styles = StyleSheet.create({
         width: 180,
         height: 180,
         borderRadius: 90,
-        backgroundColor: 'rgba(66, 194, 255, 0.11)',
+        backgroundColor: 'rgba(78, 168, 222, 0.11)',
     },
     header: {
         color: COLORS.textStrong,
@@ -651,6 +678,26 @@ const styles = StyleSheet.create({
         paddingHorizontal: 18,
         paddingVertical: 20,
         justifyContent: 'center',
+    },
+    analysisKicker: {
+        color: COLORS.primary,
+        fontSize: 11,
+        fontWeight: '900',
+        letterSpacing: 1,
+        marginBottom: 8,
+    },
+    analysisTitle: {
+        color: COLORS.textStrong,
+        fontSize: 17,
+        fontWeight: '900',
+        lineHeight: 24,
+        marginBottom: 8,
+    },
+    analysisCaption: {
+        color: COLORS.text,
+        fontSize: 12,
+        lineHeight: 18,
+        marginBottom: 18,
     },
     analysisBarRow: {
         flexDirection: 'row',
