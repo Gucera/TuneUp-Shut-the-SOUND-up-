@@ -1,561 +1,814 @@
-# TuneUpDemo1 - AI-Powered Music Learning Platform 🎵
+# TuneUp 🎵
 
-A comprehensive music education and analysis platform combining **React Native (Expo)** mobile app with an **AI-powered FastAPI backend** for musicians of all levels. This platform integrates real-time pitch detection, AI music analysis, interactive music theory games, and a professional studio-style traffic editor.
+<p align="center">
+  <img src="./MusicAIApp/assets/icon.png" alt="TuneUp app icon" width="120" />
+</p>
 
----
+<p align="center">
+  <strong>A premium mobile music-learning platform built with Expo, React Native, FastAPI, and Firebase.</strong>
+</p>
 
-## Table of Contents
-1. [How the App Works (Functional Overview)](#1-how-the-app-works-functional-overview)
-2. [How the Code Works (Technical Deep Dive)](#2-how-the-code-works-technical-deep-dive)
-3. [Project Structure](#3-project-structure)
-4. [Project Index & Glossary](#4-project-index--glossary)
-5. [Roadmap & Future Improvements](#5-roadmap--future-improvements)
+<p align="center">
+  TuneUp combines tuning, theory training, song practice, studio-style arrangement analysis, profiles, streaks, and gamification in a single mobile-first experience.
+</p>
 
----
-
-## 1. How the App Works (Functional Overview)
-
-### What This Application Does
-
-**TuneUpDemo1** is a mobile music education platform designed to help musicians:
-- **Tune instruments in real-time** using advanced pitch detection
-- **Learn music theory** through interactive gamification
-- **Analyze songs** using AI to detect BPM, structure, and sections
-- **Create professional annotations** on music tracks like a studio engineer
-
-### Core Features
-
-#### 🎸 **Pratik (Practice) Screen** - Instrument Tuner & Rhythm Detector
-- **Multi-Instrument Support**: Guitar, Bass, and Drums
-- **Real-time Pitch Detection**: Uses autocorrelation algorithm to detect frequency from live microphone input
-- **Visual Feedback**: 
-  - Guitar/Bass: Animated needle showing pitch deviation
-  - Drums: Pulsating visual rhythm detector based on RMS (Root Mean Square) audio analysis
-- **Precision Tuning**: Detects if instrument is sharp, flat, or perfectly tuned within 3Hz tolerance
-
-#### 📚 **Teori (Theory) Screen** - Interactive Note Reading Game
-- **Musical Staff Display**: Authentic music notation with treble clef
-- **7-Key Piano Interface**: Realistic piano keyboard with white and black keys
-- **Gamification**: XP system, streak tracking, immediate feedback
-- **Educational Goal**: Train musicians to read sheet music by sight
-
-#### 🎛️ **Trafik (Traffic) Screen** - AI Studio Editor
-- **Audio File Upload**: Import MP3/WAV files for analysis
-- **AI-Powered Analysis**: Automatically detects:
-  - BPM (Beats Per Minute)
-  - Song structure (Intro, Verse, Chorus, Bridge, Outro)
-  - Optimal section markers with color-coded labels
-- **Waveform Visualization**: Chunk-based rendering for smooth performance
-- **Manual Editing**: Add custom markers at any position
-- **Data Persistence**: Save analyses to Firebase Firestore for cloud storage
-
-#### 🎵 **Şarkı (Song) Screen** - Song Repertoire
-- Displays curated song library with difficulty ratings
-- Color-coded difficulty levels (Easy, Medium, Hard)
-- Beautiful gradient UI with card-based design
-
-### User Flow
-```
-User Opens App → Selects Tab
-  ├─ Pratik: Records audio → Analyzes pitch/rhythm → Displays tuning feedback
-  ├─ Teori: Displays random note → User plays piano → Validates answer → Updates score
-  ├─ Trafik: Uploads song → AI analyzes → Displays waveform + markers → User can save
-  └─ Şarkı: Browse song library → Select difficulty level
-```
-
-### Problem This Project Solves
-Musicians often struggle with:
-- **Instrument tuning** without expensive tuners
-- **Learning music theory** in an engaging, non-boring way
-- **Understanding song structure** for practice or performance
-- **Accessing professional tools** that are too complex or expensive
-
-This app democratizes these tools into a single, free, mobile-first platform.
+<p align="center">
+  <img src="https://img.shields.io/badge/Expo-54-000020?style=for-the-badge&logo=expo" alt="Expo 54" />
+  <img src="https://img.shields.io/badge/React_Native-0.81-61DAFB?style=for-the-badge&logo=react" alt="React Native 0.81" />
+  <img src="https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi" alt="FastAPI Backend" />
+  <img src="https://img.shields.io/badge/Firebase-Firestore-FFCA28?style=for-the-badge&logo=firebase" alt="Firebase Firestore" />
+  <img src="https://img.shields.io/badge/TypeScript-App-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript App" />
+</p>
 
 ---
 
-## 2. How the Code Works (Technical Deep Dive)
+## ✨ Overview
 
-### Technical Architecture
+TuneUp is a full-stack music practice app designed to feel like a modern premium product, while still being practical for real daily training.
 
-The application follows a **Client-Server Architecture** with a clear separation of concerns:
+It includes:
+- 🎸 **Practice Deck** for instrument tuning and live microphone-based pitch feedback
+- 📚 **Theory Lab** for lessons, theory quiz, drag puzzles, audio quiz, and quick note drills
+- 🎛️ **Studio Grid** for arrangement analysis, BPM detection, section markers, and song structure study
+- 🎵 **Song Flow** for chord-following, tab playback, guided practice, imported songs, and performance scoring
+- 👤 **Profile & Settings** for progress tracking, badges, streaks, leaderboard data, saved songs, lesson history, and app preferences
+- 🏆 **Gamification** with XP, levels, streaks, leaderboard sync, and unlockable badges
 
-```
-┌─────────────────────────────────────────┐
-│   React Native Mobile App (Frontend)   │
-│   - Navigation (Tab-based)              │
-│   - UI Components (Screens)             │
-│   - Local Database (WatermelonDB)       │
-│   - Real-time Audio Processing          │
-└─────────────┬───────────────────────────┘
-              │ HTTP/REST API
-              │ (FormData for file uploads)
-┌─────────────▼───────────────────────────┐
-│   FastAPI Backend (Python)              │
-│   - AI Music Analysis (Librosa)         │
-│   - BPM Detection                        │
-│   - Segmentation (Section Detection)    │
-│   - Firebase Integration                │
-└─────────────┬───────────────────────────┘
-              │
-┌─────────────▼───────────────────────────┐
-│   Firebase Firestore (Cloud Database)  │
-│   - Traffic Analysis Storage            │
-│   - User Data (Future)                  │
-└─────────────────────────────────────────┘
-```
-
-### Data Flow & State Management
-
-#### Frontend State Management
-- **React Hooks**: `useState`, `useRef`, `useEffect` for component-level state
-- **Shared Values**: `react-native-reanimated` for high-performance animations
-- **No Global State**: Each screen manages its own state independently
-
-#### Audio Processing Pipeline (PracticalScreen)
-```
-Microphone → Audio Recording (Expo AV)
-          → Base64 Encoding
-          → PCM Decoding (pitchDetection.ts)
-          → Frequency Analysis (Autocorrelation)
-          → Note Matching (tuningData.ts)
-          → Visual Feedback (Skia Canvas)
-```
-
-#### AI Analysis Pipeline (TrafficScreen + Backend)
-```
-User Uploads File
-   ↓
-Frontend: FormData → API Call (api.ts)
-   ↓
-Backend: Librosa.load() → Audio Signal (Float32Array)
-   ↓
-BPM Detection: Onset Strength + Beat Tracking
-   ↓
-Segmentation: Chroma CQT + Agglomerative Clustering
-   ↓
-Marker Generation: Smart filtering (5-175s, 15s spacing)
-   ↓
-Response: { bpm, markers[] } → Frontend
-   ↓
-Display: Waveform with colored section markers
-   ↓
-Save to Firebase: Firestore.collection('traffic_analyses').add()
-```
-
-### Key Technologies & Why They're Used
-
-| Technology | Purpose | Rationale |
-|-----------|---------|-----------|
-| **React Native (Expo)** | Cross-platform mobile UI | Deploy to iOS/Android simultaneously with native performance |
-| **@shopify/react-native-skia** | Canvas rendering | Hardware-accelerated graphics for smooth animations (60fps) |
-| **react-native-reanimated** | Animations | Runs animations on UI thread for jank-free experience |
-| **Expo AV** | Audio recording | Simple API for microphone access with cross-platform support |
-| **WatermelonDB** | Local database | Reactive, lazy-loaded SQLite database for offline-first apps |
-| **FastAPI** | Backend framework | Async Python framework with automatic API documentation |
-| **Librosa** | Audio analysis | Industry-standard library for music information retrieval (MIR) |
-| **Firebase Firestore** | Cloud database | NoSQL database with real-time sync and easy scalability |
-| **NumPy** | Numerical computing | Efficient array operations for audio signal processing |
-
-### Complex Algorithms Explained
-
-#### 1. **Autocorrelation Pitch Detection** ([pitchDetection.ts](file:///Users/yavuzsever/Desktop/TuneUpDemo1/MusicAIApp/src/utils/pitchDetection.ts))
-
-**What it does**: Detects the fundamental frequency of a musical note from raw audio.
-
-**How it works**:
-```typescript
-autoCorrelate(buffer: Float32Array, sampleRate: number)
-```
-
-1. **RMS Filtering**: Calculates Root Mean Square to filter out silence (< 0.01)
-2. **Edge Trimming**: Removes leading/trailing silence using threshold (0.2)
-3. **Autocorrelation**: For each time-lag `i`, calculates correlation:
-   ```
-   c[i] = Σ (buffer[j] * buffer[j+i])
-   ```
-   This finds repeating patterns (periodicity) in the signal
-4. **Peak Detection**: Finds the lag with maximum correlation (excludes initial decay)
-5. **Frequency Calculation**: `frequency = sampleRate / lag`
-
-**Why autocorrelation?**
-- Simple, fast, and works well for monophonic instruments
-- More robust than zero-crossing for complex waveforms
-- No FFT overhead, runs efficiently on mobile devices
-
-#### 2. **AI Song Segmentation** ([main.py](file:///Users/yavuzsever/Desktop/TuneUpDemo1/backend/main.py#L143-L203))
-
-**What it does**: Automatically divides a song into sections (Intro, Verse, Chorus, etc.)
-
-**How it works**:
-```python
-chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
-bounds = librosa.segment.agglomerative(chroma, 6)
-```
-
-1. **Chroma Feature Extraction**: 
-   - Uses Constant-Q Transform (CQT) to get pitch classes (C, C#, D, etc.)
-   - Creates a time-series of 12-dimensional chroma vectors
-   - Captures harmonic content while ignoring timbre
-
-2. **Agglomerative Clustering**:
-   - Hierarchical clustering algorithm
-   - Merges similar adjacent segments based on chroma similarity
-   - Forces exactly 6 segments (Intro, Verse1, Chorus, Verse2, Bridge, Outro)
-
-3. **Smart Filtering**:
-   ```python
-   if t > 5.0 and t < 175.0 and (t - last_time > 15.0):
-   ```
-   - Skips first 5 seconds (song start is obvious)
-   - Ignores after 175 seconds (avoids cluttered fade-outs)
-   - Enforces 15-second minimum spacing between markers
-
-4. **Color Mapping**: Assigns semantic colors from `SECTION_COLORS` dictionary
-
-**Why this approach?**
-- Chroma is musically meaningful (captures chord changes)
-- Agglomerative clustering doesn't require training data
-- Smart filtering prevents marker spam and improves UX
-
-#### 3. **Chunk-Based Waveform Rendering** ([TrafficScreen.tsx](file:///Users/yavuzsever/Desktop/TuneUpDemo1/MusicAIApp/src/screens/TrafficScreen.tsx#L74-L88))
-
-**What it does**: Renders hours-long songs smoothly without performance issues
-
-**How it works**:
-```typescript
-const totalBars = Math.floor((seconds * PIXELS_PER_SECOND) / TOTAL_BAR_WIDTH)
-const totalChunks = Math.ceil(totalBars / POINTS_PER_CHUNK)
-```
-
-1. **Virtualization**: Only renders chunks visible on screen (FlatList `windowSize={5}`)
-2. **Memoization**: `React.memo()` prevents re-rendering unchanged chunks
-3. **Skia Paths**: Hardware-accelerated canvas drawing
-4. **Random Data**: Currently uses `Math.random()` for demo (real waveform extraction planned)
-
-**Performance**: Can handle 3-hour songs at 60fps on mid-range devices.
+The project is split into:
+- a **React Native + Expo** mobile app in [`MusicAIApp`](./MusicAIApp)
+- a **Python + FastAPI** backend in [`backend`](./backend)
 
 ---
 
-## 3. Project Structure
+## 🖼️ App Preview
 
-```
-TuneUpDemo1/
-├── 📱 MusicAIApp/                    # React Native Mobile Application (Expo)
-│   ├── 📂 src/                       # Source code
-│   │   ├── 📂 database/              # WatermelonDB local database
-│   │   │   ├── index.ts              # Database initialization
-│   │   │   ├── model.ts              # Song & Progress models (ORM)
-│   │   │   ├── schema.ts             # Database schema definition
-│   │   │   └── services.ts           # CRUD operations
-│   │   ├── 📂 screens/               # Main UI screens (Tab Navigator)
-│   │   │   ├── PracticalScreen.tsx   # 🎸 Tuner + Rhythm detector (Pitch detection, Skia animations)
-│   │   │   ├── TheoryScreen.tsx      # 📚 Music theory game (Note reading, gamification)
-│   │   │   ├── TrafficScreen.tsx     # 🎛️ AI Studio Editor (Waveform, markers, AI analysis)
-│   │   │   └── SongScreen.tsx        # 🎵 Song library (Repertoire browser)
-│   │   ├── 📂 services/              # API communication layer
-│   │   │   └── api.ts                # Backend API calls (recommend, analyze, save)
-│   │   ├── 📂 utils/                 # Helper functions & algorithms
-│   │   │   ├── pitchDetection.ts     # Autocorrelation algorithm, PCM decoder
-│   │   │   └── tuningData.ts         # Instrument tuning frequencies (Guitar, Bass, Ukulele)
-│   │   └── theme.ts                  # Global color palette & spacing constants
-│   ├── App.tsx                       # Root component (Navigation setup, Tab Bar)
-│   ├── package.json                  # Dependencies (React Native, Expo, Skia, WatermelonDB)
-│   └── tsconfig.json                 # TypeScript configuration
-│
-├── 🐍 backend/                       # FastAPI Python Backend (AI Engine)
-│   ├── main.py                       # Main API server (5 endpoints: recommend, analyze-bpm, analyze-full, save-traffic, get-traffic)
-│   ├── models.py                     # Pydantic data models (UserProfile, TrafficData)
-│   ├── serviceAccountKey.json        # 🔐 Firebase Admin SDK credentials (GITIGNORED)
-│   ├── traffic_db.json               # Legacy local database (deprecated, kept for fallback)
-│   ├── temp_files/                   # Temporary storage for uploaded audio files
-│   └── uploads/                      # Uploaded songs stored here temporarily
-│
-├── .git/                             # Git version control
-├── .venv/                            # Python virtual environment (backend dependencies)
-└── package-lock.json                 # Root package lock (if any shared scripts exist)
-```
+### Song Flow preview
 
-### Key File Annotations
+<p align="center">
+  <img src="./MusicAIApp/assets/readme/song-flow-preview.png" alt="TuneUp Song Flow screen preview" width="320" />
+</p>
 
-| File | Purpose |
-|------|---------|
-| **App.tsx** | Configures 4-tab bottom navigation with blur effect, sets up routing |
-| **PracticalScreen.tsx** | Records 100ms audio chunks in loop, analyzes via autocorrelation, renders Skia needle/drum animations |
-| **TrafficScreen.tsx** | Manages waveform playback, chunk-based rendering, AI analysis trigger, Firebase save |
-| **TheoryScreen.tsx** | Displays musical staff, generates random notes, validates piano input, tracks XP/streaks |
-| **api.ts** | Handles HTTP requests to backend (FormData for files, JSON for metadata) |
-| **pitchDetection.ts** | Core DSP: Base64→PCM→Float32→Autocorrelation→Frequency |
-| **tuningData.ts** | Reference frequency tables for standard tunings, closest-string matcher |
-| **main.py** | FastAPI server with 5 endpoints, Librosa integration, Firebase Firestore client |
-| **schema.ts** | WatermelonDB schema (songs, progress tables) for offline data |
+**What this preview shows:**
+- the premium Song Flow shell
+- the upgraded top hero treatment
+- smooth sectioned layout with streak, library, and playback entry point
+- the soft-light visual system used across the app
 
 ---
 
-## 4. Project Index & Glossary
+## 🧭 Table of Contents
 
-### Top 5 Critical Components
-
-#### 1. **`autoCorrelate()` Function** ([pitchDetection.ts:11-48](file:///Users/yavuzsever/Desktop/TuneUpDemo1/MusicAIApp/src/utils/pitchDetection.ts#L11-L48))
-**Responsibility**: Converts raw audio samples into a frequency value (Hz)  
-**Why Critical**: The entire tuner feature depends on this. Without it, pitch detection fails.  
-**Dependencies**: Called by `PracticalScreen.tsx` every 100ms during listening mode.  
-**Algorithm**: Autocorrelation-based pitch detection (industry-standard for monophonic audio).
+- [✨ Overview](#-overview)
+- [🖼️ App Preview](#️-app-preview)
+- [🚀 Core Product Experience](#-core-product-experience)
+- [🗂️ Shipped Content](#️-shipped-content)
+- [🏗️ Architecture](#️-architecture)
+- [📱 Frontend Stack](#-frontend-stack)
+- [⚙️ Backend Stack](#️-backend-stack)
+- [🔁 Runtime Flows](#-runtime-flows)
+- [🧠 Feature Deep Dive](#-feature-deep-dive)
+- [📦 Project Structure](#-project-structure)
+- [🔌 API Endpoints](#-api-endpoints)
+- [🎼 Song Import Format](#-song-import-format)
+- [🛠️ Local Development Setup](#️-local-development-setup)
+- [🔐 Security Notes](#-security-notes)
+- [🧪 Quality Checks](#-quality-checks)
+- [🚚 Deployment Notes](#-deployment-notes)
+- [🧭 Suggested Git Workflow](#-suggested-git-workflow)
+- [📝 Current Status](#-current-status)
 
 ---
 
-#### 2. **`/analyze-full` Endpoint** ([main.py:123-223](file:///Users/yavuzsever/Desktop/TuneUpDemo1/backend/main.py#L123-L223))
-**Responsibility**: Full AI analysis of uploaded songs (BPM + segmentation + markers)  
-**Why Critical**: Powers the entire Traffic Editor feature. Returns structured data consumed by frontend.  
-**Data Flow**:
+## 🚀 Core Product Experience
+
+### 1. Practice Deck 🎯
+
+A live instrument practice space focused on immediate clarity.
+
+**Highlights**
+- Supports **Guitar**, **Bass**, **Ukulele**, and **Drums**
+- Live microphone capture via `expo-av`
+- Local pitch analysis plus optional backend pitch assist fallback
+- Visual tuning meter with cents/string guidance
+- Settings-controlled helper views and frequency readout
+
+**Use cases**
+- Quick tuning before practice
+- Checking pitch stability
+- Basic live input confidence building
+- Drum hit presence feedback
+
+---
+
+### 2. Theory Lab 📚
+
+A premium study area built around fast repetition, guided lessons, and music-reading exercises.
+
+**Included modes**
+- **Lesson Packs**
+- **Theory Quiz**
+- **Quick Note**
+- **Drag Puzzle**
+- **Audio Quiz**
+
+**Highlights**
+- Premium structured lessons with visual aids
+- Animated learning visuals such as:
+  - chord diagrams
+  - finger placement previews
+  - tab snippets
+  - keyboard maps
+  - drum rudiment lanes
+- XP and streak rewards for practice completion
+- Premium loading states and celebration overlays
+
+---
+
+### 3. Studio Grid 🎛️
+
+A structure-analysis workspace for song study and arrangement thinking.
+
+**Highlights**
+- Load a song file from the device
+- Run backend-assisted BPM + section analysis
+- Review waveform chunks with markers
+- Save studies and surface them later in Profile
+- Browse **built-in traffic studies** for reference material
+
+**Intended value**
+- Practice arrangement awareness
+- Understand section boundaries
+- Build rehearsal notes faster
+- Give learners a simplified “studio brain” view
+
+---
+
+### 4. Song Flow 🎵
+
+The guided song-learning mode, designed for a “play with the track” experience.
+
+**Highlights**
+- Internal panels for:
+  - **Chords**
+  - **Tabs**
+  - **Guide**
+- Water-smooth lane rendering with Skia
+- Chord scoring through live mic listening
+- Tabs mode for guided timing playback
+- Seek bar + jump controls
+- Song import flow for audio + JSON chart pairing
+- Backing tracks and imported library persistence
+
+---
+
+### 5. Profile & Settings 👤
+
+A single destination for identity, progress, libraries, rewards, and configuration.
+
+**Highlights**
+- XP, level, streak, longest streak, lesson count, quiz count, song count
+- Clickable shelves for:
+  - completed lessons
+  - saved / completed songs
+  - studio saves
+  - badge catalog
+- Detailed badge states:
+  - locked = monochrome
+  - unlocked = colored
+- App-wide settings with tab-level controls
+
+---
+
+## 🗂️ Shipped Content
+
+The app already contains meaningful learning content, not just shell UI.
+
+### Lesson packs
+- 🎸 **20 guitar lessons**
+- 🎹 **20 piano lessons**
+- 🥁 **10 drum lessons**
+
+### Theory content
+- 🧠 **50 theory quiz questions**
+- 🎧 audio chord quiz content
+- 🎼 note-reading and drag-puzzle drills
+
+### Song / structure content
+- 🎵 **4 built-in demo songs** with chords and tabs
+- 🎛️ **10 built-in traffic studies** for structure learning
+- 📥 imported songs supported through local JSON + audio pairing
+
+### Gamification content
+- 🏅 badge catalog with unlock rules
+- 🔥 streak tracking
+- 🥇 leaderboard sync support
+- ⭐ XP and level progression
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TD
+    A["Mobile App\nExpo + React Native"] --> B["REST API\nFastAPI"]
+    A --> C["Local Persistence\nWatermelonDB + FileSystem"]
+    B --> D["Audio Analysis\nlibrosa + numpy + scikit-learn"]
+    B --> E["Cloud Storage\nFirebase Firestore"]
+    C --> F["Settings"]
+    C --> G["Gamification State"]
+    C --> H["Imported Song Library"]
 ```
-Input: Multipart file upload
- ↓
-Librosa processing (CQT, onset detection, agglomerative clustering)
- ↓
-Output: { status, bpm, markers: [{ id, label, color, time }], message }
+
+### Architectural goals
+- Keep the mobile experience **offline-friendly where possible**
+- Use the backend for **heavier or more reliable audio analysis**
+- Persist user-facing state locally for a smooth app feel
+- Sync competitive / shared data to Firestore only where it makes sense
+
+---
+
+## 📱 Frontend Stack
+
+The mobile app lives in [`./MusicAIApp`](./MusicAIApp).
+
+### Primary technologies
+- **Expo 54**
+- **React Native 0.81**
+- **TypeScript**
+- **React Navigation**
+- **React Native Reanimated**
+- **Gesture Handler**
+- **Shopify Skia**
+- **Expo AV**
+- **Expo Document Picker**
+- **Expo File System**
+- **Expo Haptics**
+- **Lottie React Native**
+- **WatermelonDB**
+
+### Frontend responsibilities
+- render all learning and practice screens
+- manage local UI state
+- store app settings locally
+- store imported songs locally
+- store gamification state locally
+- record microphone input
+- perform lightweight pitch analysis on-device
+- call backend endpoints when deeper analysis is needed
+
+---
+
+## ⚙️ Backend Stack
+
+The backend lives in [`./backend`](./backend).
+
+### Primary technologies
+- **FastAPI**
+- **Pydantic**
+- **librosa**
+- **NumPy**
+- **scikit-learn**
+- **Firebase Admin SDK**
+- **Firestore**
+
+### Backend responsibilities
+- BPM analysis
+- full-track structure analysis
+- pitch detection fallback from uploaded audio clips
+- traffic-analysis persistence
+- leaderboard profile sync
+- leaderboard retrieval
+
+---
+
+## 🔁 Runtime Flows
+
+### Practice tuning flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Mobile App
+    participant M as Microphone
+    participant B as Backend
+
+    U->>A: Open Practice Deck
+    U->>A: Start Listening
+    A->>M: Record short live clip
+    A->>A: Try local pitch detection
+    alt Local detection succeeds
+        A->>U: Show target, note, cents, and string
+    else Local detection is weak
+        A->>B: POST /detect-pitch
+        B->>A: Frequency result
+        A->>U: Show stabilized tuning feedback
+    end
 ```
-**Fallback Logic**: If AI fails to find sections, uses hardcoded 30/60/90/120s markers.
 
----
+### Song Flow scoring flow
 
-#### 3. **`TrafficScreen` Component** ([TrafficScreen.tsx](file:///Users/yavuzsever/Desktop/TuneUpDemo1/MusicAIApp/src/screens/TrafficScreen.tsx))
-**Responsibility**: Studio-style waveform editor with playback, markers, and AI integration  
-**Why Critical**: Most complex UI component; integrates audio playback, canvas rendering, AI API, and Firebase.  
-**State Management**:
-- `chunks`: 2D array of waveform amplitude data
-- `markers`: Array of `{ id, label, color, x }` for section annotations
-- `sound`: Expo AV Sound object for playback control
-- `scrollX`: Tracks horizontal scroll position for playhead sync
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Song Flow
+    participant M as Mic Input
+    participant B as Backend Pitch Assist
 
-**Performance Optimizations**:
-- `React.memo()` on `WaveChunk` to prevent unnecessary re-renders
-- `windowSize={5}` virtualizes rendering (only 5 chunks in memory)
-- `removeClippedSubviews` recycles views outside viewport
-
----
-
-#### 4. **`getClosestString()` Function** ([tuningData.ts:35-57](file:///Users/yavuzsever/Desktop/TuneUpDemo1/MusicAIApp/src/utils/tuningData.ts#L35-L57))
-**Responsibility**: Matches detected frequency to nearest instrument string (e.g., "E2", "A3")  
-**Why Critical**: Bridges raw frequency data to user-friendly note names.  
-**Algorithm**:
-```typescript
-For each string in TUNINGS[instrument]:
-  Calculate frequency difference
-  Track minimum difference
-Return { stringName, targetFreq, diff, isPerfect: (diff < 3Hz) }
+    U->>A: Start a song session
+    A->>A: Play backing track
+    A->>M: Listen in short clips
+    A->>A: Compare detected note to expected chord tones
+    alt On-device read is unstable
+        A->>B: POST /detect-pitch
+        B->>A: Frequency fallback
+    end
+    A->>A: Score PERFECT / GOOD / MISS
+    A->>U: Show combo, accuracy, and summary
 ```
-**Used by**: `PracticalScreen` to display which string is being tuned.
+
+### Traffic analysis flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Studio Grid
+    participant B as FastAPI
+    participant F as Firestore
+
+    U->>A: Pick song file
+    U->>A: Tap Scan
+    A->>B: POST /analyze-full
+    B->>B: Load audio with librosa
+    B->>B: Estimate BPM
+    B->>B: Segment song structure
+    B->>A: Return BPM + markers
+    A->>U: Show waveform + structure labels
+    U->>A: Save study
+    A->>B: POST /save-traffic
+    B->>F: Persist analysis
+```
 
 ---
 
-#### 5. **Firebase Firestore Integration** ([main.py:16-23, 96-120](file:///Users/yavuzsever/Desktop/TuneUpDemo1/backend/main.py#L16-L23))
-**Responsibility**: Cloud storage for traffic analyses  
-**Why Critical**: Enables persistent data across devices; future foundation for user accounts.  
-**Collections**:
-- `traffic_analyses`: Stores `{ song_name, duration, markers[] }`
+## 🧠 Feature Deep Dive
 
-**API Methods**:
-- `POST /save-traffic`: Saves analysis to Firestore
-- `GET /get-traffic`: Retrieves all saved analyses
+### Practice Deck
 
-**Schema** (Implicit, NoSQL):
+**Files involved**
+- [`MusicAIApp/src/screens/PracticalScreen.tsx`](./MusicAIApp/src/screens/PracticalScreen.tsx)
+- [`MusicAIApp/src/utils/pitchDetection.ts`](./MusicAIApp/src/utils/pitchDetection.ts)
+- [`MusicAIApp/src/utils/tuningData.ts`](./MusicAIApp/src/utils/tuningData.ts)
+- [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts)
+
+**What it does**
+- captures short clips with `expo-av`
+- tries on-device pitch detection first
+- falls back to backend pitch detection when needed
+- converts raw frequency into note and closest string guidance
+- supports drums with a simpler signal-energy feedback mode
+
+**User-facing outputs**
+- current target note
+- detected note
+- frequency in Hz
+- cents off target
+- active string
+- engine source: local or backend assist
+
+---
+
+### Theory Lab
+
+**Files involved**
+- [`MusicAIApp/src/screens/TheoryScreen.tsx`](./MusicAIApp/src/screens/TheoryScreen.tsx)
+- [`MusicAIApp/src/data/lessonLibrary.ts`](./MusicAIApp/src/data/lessonLibrary.ts)
+- [`MusicAIApp/src/data/theoryQuizQuestions.ts`](./MusicAIApp/src/data/theoryQuizQuestions.ts)
+- [`MusicAIApp/src/data/theoryPuzzles.ts`](./MusicAIApp/src/data/theoryPuzzles.ts)
+- [`MusicAIApp/src/data/audioChordQuiz.ts`](./MusicAIApp/src/data/audioChordQuiz.ts)
+- [`MusicAIApp/src/components/LessonVisualGallery.tsx`](./MusicAIApp/src/components/LessonVisualGallery.tsx)
+
+**What it does**
+- presents structured lesson packs by instrument
+- runs quiz and puzzle mini-games
+- rewards progress through XP and streak logic
+- renders visual lesson support such as finger placement and rudiment previews
+
+**Lesson model includes**
+- title and subtitle
+- tier and duration
+- goal
+- focus tags
+- warmup
+- lesson steps
+- practice loop
+- coach notes
+- checkpoint
+- attached learning visuals
+
+---
+
+### Studio Grid
+
+**Files involved**
+- [`MusicAIApp/src/screens/TrafficScreen.tsx`](./MusicAIApp/src/screens/TrafficScreen.tsx)
+- [`MusicAIApp/src/data/trafficAnalysisLibrary.ts`](./MusicAIApp/src/data/trafficAnalysisLibrary.ts)
+- [`backend/main.py`](./backend/main.py)
+
+**What it does**
+- loads audio into a study session
+- requests BPM + section analysis from the backend
+- visualizes markers on a waveform strip
+- saves analysis data for later review
+
+**Built-in use cases**
+- arrangement study
+- rehearsal prep
+- timing-aware section planning
+- comparison between built-in studies and user-loaded songs
+
+---
+
+### Song Flow
+
+**Files involved**
+- [`MusicAIApp/src/screens/SongScreen.tsx`](./MusicAIApp/src/screens/SongScreen.tsx)
+- [`MusicAIApp/src/data/songLessons.ts`](./MusicAIApp/src/data/songLessons.ts)
+- [`MusicAIApp/src/services/songLibrary.ts`](./MusicAIApp/src/services/songLibrary.ts)
+
+**What it does**
+- supports built-in songs and imported songs
+- plays backing tracks with transport controls
+- renders chord and tab guidance in a premium shell
+- scores chord mode with live microphone listening
+- uses tabs mode as timing-guided playback
+- stores imported songs locally for reuse
+
+**Built-in schema**
+- `SongChordEvent` → `{ timeSec, chord, laneRow }`
+- `SongTabNote` → `{ timeSec, stringIndex, fret, durationSec? }`
+- `SongLesson` → `{ id, title, artist, difficulty, backingTrack, durationSec, chordEvents, tabNotes }`
+
+---
+
+### Profile, Badges, and Settings
+
+**Files involved**
+- [`MusicAIApp/src/screens/ProfileScreen.tsx`](./MusicAIApp/src/screens/ProfileScreen.tsx)
+- [`MusicAIApp/src/services/gamification.ts`](./MusicAIApp/src/services/gamification.ts)
+- [`MusicAIApp/src/services/appSettings.ts`](./MusicAIApp/src/services/appSettings.ts)
+
+**What it does**
+- stores player identity locally
+- tracks streaks and completions
+- unlocks badges based on actual activity
+- syncs leaderboard data when enabled
+- exposes app settings per major tab
+
+**Current badge examples**
+- `First Song`
+- `Drum Master`
+- `Lesson Starter`
+- `Theory Starter`
+- `3-Day Streak`
+
+---
+
+## 📦 Project Structure
+
+```text
+TuneUp/
+├── MusicAIApp/
+│   ├── assets/
+│   │   ├── audio/
+│   │   └── readme/
+│   ├── src/
+│   │   ├── animations/
+│   │   ├── components/
+│   │   ├── data/
+│   │   │   ├── lessonPacks/
+│   │   │   └── *.ts
+│   │   ├── database/
+│   │   ├── hooks/
+│   │   ├── screens/
+│   │   ├── services/
+│   │   └── utils/
+│   ├── App.tsx
+│   ├── app.json
+│   └── package.json
+├── backend/
+│   ├── main.py
+│   └── models.py
+├── .gitignore
+└── README.md
+```
+
+### Important frontend directories
+- `src/screens/` → top-level app tabs and feature screens
+- `src/components/` → reusable UI building blocks
+- `src/data/` → built-in lesson, quiz, song, and study content
+- `src/services/` → API, gamification, settings, and song import logic
+- `src/database/` → WatermelonDB persistence helpers
+- `src/utils/` → pitch and tuning helpers
+
+### Important backend files
+- `backend/main.py` → FastAPI app, analysis routes, leaderboard routes, traffic persistence
+- `backend/models.py` → Pydantic models for structured backend data
+
+---
+
+## 🔌 API Endpoints
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/` | health / readiness message |
+| `POST` | `/recommend` | mood-based song recommendation demo |
+| `POST` | `/analyze-bpm` | simple BPM detection |
+| `POST` | `/detect-pitch` | backend pitch detection fallback |
+| `POST` | `/save-traffic` | save a traffic analysis |
+| `GET` | `/get-traffic` | fetch saved traffic analyses |
+| `POST` | `/sync-leaderboard` | sync leaderboard profile |
+| `GET` | `/leaderboard` | fetch top leaderboard entries |
+| `POST` | `/analyze-full` | BPM + structure analysis |
+
+---
+
+## 🎼 Song Import Format
+
+Song import is handled by [`MusicAIApp/src/services/songLibrary.ts`](./MusicAIApp/src/services/songLibrary.ts).
+
+### Required import flow
+- choose an **audio file**
+- choose a **JSON manifest**
+- import into the local Song Flow library
+
+### Supported JSON structure
+
 ```json
 {
-  "song_name": "string",
-  "duration": "number",
-  "markers": [
-    { "id": "number", "label": "string", "color": "string", "x": "number" }
+  "title": "Example Song",
+  "artist": "Example Artist",
+  "difficulty": "Medium",
+  "durationSec": 120,
+  "chordEvents": [
+    { "timeSec": 0.0, "chord": "Em", "laneRow": 1 },
+    { "timeSec": 2.0, "chord": "G", "laneRow": 0 }
+  ],
+  "tabNotes": [
+    { "timeSec": 0.0, "stringIndex": 1, "fret": 3, "durationSec": 0.5 },
+    { "timeSec": 0.5, "stringIndex": 2, "fret": 2, "durationSec": 0.4 }
   ]
 }
 ```
 
----
-
-## 5. Roadmap & Future Improvements
-
-### Code Comments (TODO/FIXME/NOTE)
-
-No `TODO`, `FIXME`, or explicit `NOTE` comments found in the codebase. However, several implicit TODOs exist based on code analysis:
-
-#### Identified Implicit TODOs:
-
-1. **[TrafficScreen.tsx:34]** - Waveform data is currently random:
-   ```typescript
-   // Currently uses Math.random() for demo
-   new Array(POINTS_PER_CHUNK).fill(0).map(() => Math.random() * 40)
-   ```
-   **TODO**: Extract real waveform envelope from audio file using FFT or peak amplitude analysis.
-
-2. **[api.ts:6]** - Hardcoded IP address:
-   ```typescript
-   const API_URL = 'http://192.168.0.28:8000';
-   ```
-   **TODO**: Use environment variables or auto-discovery for backend URL (prevents manual changes per network).
-
-3. **[SongScreen.tsx:7-13]** - Hardcoded demo songs:
-   ```typescript
-   const DEMO_SONGS = [ ... ]
-   ```
-   **TODO**: Fetch songs from backend API or Firebase. Integrate with `/recommend` endpoint.
-
-4. **[models.py:5-10]** - Unused `UserProfile` model:
-   ```python
-   class UserProfile(BaseModel):
-       email: str
-       instrument: str
-       level: int = 1
-   ```
-   **TODO**: Implement user authentication system (Firebase Auth + profile endpoints).
-
-5. **[main.py:134]** - 180-second limit on analysis:
-   ```python
-   y, sr = librosa.load(file_path, sr=None, duration=180)
-   ```
-   **TODO**: Support full-length analysis (requires chunking/streaming or progress callbacks).
+### Notes
+- `laneRow` should stay in the `0..3` range
+- `stringIndex` should stay in the `0..5` range
+- at least one of `chordEvents` or `tabNotes` must be present
+- imported audio is copied into the app sandbox for persistence across reloads
 
 ---
 
-### Suggested Next Steps
-
-Based on codebase analysis, here are **3 logical improvements** to enhance the platform:
-
-#### 🚀 **1. Real Waveform Visualization**
-**Problem**: Traffic Editor currently shows random data instead of actual audio waveform.
-
-**Solution**:
-- Backend: Add `/extract-waveform` endpoint using Librosa's `librosa.amplitude_to_db()`
-- Generate downsampled amplitude envelope (e.g., 1 sample per 100ms)
-- Return as JSON array to frontend
-- Frontend: Replace `Math.random()` with API response data
-
-**Benefits**:
-- Users can visually identify loud/quiet sections
-- More accurate marker placement
-- Professional appearance
-
-**Estimated Effort**: 2-3 hours
-
----
-
-#### 🎯 **2. User Authentication & Progress Tracking**
-**Problem**: No user accounts; XP/streaks reset on app close.
-
-**Solution**:
-- Firebase Authentication (email/password or Google Sign-In)
-- Backend: Add `/users` endpoints (create, get, update profile)
-- Frontend: WatermelonDB sync with Firestore for offline-first UX
-- Link `Progress` model to Firebase UID
-
-**Benefits**:
-- Cross-device progress sync
-- Leaderboards and social features
-- Personalized song recommendations based on skill level
-
-**Estimated Effort**: 6-8 hours
-
----
-
-#### ⚡ **3. Performance Optimization: Replace AutoCorrelation with AMDF/YIN**
-**Problem**: Autocorrelation is CPU-intensive (O(n²) complexity).
-
-**Concern**: On lower-end devices, 100ms intervals may lag during pitch detection.
-
-**Solution**:
-- Replace autocorrelation with **YIN algorithm** (more efficient, more accurate)
-- YIN is O(n) and handles harmonic instruments better
-- Use libraries like `@echogarden/yin` or implement manually
-
-**Benefits**:
-- Faster response time (50-70ms latency reduction)
-- Better accuracy for guitars with overtones
-- Lower battery consumption
-
-**Estimated Effort**: 4-5 hours
-
-**Reference**: [YIN Algorithm Paper (2002)](http://audition.ens.fr/adc/pdf/2002_JASA_YIN.pdf)
-
----
-
-### Bonus Suggestions (Smaller Wins)
-
-- **Unit Tests**: Add Jest tests for `autoCorrelate()`, `getClosestString()`, API endpoints
-- **Error Handling**: Add user-friendly error messages for network failures (currently shows generic "Sunucuya ulaşılamadı")
-- **Localization**: Extract Turkish strings to i18n library (currently hardcoded)
-- **Dark Mode Toggle**: UI is always dark; add light mode option
-- **Metronome**: Add click track to Practice screen for rhythm training
-
----
-
-## Getting Started
+## 🛠️ Local Development Setup
 
 ### Prerequisites
-- **Node.js** 18+ (for React Native)
-- **Python** 3.9+ (for backend)
-- **Expo CLI**: `npm install -g expo-cli`
-- **Firebase Project** (for cloud storage)
 
-### Installation
+### Frontend
+- Node.js 18+
+- npm
+- Xcode Simulator for iOS testing or Android Studio for Android testing
 
-#### Frontend (Mobile App)
+### Backend
+- Python 3.11+ recommended
+- virtual environment support
+- Firebase service account JSON for Firestore-backed features
+
+---
+
+### 1. Clone the project
+
 ```bash
-cd MusicAIApp
-npm install
-npx expo start
+git clone <YOUR_GITHUB_REPO_URL>
+cd <YOUR_PROJECT_DIRECTORY>
 ```
-Scan QR code with Expo Go app or run in iOS/Android simulator.
 
-#### Backend (API Server)
+---
+
+### 2. Start the backend
+
+Create and activate a Python virtual environment if needed, then install the backend dependencies.
+
 ```bash
 cd backend
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install fastapi uvicorn librosa firebase-admin scikit-learn
+source venv/bin/activate
+pip install fastapi uvicorn python-multipart librosa numpy scikit-learn firebase-admin
+```
+
+### Firebase credential requirement
+Place your Firebase Admin SDK key locally at:
+
+```text
+backend/serviceAccountKey.json
+```
+
+This file is **required locally** for Firestore-backed features and **must never be committed**.
+
+### Run the backend
+
+```bash
+cd "/path/to/project/backend"
+source venv/bin/activate
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Update API URL**: Change `API_URL` in [api.ts](file:///Users/yavuzsever/Desktop/TuneUpDemo1/MusicAIApp/src/services/api.ts#L6) to your local IP.
+---
+
+### 3. Start the frontend
+
+```bash
+cd "/path/to/project/MusicAIApp"
+npm install
+npx expo start -c
+```
+
+You can then open:
+- **iOS simulator** with `i`
+- **Android emulator** with `a`
+- **Expo Go** by scanning the QR code on a real device
 
 ---
 
-## Technologies Used
+### 4. Configure frontend API access
 
-**Frontend**:
-- React Native 0.81.5
-- Expo SDK 54
-- TypeScript 5.9
-- React Navigation 7
-- @shopify/react-native-skia 2.2.12
-- react-native-reanimated 4.1.1
-- WatermelonDB 0.28.0
-- Expo AV 16.0.7
-- NativeWind (TailwindCSS for React Native)
+The backend URL is configured in:
+- [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts)
 
-**Backend**:
-- Python 3.9+
-- FastAPI
-- Librosa 0.10+
-- NumPy
-- Firebase Admin SDK
-- Scikit-learn (for clustering)
+### Typical values
+- iOS simulator: `http://127.0.0.1:8000`
+- Android emulator: `http://10.0.2.2:8000`
+- physical phone: `http://YOUR_LOCAL_IP:8000`
 
-**Cloud**:
-- Firebase Firestore (NoSQL database)
-- Firebase Admin SDK (server-side)
+To find your local IP on macOS:
+
+```bash
+ipconfig getifaddr en0
+```
 
 ---
 
-## License
+## 🔐 Security Notes
 
-This project is for educational/demonstration purposes.
+Security is critical for this project because it contains mobile app code, backend services, and cloud credentials.
+
+### Never commit
+- `.env`
+- `.env.*`
+- `serviceAccountKey.json`
+- `node_modules/`
+- `venv/`
+- `.venv/`
+- `__pycache__/`
+- `.expo/`
+- any `uploads/` directory
+- local database / runtime artifacts
+
+### Included protections
+- a root-level `.gitignore` should block sensitive and bulky files
+- `backend/serviceAccountKey.json` is intended to stay local only
+- uploads and generated caches should stay out of version control
+
+### Recommended security practices
+- use a dedicated Firebase service account with the minimum required permissions
+- rotate credentials if a secret was ever committed in the past
+- keep repository visibility private until secret hygiene is verified
+- use environment-specific backend configs instead of hardcoding production secrets
 
 ---
 
-## Credits
+## 🧪 Quality Checks
 
-Developed by Yavuz Sever as a music education platform prototype.
+Recommended checks before every push:
 
-**Special Thanks**:
-- Librosa team for music analysis tools
-- Expo team for seamless React Native development
-- Shopify for high-performance Skia renderer
+```bash
+cd MusicAIApp
+npx tsc --noEmit
+npx expo-doctor
+```
+
+Backend sanity check:
+
+```bash
+cd backend
+python3 -m py_compile main.py
+```
+
+---
+
+## 🚚 Deployment Notes
+
+### Mobile app
+This project is currently optimized for local Expo development.
+
+A production release path would typically include:
+- EAS Build for mobile binaries
+- environment-based API configuration
+- proper asset optimization
+- analytics / crash reporting
+- app-store compliant permission copy
+
+### Backend
+For production deployment, the backend should be hosted on a secure Python runtime such as:
+- Railway
+- Render
+- Fly.io
+- Google Cloud Run
+- AWS ECS / Lambda (with adaptation)
+
+Production hardening would include:
+- secret management via environment variables or secret store
+- HTTPS
+- request limits / abuse protection
+- monitoring and logs
+- storage cleanup policies for uploaded files
+
+---
+
+## 🧭 Suggested Git Workflow
+
+### First secure push
+
+```bash
+git branch -M main
+git remote set-url origin <YOUR_GITHUB_REPO_URL>
+git rm -r --cached --ignore-unmatch backend/__pycache__ backend/uploads backend/venv .venv MusicAIApp/node_modules MusicAIApp/.expo
+git rm --cached --ignore-unmatch backend/serviceAccountKey.json .env .env.*
+git add -A
+git commit -m "Initial secure project import"
+git push -u origin main
+```
+
+### Everyday update workflow
+
+```bash
+git checkout main
+git pull --rebase origin main
+git status --short
+git add -A
+git commit -m "Describe your change"
+git push origin main
+```
+
+### Recommended safety habit
+
+```bash
+git status --short
+git diff --cached --name-only
+```
+
+This helps catch accidental commits before they go to GitHub.
+
+---
+
+## 📝 Current Status
+
+### Product areas already implemented
+- ✅ multi-tab mobile app shell
+- ✅ live tuner / practice experience
+- ✅ structured lesson packs
+- ✅ theory quiz and puzzle modes
+- ✅ audio chord quiz
+- ✅ song flow with chords + tabs
+- ✅ local song import
+- ✅ studio traffic analysis workflow
+- ✅ profile dashboard
+- ✅ streaks, XP, badges, leaderboard sync
+- ✅ premium transitions, loading states, and celebration overlays
+
+### Current packaged content
+- ✅ 20 guitar lessons
+- ✅ 20 piano lessons
+- ✅ 10 drum lessons
+- ✅ 50 theory quiz questions
+- ✅ 10 built-in traffic studies
+- ✅ 4 built-in demo songs
+
+### Areas that can be expanded next
+- richer production song libraries
+- more advanced chord recognition
+- deeper analytics and session history
+- additional badge sets and seasonal challenges
+- cloud-authenticated user accounts
+
+---
+
+## 🤝 Final Notes
+
+This repository is structured to support both:
+- **product-facing iteration** on the mobile experience
+- **engineering-focused iteration** on audio analysis, learning systems, and backend services
+
+If you want this README to go one level further, the next strong step would be adding:
+- more simulator screenshots for each tab
+- an animated demo GIF
+- EAS build / release instructions
+- backend deployment instructions for one specific host
