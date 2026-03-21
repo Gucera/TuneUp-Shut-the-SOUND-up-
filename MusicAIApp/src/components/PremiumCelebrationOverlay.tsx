@@ -40,7 +40,7 @@ export default function PremiumCelebrationOverlay({
             <Animated.View entering={ZoomIn.springify().damping(18).stiffness(220)} style={styles.cardWrap}>
                 <BlurView intensity={22} tint="light" style={styles.blurCard}>
                     <LinearGradient
-                        colors={['rgba(255,255,255,0.76)', 'rgba(248,251,254,0.92)']}
+                        colors={['rgba(116,0,184,0.22)', 'rgba(78,168,222,0.26)', 'rgba(128,255,219,0.22)']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.cardInner}

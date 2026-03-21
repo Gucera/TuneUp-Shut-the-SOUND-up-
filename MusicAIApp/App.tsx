@@ -83,7 +83,7 @@ export default function App() {
             ),
             tabBarBackground: () => (
               <LinearGradient
-                colors={[COLORS.panelAlt, COLORS.panel]}
+                colors={[COLORS.secondary, COLORS.panel, COLORS.backgroundAlt]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.tabBarBackground}
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     right: 20,
     height: 28,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.82)',
+    backgroundColor: 'rgba(116,0,184,0.16)',
   },
   iconWrap: {
     alignItems: 'center',
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     borderWidth: 1,
     borderColor: COLORS.pixelLine,
-    backgroundColor: COLORS.panelAlt,
+    backgroundColor: COLORS.panel,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 5,
@@ -155,12 +155,12 @@ const styles = StyleSheet.create({
   },
   iconFrameActive: {
     borderColor: COLORS.primary,
-    backgroundColor: COLORS.panel,
+    backgroundColor: COLORS.backgroundAlt,
     shadowColor: COLORS.primary,
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
   },
   activePip: {
     width: 6,

@@ -24,12 +24,12 @@ export default function ScreenSettingsButton({
     return (
         <TouchableOpacity style={styles.button} onPress={handlePress}>
             <LinearGradient
-                colors={[COLORS.panelAlt, COLORS.panel, COLORS.backgroundAlt]}
+                colors={[COLORS.primary, COLORS.accent, COLORS.secondary]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.gradient}
             >
-                <Ionicons name="settings-outline" size={18} color={COLORS.textStrong} />
+                <Ionicons name="settings-outline" size={18} color={COLORS.panelAlt} />
             </LinearGradient>
         </TouchableOpacity>
     );
@@ -47,9 +47,10 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         ...SHADOWS.soft,
         shadowColor: COLORS.primary,
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
-        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.22,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 12 },
+        elevation: 12,
     },
     gradient: {
         width: '100%',

@@ -1,11 +1,10 @@
-// Your backend URL
-// If using a simulator: 'http://127.0.0.1:8000'
-// If using a real phone or QR code: use your Mac's IP (e.g. 'http://192.168.1.35:8000')
-// To find your IP, run in terminal: ipconfig getifaddr en0
-
 const BASE_URL = 'https://tuneup-shut-the-sound-up.onrender.com';
+const WARMUP_WINDOW_MS = 45_000;
+
 let lastWarmupAt = 0;
-let warmupPromise: Promise<void> | null = null;
+let pendingWarmup: Promise<void> | null = null;
+
+type ApiPayload = Record<string, any>;
 
 export interface ApiErrorResponse {
     status: 'error' | 'failed';
@@ -112,7 +111,7 @@ export type AnalysisTaskStatusResponse =
     | AnalysisTaskFailedResponse
     | ApiErrorResponse;
 
-const getAudioMimeType = (fileName: string, fileUri: string) => {
+function inferAudioMimeType(fileName: string, fileUri: string) {
     const candidate = `${fileName} ${fileUri}`.toLowerCase();
 
     if (candidate.includes('.wav')) {
@@ -128,9 +127,9 @@ const getAudioMimeType = (fileName: string, fileUri: string) => {
     }
 
     return 'application/octet-stream';
-};
+}
 
-const parseResponseJson = async (response: Response) => {
+async function readJsonPayload(response: Response): Promise<ApiPayload> {
     const rawText = await response.text();
 
     if (!rawText) {
@@ -138,73 +137,138 @@ const parseResponseJson = async (response: Response) => {
     }
 
     try {
-        return JSON.parse(rawText);
-    } catch (error) {
+        return JSON.parse(rawText) as ApiPayload;
+    } catch {
         return { message: rawText };
     }
-};
+}
 
-const warmBackend = async () => {
+function getString(payload: ApiPayload, key: string, fallback: string) {
+    return typeof payload[key] === 'string' ? payload[key] : fallback;
+}
+
+function getNullableString(payload: ApiPayload, key: string) {
+    return typeof payload[key] === 'string' ? payload[key] : null;
+}
+
+function buildApiError(response: Response | null, payload: ApiPayload, fallback: string): ApiErrorResponse {
+    return {
+        status: 'error',
+        message: getString(payload, 'detail', getString(payload, 'message', fallback)),
+        ...(response ? { statusCode: response.status } : {}),
+    };
+}
+
+function createAudioFormData(fileUri: string, fileName: string, fallbackFileName: string) {
+    const normalizedFileName = fileName && fileName.includes('.')
+        ? fileName
+        : fallbackFileName;
+    const formData = new FormData();
+
+    formData.append('file', {
+        uri: fileUri,
+        name: normalizedFileName,
+        type: inferAudioMimeType(normalizedFileName, fileUri),
+    } as any);
+
+    return formData;
+}
+
+async function warmBackendIfNeeded() {
     const now = Date.now();
-    if ((now - lastWarmupAt) < 45000) {
+    if ((now - lastWarmupAt) < WARMUP_WINDOW_MS) {
         return;
     }
 
-    if (warmupPromise) {
-        return warmupPromise;
+    if (pendingWarmup) {
+        return pendingWarmup;
     }
 
-    warmupPromise = (async () => {
+    pendingWarmup = (async () => {
         try {
-            await fetch(`${BASE_URL}/`, {
-                method: 'GET',
-            });
-        } catch (error) {
-            // Ignore warm-up failures and let the real request surface the useful error.
+            await fetch(`${BASE_URL}/`);
+        } catch {
+            return;
         } finally {
             lastWarmupAt = Date.now();
-            warmupPromise = null;
+            pendingWarmup = null;
         }
     })();
 
-    return warmupPromise;
-};
+    return pendingWarmup;
+}
 
-// Recommend a song based on mood
+async function requestJson(path: string, init: RequestInit, options?: { warmup?: boolean }) {
+    if (options?.warmup) {
+        await warmBackendIfNeeded();
+    }
+
+    const response = await fetch(`${BASE_URL}${path}`, init);
+    const payload = await readJsonPayload(response);
+    return { response, payload };
+}
+
+function mapTrafficAnalysisEntry(entry: any): TrafficAnalysisEntry {
+    return {
+        songName: typeof entry?.song_name === 'string' ? entry.song_name : 'Untitled',
+        duration: typeof entry?.duration === 'number' ? entry.duration : 0,
+        markers: Array.isArray(entry?.markers) ? entry.markers : [],
+        userId: typeof entry?.user_id === 'string' ? entry.user_id : null,
+        createdAt: typeof entry?.created_at === 'string' ? entry.created_at : null,
+    };
+}
+
+function mapAnalysisResult(payload: ApiPayload, fallbackMessage: string): AnalysisResultPayload {
+    return {
+        bpm: typeof payload.bpm === 'number' ? payload.bpm : 0,
+        markers: Array.isArray(payload.markers) ? payload.markers : [],
+        message: getString(payload, 'message', fallbackMessage),
+    };
+}
+
+function mapLeaderboardEntry(entry: any): LeaderboardEntry {
+    return {
+        userId: entry?.user_id ?? 'unknown',
+        displayName: entry?.display_name ?? 'Player',
+        xp: typeof entry?.xp === 'number' ? entry.xp : 0,
+        level: typeof entry?.level === 'number' ? entry.level : 1,
+        streakDays: typeof entry?.streak_days === 'number' ? entry.streak_days : 0,
+        longestStreak: typeof entry?.longest_streak === 'number' ? entry.longest_streak : 0,
+        badges: Array.isArray(entry?.badges) ? entry.badges : [],
+        completedLessons: typeof entry?.completed_lessons === 'number' ? entry.completed_lessons : 0,
+        completedSongs: typeof entry?.completed_songs === 'number' ? entry.completed_songs : 0,
+        completedQuizzes: typeof entry?.completed_quizzes === 'number' ? entry.completed_quizzes : 0,
+        updatedAt: typeof entry?.updated_at === 'string' ? entry.updated_at : null,
+    };
+}
+
 export const recommendSong = async (mood: string) => {
     try {
-        const response = await fetch(`${BASE_URL}/recommend`, {
+        const { payload } = await requestJson('/recommend', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ mood }),
         });
-        return await response.json();
-    } catch (error) {
+
+        return payload;
+    } catch {
         return null;
     }
 };
 
-// Simple BPM analysis (legacy endpoint)
 export const analyzeBpm = async (fileUri: string, fileName: string) => {
     try {
-        const formData = new FormData();
-        formData.append('file', {
-            uri: fileUri,
-            name: fileName || 'audio.mp3',
-            type: 'audio/mpeg',
-        } as any);
-
-        const response = await fetch(`${BASE_URL}/analyze-bpm`, {
+        const { payload } = await requestJson('/analyze-bpm', {
             method: 'POST',
-            body: formData,
+            body: createAudioFormData(fileUri, fileName, 'audio.mp3'),
         });
-        return await response.json();
-    } catch (error) {
+
+        return payload;
+    } catch {
         return { status: 'error', message: 'Server error' };
     }
 };
 
-// Save traffic analysis data to Firebase
 export const saveTrafficData = async (
     songName: string,
     duration: number,
@@ -212,44 +276,36 @@ export const saveTrafficData = async (
     userId?: string,
 ) => {
     try {
-        const response = await fetch(`${BASE_URL}/save-traffic`, {
+        const { payload } = await requestJson('/save-traffic', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 song_name: songName,
-                duration: duration,
-                markers: markers,
+                duration,
+                markers,
                 user_id: userId ?? null,
             }),
         });
 
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        return { status: "error", message: "Could not reach the server." };
+        return payload;
+    } catch {
+        return { status: 'error', message: 'Could not reach the server.' };
     }
 };
 
 export const fetchTrafficAnalyses = async (userId?: string): Promise<TrafficAnalysisEntry[]> => {
     try {
-        const suffix = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
-        const response = await fetch(`${BASE_URL}/get-traffic${suffix}`);
-        const data = await response.json();
+        const querySuffix = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+        const { response, payload } = await requestJson(`/get-traffic${querySuffix}`, {
+            method: 'GET',
+        });
 
-        if (!response.ok || !Array.isArray(data)) {
+        if (!response.ok || !Array.isArray(payload)) {
             return [];
         }
 
-        return data.map((entry: any) => ({
-            songName: typeof entry.song_name === 'string' ? entry.song_name : 'Untitled',
-            duration: typeof entry.duration === 'number' ? entry.duration : 0,
-            markers: Array.isArray(entry.markers) ? entry.markers : [],
-            userId: typeof entry.user_id === 'string' ? entry.user_id : null,
-            createdAt: typeof entry.created_at === 'string' ? entry.created_at : null,
-        }));
-    } catch (error) {
+        return payload.map(mapTrafficAnalysisEntry);
+    } catch {
         return [];
     }
 };
@@ -259,184 +315,111 @@ export const uploadAudioForAnalysis = async (
     fileName: string,
 ): Promise<UploadAudioAcceptedResponse | ApiErrorResponse> => {
     try {
-        await warmBackend();
-        const formData = new FormData();
-        let safeFileName = fileName || 'song.mp3';
-
-        if (!safeFileName.includes('.')) {
-            safeFileName += '.mp3';
-        }
-
-        formData.append('file', {
-            uri: fileUri,
-            name: safeFileName,
-            type: getAudioMimeType(safeFileName, fileUri),
-        } as any);
-
-        const response = await fetch(`${BASE_URL}/upload-audio`, {
+        const { response, payload } = await requestJson('/upload-audio', {
             method: 'POST',
-            body: formData,
-        });
-        const data = await parseResponseJson(response);
+            body: createAudioFormData(fileUri, fileName, 'song.mp3'),
+        }, { warmup: true });
 
         if (!response.ok) {
-            return {
-                status: 'error',
-                message: typeof data?.detail === 'string'
-                    ? data.detail
-                    : typeof data?.message === 'string'
-                        ? data.message
-                        : 'Could not start the background scan.',
-                statusCode: typeof response.status === 'number' ? response.status : undefined,
-            };
+            return buildApiError(response, payload, 'Could not start the background scan.');
         }
 
         return {
             status: 'accepted',
-            taskId: typeof data?.task_id === 'string' ? data.task_id : '',
-            progressText: typeof data?.progress_text === 'string' ? data.progress_text : 'Background scan started.',
-            message: typeof data?.message === 'string' ? data.message : 'Background scan started.',
+            taskId: getString(payload, 'task_id', ''),
+            progressText: getString(payload, 'progress_text', 'Background scan started.'),
+            message: getString(payload, 'message', 'Background scan started.'),
         };
-    } catch (error) {
+    } catch {
         return { status: 'error', message: 'Could not connect to server.' };
     }
 };
 
-export const fetchAnalysisTaskStatus = async (
-    taskId: string,
-): Promise<AnalysisTaskStatusResponse> => {
+export const fetchAnalysisTaskStatus = async (taskId: string): Promise<AnalysisTaskStatusResponse> => {
     try {
-        const response = await fetch(`${BASE_URL}/task-status/${encodeURIComponent(taskId)}`);
-        const data = await parseResponseJson(response);
+        const { response, payload } = await requestJson(`/task-status/${encodeURIComponent(taskId)}`, {
+            method: 'GET',
+        });
 
         if (!response.ok) {
-            return {
-                status: 'error',
-                message: typeof data?.detail === 'string'
-                    ? data.detail
-                    : typeof data?.message === 'string'
-                        ? data.message
-                        : 'Could not load scan status.',
-            };
+            return buildApiError(response, payload, 'Could not load scan status.');
         }
 
-        if (data?.status === 'completed') {
+        if (payload.status === 'completed') {
             return {
                 status: 'completed',
-                taskId: typeof data.task_id === 'string' ? data.task_id : taskId,
-                progressText: typeof data.progress_text === 'string' ? data.progress_text : 'Analysis complete.',
-                updatedAt: typeof data.updated_at === 'string' ? data.updated_at : null,
-                result: {
-                    bpm: typeof data?.result?.bpm === 'number' ? data.result.bpm : 0,
-                    markers: Array.isArray(data?.result?.markers) ? data.result.markers : [],
-                    message: typeof data?.result?.message === 'string' ? data.result.message : 'Analysis complete.',
-                },
+                taskId: getString(payload, 'task_id', taskId),
+                progressText: getString(payload, 'progress_text', 'Analysis complete.'),
+                updatedAt: getNullableString(payload, 'updated_at'),
+                result: mapAnalysisResult((payload.result as ApiPayload) ?? {}, 'Analysis complete.'),
             };
         }
 
-        if (data?.status === 'failed') {
+        if (payload.status === 'failed') {
             return {
                 status: 'failed',
-                taskId: typeof data.task_id === 'string' ? data.task_id : taskId,
-                progressText: typeof data.progress_text === 'string' ? data.progress_text : 'Analysis failed.',
-                updatedAt: typeof data.updated_at === 'string' ? data.updated_at : null,
-                message: typeof data.message === 'string' ? data.message : 'Analysis failed.',
+                taskId: getString(payload, 'task_id', taskId),
+                progressText: getString(payload, 'progress_text', 'Analysis failed.'),
+                updatedAt: getNullableString(payload, 'updated_at'),
+                message: getString(payload, 'message', 'Analysis failed.'),
             };
         }
 
         return {
             status: 'processing',
-            taskId: typeof data?.task_id === 'string' ? data.task_id : taskId,
-            progressText: typeof data?.progress_text === 'string' ? data.progress_text : 'Analysis is still running...',
-            updatedAt: typeof data?.updated_at === 'string' ? data.updated_at : null,
+            taskId: getString(payload, 'task_id', taskId),
+            progressText: getString(payload, 'progress_text', 'Analysis is still running...'),
+            updatedAt: getNullableString(payload, 'updated_at'),
         };
-    } catch (error) {
+    } catch {
         return { status: 'error', message: 'Could not connect to server.' };
     }
 };
 
-// Full AI analysis — sends a song file for BPM + section detection
 export const analyzeSongFile = async (
     fileUri: string,
     fileName: string,
 ): Promise<LegacySongAnalysisResponse | ApiErrorResponse> => {
     try {
-        await warmBackend();
-        const formData = new FormData();
-
-        // Make sure the filename has an extension (prevents backend errors)
-        let safeFileName = fileName || 'song.mp3';
-        if (!safeFileName.includes('.')) {
-            safeFileName += '.mp3';
-        }
-
-        formData.append('file', {
-            uri: fileUri,
-            name: safeFileName,
-            type: getAudioMimeType(safeFileName, fileUri),
-        } as any);
-
-        const response = await fetch(`${BASE_URL}/analyze-full`, {
+        const { response, payload } = await requestJson('/analyze-full', {
             method: 'POST',
-            body: formData,
-        });
-        const data = await parseResponseJson(response);
+            body: createAudioFormData(fileUri, fileName, 'song.mp3'),
+        }, { warmup: true });
 
         if (!response.ok) {
-            return {
-                status: 'error',
-                message: typeof data?.detail === 'string'
-                    ? data.detail
-                    : typeof data?.message === 'string'
-                        ? data.message
-                        : 'Analysis failed.',
-                statusCode: typeof response.status === 'number' ? response.status : undefined,
-            };
+            return buildApiError(response, payload, 'Analysis failed.');
         }
 
+        const result = mapAnalysisResult(payload, 'Analysis complete.');
         return {
             status: 'success',
-            bpm: typeof data?.bpm === 'number' ? data.bpm : 0,
-            markers: Array.isArray(data?.markers) ? data.markers : [],
-            message: typeof data?.message === 'string' ? data.message : 'Analysis complete.',
+            ...result,
         };
-    } catch (error) {
+    } catch {
         return { status: 'error', message: 'Could not connect to server.' };
     }
 };
 
 export const detectPitchFromClip = async (fileUri: string, fileName: string, instrument: string) => {
     try {
-        const formData = new FormData();
-        let safeFileName = fileName || 'clip.m4a';
-        if (!safeFileName.includes('.')) {
-            safeFileName += '.m4a';
-        }
-
-        formData.append('file', {
-            uri: fileUri,
-            name: safeFileName,
-            type: getAudioMimeType(safeFileName, fileUri),
-        } as any);
+        const formData = createAudioFormData(fileUri, fileName, 'clip.m4a');
         formData.append('instrument', instrument);
 
-        const response = await fetch(`${BASE_URL}/detect-pitch`, {
+        const { payload } = await requestJson('/detect-pitch', {
             method: 'POST',
             body: formData,
         });
 
-        return await response.json();
-    } catch (error) {
+        return payload;
+    } catch {
         return { status: 'error', message: 'Could not connect to server.' };
     }
 };
 
 export const syncLeaderboardProfile = async (payload: LeaderboardProfilePayload) => {
-    const response = await fetch(`${BASE_URL}/sync-leaderboard`, {
+    const { payload: responsePayload } = await requestJson('/sync-leaderboard', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             user_id: payload.userId,
             display_name: payload.displayName,
@@ -451,32 +434,21 @@ export const syncLeaderboardProfile = async (payload: LeaderboardProfilePayload)
         }),
     });
 
-    return await response.json();
+    return responsePayload;
 };
 
 export const fetchLeaderboard = async (limit = 8): Promise<LeaderboardEntry[]> => {
     try {
-        const response = await fetch(`${BASE_URL}/leaderboard?limit=${limit}`);
-        const data = await response.json();
+        const { response, payload } = await requestJson(`/leaderboard?limit=${limit}`, {
+            method: 'GET',
+        });
 
-        if (!response.ok || !Array.isArray(data?.leaderboard)) {
+        if (!response.ok || !Array.isArray(payload.leaderboard)) {
             return [];
         }
 
-        return data.leaderboard.map((entry: any) => ({
-            userId: entry.user_id ?? 'unknown',
-            displayName: entry.display_name ?? 'Player',
-            xp: typeof entry.xp === 'number' ? entry.xp : 0,
-            level: typeof entry.level === 'number' ? entry.level : 1,
-            streakDays: typeof entry.streak_days === 'number' ? entry.streak_days : 0,
-            longestStreak: typeof entry.longest_streak === 'number' ? entry.longest_streak : 0,
-            badges: Array.isArray(entry.badges) ? entry.badges : [],
-            completedLessons: typeof entry.completed_lessons === 'number' ? entry.completed_lessons : 0,
-            completedSongs: typeof entry.completed_songs === 'number' ? entry.completed_songs : 0,
-            completedQuizzes: typeof entry.completed_quizzes === 'number' ? entry.completed_quizzes : 0,
-            updatedAt: typeof entry.updated_at === 'string' ? entry.updated_at : null,
-        }));
-    } catch (error) {
+        return payload.leaderboard.map(mapLeaderboardEntry);
+    } catch {
         return [];
     }
 };

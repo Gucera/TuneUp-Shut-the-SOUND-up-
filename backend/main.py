@@ -166,6 +166,35 @@ def get_task_timestamp() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def remove_file(path: Path) -> None:
+    if path.exists():
+        path.unlink()
+
+
+def serialize_analysis_task(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {key: value for key, value in payload.items() if key != "updated_at_dt"}
+
+
+def build_section_marker(marker_time: float, label: str, marker_id: Optional[int] = None) -> Dict[str, Any]:
+    return {
+        "id": marker_id if marker_id is not None else int(marker_time * 10000) + random.randint(0, 999),
+        "label": label,
+        "color": SECTION_COLORS.get(label, "#56cfe1"),
+        "x": 0,
+        "time": float(marker_time),
+    }
+
+
+def build_fallback_markers() -> List[Dict[str, Any]]:
+    labels = ["VERSE 1", "CHORUS", "VERSE 2", "CHORUS"]
+    times = [30.0, 60.0, 90.0, 120.0]
+
+    return [
+        build_section_marker(marker_time, label, int(marker_time * 1000))
+        for marker_time, label in zip(times, labels)
+    ]
+
+
 def prune_analysis_tasks() -> None:
     cutoff = get_task_timestamp() - timedelta(minutes=TASK_RETENTION_MINUTES)
 
@@ -218,8 +247,7 @@ def get_analysis_task(task_id: str) -> Optional[Dict[str, Any]]:
         if not payload:
             return None
 
-        # `updated_at_dt` is an internal datetime helper and should not leak to the client.
-        return {key: value for key, value in payload.items() if key != "updated_at_dt"}
+        return serialize_analysis_task(payload)
 
 
 def build_upload_path(file_name: str) -> Path:
@@ -269,30 +297,13 @@ def build_analysis_result(
         for timestamp in bound_times:
             if 5.0 < timestamp < 175.0 and (timestamp - last_time > 15.0):
                 label_name = section_names[name_index] if name_index < len(section_names) else "SECTION"
-                ai_markers.append({
-                    "id": int(timestamp * 10000) + random.randint(0, 999),
-                    "label": label_name,
-                    "color": SECTION_COLORS.get(label_name, "#56cfe1"),
-                    "x": 0,
-                    "time": float(timestamp),
-                })
+                ai_markers.append(build_section_marker(timestamp, label_name))
                 last_time = timestamp
                 name_index += 1
 
         if len(ai_markers) == 0:
             print("AI found no sections, adding default markers...")
-            steps = [30.0, 60.0, 90.0, 120.0]
-            labels = ["VERSE 1", "CHORUS", "VERSE 2", "CHORUS"]
-
-            for index, timestamp in enumerate(steps):
-                label = labels[index]
-                ai_markers.append({
-                    "id": int(timestamp * 1000),
-                    "label": label,
-                    "color": SECTION_COLORS.get(label, "#80ffdb"),
-                    "x": 0,
-                    "time": float(timestamp),
-                })
+            ai_markers.extend(build_fallback_markers())
     except Exception as exc:
         print(f"Segmentation error: {exc}")
 
@@ -342,8 +353,7 @@ def run_analysis_task(task_id: str, file_path_str: str, file_name: str) -> None:
             error=str(exc),
         )
     finally:
-        if file_path.exists():
-            file_path.unlink()
+        remove_file(file_path)
 
 
 def save_traffic_record(doc_data: dict) -> str:
@@ -465,8 +475,7 @@ async def analyze_bpm(file: UploadFile = File(...)):
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
     finally:
-        if file_path.exists():
-            file_path.unlink()
+        remove_file(file_path)
 
 
 @app.post("/detect-pitch")
@@ -504,8 +513,7 @@ async def detect_pitch(file: UploadFile = File(...), instrument: str = Form("Gui
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
     finally:
-        if file_path.exists():
-            file_path.unlink()
+        remove_file(file_path)
 
 
 @app.post("/save-traffic")
@@ -617,5 +625,4 @@ async def analyze_full(file: UploadFile = File(...)):
         print(f"General Error: {exc}")
         return {"status": "error", "message": str(exc)}
     finally:
-        if file_path.exists():
-            file_path.unlink()
+        remove_file(file_path)

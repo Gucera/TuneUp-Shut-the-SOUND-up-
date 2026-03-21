@@ -38,6 +38,17 @@ The project is split into:
 - a **React Native + Expo** mobile app in [`MusicAIApp`](./MusicAIApp)
 - a **Python + FastAPI** backend in [`backend`](./backend)
 
+The most important developer-facing flow is the Studio Grid analysis loop, which now behaves like one coordinated full-stack system:
+
+1. The user selects an audio file in the Expo app.
+2. The frontend uploads it to `POST /upload-audio`.
+3. The backend immediately returns a `task_id`.
+4. FastAPI `BackgroundTasks` runs BPM + segmentation analysis with `librosa`.
+5. The frontend polls `GET /task-status/{task_id}` for progress and completion.
+6. If the app backgrounds, polling pauses; when the app becomes active again, polling resumes.
+7. Once complete, the frontend receives BPM and section markers and updates the Studio UI.
+8. Traffic-analysis saves and leaderboard data persist through Firestore, with local JSON fallback when cloud storage is unavailable.
+
 ---
 
 ## 🖼️ App Preview
@@ -211,13 +222,18 @@ The app already contains meaningful learning content, not just shell UI.
 
 ```mermaid
 flowchart TD
-    A["Mobile App\nExpo + React Native"] --> B["REST API\nFastAPI"]
-    A --> C["Local Persistence\nWatermelonDB + FileSystem"]
-    B --> D["Audio Analysis\nlibrosa + numpy + scikit-learn"]
-    B --> E["Cloud Storage\nFirebase Firestore"]
-    C --> F["Settings"]
-    C --> G["Gamification State"]
-    C --> H["Imported Song Library"]
+    A["Expo App\nStudio Grid + Song Flow + Profile"] -->|Upload audio| B["POST /upload-audio"]
+    B -->|Return task_id| A
+    B --> C["FastAPI BackgroundTasks"]
+    C --> D["Audio analysis\nlibrosa + numpy + scikit-learn"]
+    A -->|Poll progress| E["GET /task-status/{task_id}"]
+    D --> E
+    E -->|BPM + markers| A
+    A --> F["Studio UI\nWaveform + section markers"]
+    A --> G["Traffic saves + leaderboard sync"]
+    G --> H["Firestore"]
+    G --> I["Local JSON fallback"]
+    A --> J["Local app state\nWatermelonDB + FileSystem"]
 ```
 
 ### Architectural goals
@@ -225,6 +241,13 @@ flowchart TD
 - Use the backend for **heavier or more reliable audio analysis**
 - Persist user-facing state locally for a smooth app feel
 - Sync competitive / shared data to Firestore only where it makes sense
+
+### Operational notes
+- `GET /healthz` reports backend readiness, active storage mode, and Firebase connectivity state.
+- The async scan path is `POST /upload-audio` followed by `GET /task-status/{task_id}` polling, with `POST /analyze-full` kept as a synchronous fallback path.
+- Frontend API requests currently point at `BASE_URL` inside [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts), while [`MusicAIApp/.env.example`](./MusicAIApp/.env.example) documents the intended `EXPO_PUBLIC_API_BASE_URL` value for hosted environments.
+- Backend Firebase credentials can come from `FIREBASE_SERVICE_ACCOUNT_JSON`, `GOOGLE_APPLICATION_CREDENTIALS`, or a local `backend/serviceAccountKey.json`.
+- Traffic saves and leaderboard records use Firestore when available, then fall back to local JSON stores for recovery-friendly behavior during local development or temporary cloud misconfiguration.
 
 ---
 
@@ -332,18 +355,29 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant A as Studio Grid
+    participant A as Expo App
     participant B as FastAPI
-    participant F as Firestore
+    participant T as BackgroundTasks
+    participant F as Firestore / local JSON
 
-    U->>A: Pick song file
-    U->>A: Tap Scan
-    A->>B: POST /analyze-full
-    B->>B: Load audio with librosa
-    B->>B: Estimate BPM
-    B->>B: Segment song structure
-    B->>A: Return BPM + markers
-    A->>U: Show waveform + structure labels
+    U->>A: Pick audio file
+    A->>B: POST /upload-audio
+    B->>T: Queue background job
+    B-->>A: Return task_id
+    loop While app is active
+        A->>B: GET /task-status/{task_id}
+        B-->>A: processing / completed
+    end
+    alt App goes inactive or background
+        A->>A: Pause polling
+        A->>A: Resume polling when active again
+    end
+    T->>T: Load audio with librosa
+    T->>T: Estimate BPM
+    T->>T: Segment song structure
+    T-->>B: Store BPM + markers
+    B-->>A: Completed analysis payload
+    A->>U: Update Studio waveform + markers
     U->>A: Save study
     A->>B: POST /save-traffic
     B->>F: Persist analysis
@@ -412,14 +446,17 @@ sequenceDiagram
 
 **Files involved**
 - [`MusicAIApp/src/screens/TrafficScreen.tsx`](./MusicAIApp/src/screens/TrafficScreen.tsx)
+- [`MusicAIApp/src/hooks/useAudioAnalysisJob.ts`](./MusicAIApp/src/hooks/useAudioAnalysisJob.ts)
 - [`MusicAIApp/src/data/trafficAnalysisLibrary.ts`](./MusicAIApp/src/data/trafficAnalysisLibrary.ts)
 - [`backend/main.py`](./backend/main.py)
 
 **What it does**
 - loads audio into a study session
-- requests BPM + section analysis from the backend
-- visualizes markers on a waveform strip
-- saves analysis data for later review
+- uploads the file to an async backend scan endpoint
+- receives a `task_id` immediately and polls for progress/result updates
+- pauses polling while the app is backgrounded and resumes when the app returns active
+- applies BPM + section markers to the waveform strip when the job completes
+- saves analysis data for later review through Firestore with local JSON fallback
 
 **Built-in use cases**
 - arrangement study
@@ -512,7 +549,7 @@ TuneUp/
 - `src/utils/` → pitch and tuning helpers
 
 ### Important backend files
-- `backend/main.py` → FastAPI app, analysis routes, leaderboard routes, traffic persistence
+- `backend/main.py` → FastAPI app, async analysis routes, health checks, leaderboard routes, traffic persistence
 - `backend/models.py` → Pydantic models for structured backend data
 
 ---
@@ -521,18 +558,18 @@ TuneUp/
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| `GET` | `/` | health / readiness message |
-| `GET` | `/healthz` | backend + storage health status |
+| `GET` | `/` | readiness message with storage summary |
+| `GET` | `/healthz` | backend status, storage mode, and Firebase health |
 | `POST` | `/recommend` | mood-based song recommendation demo |
 | `POST` | `/analyze-bpm` | simple BPM detection |
 | `POST` | `/detect-pitch` | backend pitch detection fallback |
-| `POST` | `/upload-audio` | create a background song-analysis job |
-| `GET` | `/task-status/{task_id}` | poll analysis job status/results |
-| `POST` | `/save-traffic` | save a traffic analysis |
-| `GET` | `/get-traffic` | fetch saved traffic analyses |
-| `POST` | `/sync-leaderboard` | sync leaderboard profile |
-| `GET` | `/leaderboard` | fetch top leaderboard entries |
-| `POST` | `/analyze-full` | BPM + structure analysis |
+| `POST` | `/upload-audio` | upload a track and create a background song-analysis job |
+| `GET` | `/task-status/{task_id}` | fetch progress or completed results for an analysis task |
+| `POST` | `/save-traffic` | persist a traffic analysis to Firestore or local JSON fallback |
+| `GET` | `/get-traffic` | fetch saved traffic analyses from the active persistence layer |
+| `POST` | `/sync-leaderboard` | sync leaderboard profile data to the active persistence layer |
+| `GET` | `/leaderboard` | fetch top leaderboard entries from the active persistence layer |
+| `POST` | `/analyze-full` | legacy synchronous BPM + structure analysis fallback |
 
 ---
 
@@ -612,10 +649,10 @@ pip install fastapi uvicorn python-multipart librosa numpy scikit-learn firebase
 
 The backend now supports both local-file credentials and environment-based deployment credentials.
 
-You can configure Firebase in either of these ways:
-- put a local Admin SDK key at `backend/serviceAccountKey.json`
-- set `FIREBASE_SERVICE_ACCOUNT_JSON` in your deployment environment
-- set `GOOGLE_APPLICATION_CREDENTIALS` to a mounted JSON key path
+Firebase credential resolution currently works in this order:
+1. `FIREBASE_SERVICE_ACCOUNT_JSON`
+2. `GOOGLE_APPLICATION_CREDENTIALS`
+3. `backend/serviceAccountKey.json`
 
 Example values live in:
 
@@ -623,7 +660,7 @@ Example values live in:
 backend/.env.example
 ```
 
-If Firebase is unavailable, the backend still boots and falls back to local JSON storage for traffic saves and leaderboard data.
+If Firebase is unavailable, the backend still boots, `GET /healthz` reports the degraded state, and the API falls back to local JSON storage for traffic saves and leaderboard data.
 
 ### Run the backend
 
@@ -652,9 +689,9 @@ You can then open:
 
 ### 4. Configure frontend API access
 
-The frontend reads the backend URL from:
-- `MusicAIApp/.env`
-- falling back to the hardcoded URL in [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts)
+The current frontend request target is the `BASE_URL` constant in [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts).
+
+[`MusicAIApp/.env.example`](./MusicAIApp/.env.example) documents the intended `EXPO_PUBLIC_API_BASE_URL` value for hosted deployments, but this repo snapshot still uses the in-file constant unless you wire the env var into the app code.
 
 Start by using the example file:
 
@@ -684,6 +721,7 @@ Security is critical for this project because it contains mobile app code, backe
 - `.env`
 - `.env.*`
 - `serviceAccountKey.json`
+- `backend/traffic_db.json`
 - `backend/leaderboard_db.json`
 - `node_modules/`
 - `venv/`
@@ -736,11 +774,11 @@ curl http://127.0.0.1:8000/healthz
 ## 🚚 Deployment Notes
 
 ### Mobile app
-This project is optimized for Expo development, but the API layer now supports environment-based backend URLs for Render or other hosted backends.
+This project is optimized for Expo development, and the mobile app can point at either a local backend or a hosted service such as Render. In the current repo snapshot, that target is still controlled by `BASE_URL` in [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts).
 
 A production release path would typically include:
 - EAS Build for mobile binaries
-- environment-based API configuration
+- environment-backed API configuration or a deployment-specific `BASE_URL`
 - proper asset optimization
 - analytics / crash reporting
 - app-store compliant permission copy
@@ -759,13 +797,16 @@ Production hardening would include:
 - request limits / abuse protection
 - monitoring and logs
 - storage cleanup policies for uploaded files
+- durable cloud storage for leaderboard and traffic-analysis persistence
 
 ### Render-specific notes
+- use `/` or `/healthz` to verify the service is awake and whether Firestore is connected
 - set `FIREBASE_SERVICE_ACCOUNT_JSON` if you want Firestore-backed traffic saves and leaderboard sync
 - set `CORS_ALLOW_ORIGINS` if you are calling the API from web origins
-- point the mobile app to the live backend with `EXPO_PUBLIC_API_BASE_URL`
-- Studio Grid scans now use `POST /upload-audio` plus `GET /task-status/{task_id}` polling instead of one long blocking request
-- if Firebase is misconfigured, the backend falls back to local JSON storage so analysis and save flows keep responding
+- point the mobile app to the live backend by updating `BASE_URL` in [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts), or by wiring `EXPO_PUBLIC_API_BASE_URL` into the app first
+- expect Studio Grid scans to use `POST /upload-audio` plus `GET /task-status/{task_id}` polling instead of one long blocking request
+- expect hosted instances to cold-start occasionally; the frontend already warms the backend before uploads
+- if Firebase is misconfigured, the backend falls back to local JSON storage so analysis and save flows keep responding, but Firestore is still the durable production path
 
 ---
 

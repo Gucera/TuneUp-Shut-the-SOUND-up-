@@ -1937,7 +1937,7 @@ const styles = StyleSheet.create({
     },
     dropSlotFilled: {
         borderColor: COLORS.secondary,
-        backgroundColor: 'rgba(66, 194, 255, 0.12)',
+        backgroundColor: 'rgba(78, 168, 222, 0.12)',
     },
     dropSlotText: {
         color: COLORS.textDim,
@@ -2006,7 +2006,7 @@ const styles = StyleSheet.create({
     },
     selectChipActive: {
         borderColor: COLORS.primary,
-        backgroundColor: 'rgba(110, 124, 255, 0.12)',
+        backgroundColor: 'rgba(116, 0, 184, 0.12)',
     },
     selectChipMain: {
         color: COLORS.textStrong,
@@ -2110,11 +2110,11 @@ const styles = StyleSheet.create({
     },
     audioOptionCorrect: {
         borderColor: COLORS.success,
-        backgroundColor: 'rgba(86, 207, 168, 0.12)',
+        backgroundColor: 'rgba(100, 223, 223, 0.12)',
     },
     audioOptionWrong: {
         borderColor: COLORS.danger,
-        backgroundColor: 'rgba(255, 125, 150, 0.12)',
+        backgroundColor: 'rgba(94, 96, 206, 0.12)',
     },
     audioOptionText: {
         color: COLORS.textStrong,

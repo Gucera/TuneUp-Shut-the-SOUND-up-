@@ -8,25 +8,25 @@ interface PremiumBackdropProps {
 
 const PALETTES = {
     light: {
-        beam: ['rgba(255,255,255,0.78)', 'rgba(255,255,255,0)'] as const,
-        orbA: 'rgba(86, 104, 255, 0.14)',
-        orbB: 'rgba(35, 194, 255, 0.16)',
-        orbC: 'rgba(243, 199, 121, 0.12)',
-        line: 'rgba(122, 142, 165, 0.08)',
+        beam: ['rgba(116,0,184,0.24)', 'rgba(116,0,184,0)'] as const,
+        orbA: 'rgba(116, 0, 184, 0.2)',
+        orbB: 'rgba(94, 96, 206, 0.18)',
+        orbC: 'rgba(78, 168, 222, 0.16)',
+        line: 'rgba(105, 48, 195, 0.12)',
     },
     studio: {
-        beam: ['rgba(255,255,255,0.72)', 'rgba(255,255,255,0)'] as const,
-        orbA: 'rgba(86, 104, 255, 0.15)',
-        orbB: 'rgba(161, 119, 255, 0.13)',
-        orbC: 'rgba(35, 194, 255, 0.15)',
-        line: 'rgba(122, 142, 165, 0.08)',
+        beam: ['rgba(116,0,184,0.22)', 'rgba(116,0,184,0)'] as const,
+        orbA: 'rgba(116, 0, 184, 0.2)',
+        orbB: 'rgba(105, 48, 195, 0.18)',
+        orbC: 'rgba(72, 191, 227, 0.18)',
+        line: 'rgba(83, 144, 217, 0.12)',
     },
     song: {
-        beam: ['rgba(114, 242, 190, 0.18)', 'rgba(114, 242, 190, 0)'] as const,
-        orbA: 'rgba(114, 242, 190, 0.14)',
-        orbB: 'rgba(246, 193, 119, 0.11)',
-        orbC: 'rgba(57, 217, 138, 0.1)',
-        line: 'rgba(214, 235, 225, 0.06)',
+        beam: ['rgba(128,255,219,0.22)', 'rgba(128,255,219,0)'] as const,
+        orbA: 'rgba(100, 223, 223, 0.2)',
+        orbB: 'rgba(114, 239, 221, 0.18)',
+        orbC: 'rgba(78, 168, 222, 0.16)',
+        line: 'rgba(128, 255, 219, 0.1)',
     },
 };
 

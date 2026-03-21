@@ -43,15 +43,15 @@ export default function PremiumHeroStrip({
     metrics,
     dark = false,
     colors = dark
-        ? ['#1E252A', '#232C31', '#182024']
-        : ['#FFFFFF', '#F4F8FC', '#EAF2FA'],
+        ? ['#6930c3', '#5e60ce', '#4ea8de']
+        : ['#7400b8', '#5390d9', '#80ffdb'],
 }: PremiumHeroStripProps) {
-    const titleColor = dark ? '#F4F8FB' : COLORS.textStrong;
-    const bodyColor = dark ? 'rgba(244,248,251,0.78)' : COLORS.text;
-    const eyebrowColor = dark ? '#AEEFD6' : COLORS.primary;
-    const metricCard = dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)';
-    const metricBorder = dark ? 'rgba(255,255,255,0.08)' : withOpacity(COLORS.primary, 0.08);
-    const iconBg = dark ? 'rgba(255,255,255,0.08)' : withOpacity(COLORS.primary, 0.12);
+    const titleColor = dark ? '#F4F8FB' : '#ffffff';
+    const bodyColor = dark ? 'rgba(244,248,251,0.78)' : 'rgba(255,255,255,0.86)';
+    const eyebrowColor = dark ? '#AEEFD6' : '#ffffff';
+    const metricCard = dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.16)';
+    const metricBorder = dark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.24)';
+    const iconBg = dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)';
 
     return (
         <LinearGradient
@@ -60,15 +60,15 @@ export default function PremiumHeroStrip({
             end={{ x: 1, y: 1 }}
             style={styles.card}
         >
-            <View style={[styles.glow, { backgroundColor: dark ? 'rgba(114,242,190,0.18)' : 'rgba(86,104,255,0.12)' }]} />
-            <View style={[styles.glow, styles.glowSecondary, { backgroundColor: dark ? 'rgba(246,193,119,0.14)' : 'rgba(35,194,255,0.14)' }]} />
+            <View style={[styles.glow, { backgroundColor: dark ? 'rgba(128,255,219,0.18)' : 'rgba(128,255,219,0.22)' }]} />
+            <View style={[styles.glow, styles.glowSecondary, { backgroundColor: dark ? 'rgba(78,168,222,0.16)' : 'rgba(105,48,195,0.24)' }]} />
 
             <View style={styles.topRow}>
-                <View style={[styles.eyebrowPill, { backgroundColor: dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)' }]}>
+                <View style={[styles.eyebrowPill, { backgroundColor: dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.16)' }]}>
                     <Text style={[styles.eyebrowText, { color: eyebrowColor }]}>{eyebrow}</Text>
                 </View>
                 <View style={[styles.iconOrb, { backgroundColor: iconBg }]}>
-                    <Ionicons name={icon} size={18} color={dark ? '#F4F8FB' : COLORS.textStrong} />
+                    <Ionicons name={icon} size={18} color={dark ? '#F4F8FB' : '#ffffff'} />
                 </View>
             </View>
 
@@ -84,7 +84,7 @@ export default function PremiumHeroStrip({
                             { backgroundColor: metricCard, borderColor: metricBorder },
                         ]}
                     >
-                        <Text style={[styles.metricLabel, { color: dark ? 'rgba(244,248,251,0.7)' : COLORS.textDim }]}>{metric.label}</Text>
+                        <Text style={[styles.metricLabel, { color: dark ? 'rgba(244,248,251,0.7)' : 'rgba(255,255,255,0.72)' }]}>{metric.label}</Text>
                         <Text style={[styles.metricValue, { color: titleColor }]}>{metric.value}</Text>
                     </View>
                 ))}
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
         marginBottom: 14,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.6)',
+        borderColor: 'rgba(255,255,255,0.24)',
         ...SHADOWS.card,
     },
     glow: {

@@ -2,6 +2,7 @@ import { AppState, AppStateStatus } from 'react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     AnalysisResultPayload,
+    ApiErrorResponse,
     analyzeSongFile,
     fetchAnalysisTaskStatus,
     uploadAudioForAnalysis,
@@ -16,11 +17,31 @@ interface UseAudioAnalysisJobOptions {
     pollIntervalMs?: number;
 }
 
+const IDLE_PROGRESS_TEXT = 'Load a track to start a scan.';
+const STARTING_PROGRESS_TEXT = 'Waking the scan server and uploading your track...';
+const FALLBACK_PROGRESS_TEXT = 'Background scan is unavailable on this server. Falling back to direct scan. Keep TuneUp open.';
+const BACKGROUND_PROGRESS_TEXT = 'Scan still running in the background. Polling will resume when you return.';
+const RESUME_PROGRESS_TEXT = 'Checking scan progress...';
+const FAILURE_PROGRESS_TEXT = 'Could not start the scan.';
+
+function getOptionalProgressText(status: unknown, fallback: string) {
+    if (
+        typeof status === 'object'
+        && status !== null
+        && 'progressText' in status
+        && typeof status.progressText === 'string'
+    ) {
+        return status.progressText;
+    }
+
+    return fallback;
+}
+
 export function useAudioAnalysisJob({
     pollIntervalMs = 4000,
 }: UseAudioAnalysisJobOptions = {}) {
     const [isScanning, setIsScanning] = useState(false);
-    const [progressText, setProgressText] = useState('Load a track to start a scan.');
+    const [progressText, setProgressText] = useState(IDLE_PROGRESS_TEXT);
     const [result, setResult] = useState<AnalysisResultPayload | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [taskId, setTaskId] = useState<string | null>(null);
@@ -29,22 +50,28 @@ export function useAudioAnalysisJob({
     const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
-    const clearPollTimeout = useCallback(() => {
-        if (pollTimeoutRef.current) {
-            clearTimeout(pollTimeoutRef.current);
-            pollTimeoutRef.current = null;
+    const clearScheduledPoll = useCallback(() => {
+        if (!pollTimeoutRef.current) {
+            return;
         }
+
+        clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
     }, []);
 
-    const resetJob = useCallback(() => {
-        clearPollTimeout();
+    const stopTrackingTask = useCallback(() => {
+        clearScheduledPoll();
         activeTaskIdRef.current = null;
         setTaskId(null);
         setIsScanning(false);
-        setProgressText('Load a track to start a scan.');
+    }, [clearScheduledPoll]);
+
+    const resetJob = useCallback(() => {
+        stopTrackingTask();
+        setProgressText(IDLE_PROGRESS_TEXT);
         setResult(null);
         setError(null);
-    }, [clearPollTimeout]);
+    }, [stopTrackingTask]);
 
     const clearResult = useCallback(() => {
         setResult(null);
@@ -54,112 +81,121 @@ export function useAudioAnalysisJob({
         setError(null);
     }, []);
 
-    const pollTaskStatus = useCallback(async (nextTaskId: string) => {
+    const completeScan = useCallback((analysisResult: AnalysisResultPayload, nextProgressText = 'Analysis complete.') => {
+        stopTrackingTask();
+        setProgressText(nextProgressText);
+        setError(null);
+        setResult(analysisResult);
+    }, [stopTrackingTask]);
+
+    const failScan = useCallback((message: string, nextProgressText = FAILURE_PROGRESS_TEXT) => {
+        stopTrackingTask();
+        setProgressText(nextProgressText);
+        setError(message);
+    }, [stopTrackingTask]);
+
+    const pollTask = useCallback(async (nextTaskId: string) => {
         const status = await fetchAnalysisTaskStatus(nextTaskId);
 
         if (status.status === 'completed') {
-            clearPollTimeout();
-            activeTaskIdRef.current = null;
-            setTaskId(null);
-            setIsScanning(false);
-            setProgressText(status.progressText);
-            setError(null);
-            setResult(status.result);
+            completeScan(status.result, status.progressText);
             return;
         }
 
         if (status.status === 'failed' || status.status === 'error') {
-            clearPollTimeout();
-            activeTaskIdRef.current = null;
-            setTaskId(null);
-            setIsScanning(false);
-            setProgressText('progressText' in status ? status.progressText : 'Analysis failed.');
-            setError(status.message);
+            failScan(status.message, getOptionalProgressText(status, 'Analysis failed.'));
             return;
         }
 
-        setProgressText('progressText' in status ? status.progressText : 'Analysis is still running...');
-
-        if (appStateRef.current === 'active') {
-            clearPollTimeout();
-            pollTimeoutRef.current = setTimeout(() => {
-                pollTimeoutRef.current = null;
-                void pollTaskStatus(nextTaskId);
-            }, pollIntervalMs);
+        if (status.status !== 'processing') {
+            return;
         }
-    }, [clearPollTimeout, pollIntervalMs]);
+
+        setProgressText(status.progressText);
+
+        if (appStateRef.current !== 'active') {
+            return;
+        }
+
+        clearScheduledPoll();
+        pollTimeoutRef.current = setTimeout(() => {
+            pollTimeoutRef.current = null;
+            void pollTask(nextTaskId);
+        }, pollIntervalMs);
+    }, [clearScheduledPoll, completeScan, failScan, pollIntervalMs]);
+
+    const runLegacyFallbackScan = useCallback(async (
+        fileUri: string,
+        fileName: string,
+        uploadError: ApiErrorResponse,
+    ) => {
+        setProgressText(FALLBACK_PROGRESS_TEXT);
+        const fallbackResult = await analyzeSongFile(fileUri, fileName);
+
+        if (fallbackResult.status === 'success') {
+            completeScan({
+                bpm: fallbackResult.bpm,
+                markers: fallbackResult.markers,
+                message: fallbackResult.message,
+            });
+            return;
+        }
+
+        const errorMessage = uploadError.statusCode === 404
+            ? `Background scan is not deployed on the live backend yet. ${fallbackResult.message}`
+            : fallbackResult.message || uploadError.message;
+
+        failScan(errorMessage);
+    }, [completeScan, failScan]);
 
     const startScan = useCallback(async ({ fileUri, fileName }: StartScanInput) => {
-        clearPollTimeout();
+        clearScheduledPoll();
         setResult(null);
         setError(null);
         setIsScanning(true);
-        setProgressText('Waking the scan server and uploading your track...');
+        setProgressText(STARTING_PROGRESS_TEXT);
 
         const uploadResult = await uploadAudioForAnalysis(fileUri, fileName);
 
-        if (uploadResult.status !== 'accepted' || !uploadResult.taskId) {
-            setProgressText('Background scan is unavailable on this server. Falling back to direct scan. Keep TuneUp open.');
-            const fallbackResult = await analyzeSongFile(fileUri, fileName);
-
-            activeTaskIdRef.current = null;
-            setTaskId(null);
-            setIsScanning(false);
-
-            if (fallbackResult.status === 'success') {
-                setProgressText('Analysis complete.');
-                setError(null);
-                setResult({
-                    bpm: fallbackResult.bpm,
-                    markers: fallbackResult.markers,
-                    message: fallbackResult.message,
-                });
-                return uploadResult;
-            }
-
-            setProgressText('Could not start the scan.');
-            setError(
-                'statusCode' in uploadResult && uploadResult.statusCode === 404
-                    ? `Background scan is not deployed on the live backend yet. ${fallbackResult.message}`
-                    : fallbackResult.message || uploadResult.message,
-            );
+        if (uploadResult.status !== 'accepted') {
+            await runLegacyFallbackScan(fileUri, fileName, uploadResult);
             return uploadResult;
         }
 
         activeTaskIdRef.current = uploadResult.taskId;
         setTaskId(uploadResult.taskId);
         setProgressText(uploadResult.progressText);
-        await pollTaskStatus(uploadResult.taskId);
+        await pollTask(uploadResult.taskId);
+
         return uploadResult;
-    }, [clearPollTimeout, pollTaskStatus]);
+    }, [clearScheduledPoll, pollTask, runLegacyFallbackScan]);
 
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState) => {
-            const hasActiveTask = !!activeTaskIdRef.current;
             appStateRef.current = nextState;
 
-            if (!hasActiveTask) {
+            if (!activeTaskIdRef.current) {
                 return;
             }
 
             if (nextState === 'background' || nextState === 'inactive') {
-                clearPollTimeout();
-                setProgressText('Scan still running in the background. Polling will resume when you return.');
+                clearScheduledPoll();
+                setProgressText(BACKGROUND_PROGRESS_TEXT);
                 return;
             }
 
-            if (nextState === 'active' && activeTaskIdRef.current) {
-                clearPollTimeout();
-                setProgressText('Checking scan progress...');
-                void pollTaskStatus(activeTaskIdRef.current);
+            if (nextState === 'active') {
+                clearScheduledPoll();
+                setProgressText(RESUME_PROGRESS_TEXT);
+                void pollTask(activeTaskIdRef.current);
             }
         });
 
         return () => {
             subscription.remove();
-            clearPollTimeout();
+            clearScheduledPoll();
         };
-    }, [clearPollTimeout, pollTaskStatus]);
+    }, [clearScheduledPoll, pollTask]);
 
     return {
         isScanning,

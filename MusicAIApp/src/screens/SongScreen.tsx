@@ -164,8 +164,8 @@ function getChordColor(chord: string) {
         Em: COLORS.success,
         F: COLORS.warning,
         G: COLORS.accent,
-        Am: '#89A6FF',
-        Bm: '#95D3FF',
+        Am: '#72efdd',
+        Bm: '#80ffdb',
     };
 
     return palette[chord] ?? SONG_COLORS.primary;
@@ -1088,7 +1088,7 @@ export default function SongScreen() {
                         { label: 'Playback', value: isPlaying ? 'Live' : 'Ready' },
                     ]}
                     dark
-                    colors={['#1C2529', '#243138', '#172026']}
+                    colors={['#6930c3', '#5390d9', '#4ea8de']}
                 />
 
                 {isBootLoading ? (

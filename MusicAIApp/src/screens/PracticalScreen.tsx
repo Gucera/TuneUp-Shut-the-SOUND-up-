@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
         width: 140,
         height: 140,
         borderRadius: 70,
-        backgroundColor: 'rgba(110, 124, 255, 0.12)',
+        backgroundColor: 'rgba(116, 0, 184, 0.12)',
     },
     pixelGlowB: {
         position: 'absolute',
@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
         width: 170,
         height: 170,
         borderRadius: 85,
-        backgroundColor: 'rgba(66, 194, 255, 0.12)',
+        backgroundColor: 'rgba(78, 168, 222, 0.12)',
     },
     header: {
         color: COLORS.textStrong,
