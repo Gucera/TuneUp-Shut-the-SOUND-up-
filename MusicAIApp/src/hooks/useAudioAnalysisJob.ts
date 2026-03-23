@@ -11,6 +11,7 @@ import {
 interface StartScanInput {
     fileUri: string;
     fileName: string;
+    userId?: string;
 }
 
 interface UseAudioAnalysisJobOptions {
@@ -148,14 +149,14 @@ export function useAudioAnalysisJob({
         failScan(errorMessage);
     }, [completeScan, failScan]);
 
-    const startScan = useCallback(async ({ fileUri, fileName }: StartScanInput) => {
+    const startScan = useCallback(async ({ fileUri, fileName, userId }: StartScanInput) => {
         clearScheduledPoll();
         setResult(null);
         setError(null);
         setIsScanning(true);
         setProgressText(STARTING_PROGRESS_TEXT);
 
-        const uploadResult = await uploadAudioForAnalysis(fileUri, fileName);
+        const uploadResult = await uploadAudioForAnalysis(fileUri, fileName, userId);
 
         if (uploadResult.status !== 'accepted') {
             await runLegacyFallbackScan(fileUri, fileName, uploadResult);

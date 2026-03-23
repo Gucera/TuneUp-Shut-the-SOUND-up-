@@ -1,0 +1,99 @@
+diff --git a/node_modules/react-native-pitchy/ios/Pitchy.mm b/node_modules/react-native-pitchy/ios/Pitchy.mm
+index f7524d4..5c52a5c 100644
+--- a/node_modules/react-native-pitchy/ios/Pitchy.mm
++++ b/node_modules/react-native-pitchy/ios/Pitchy.mm
+@@ -2,15 +2,19 @@
+ #import <AVFoundation/AVFoundation.h>
+ #import <React/RCTLog.h>
+ #import "pitch-detector.h"
++#include <deque>
+ 
+ @implementation Pitchy {
+     AVAudioEngine *audioEngine;
+     double sampleRate;
+     double minVolume;
++    NSUInteger analysisBufferSize;
++    NSUInteger tapBufferSize;
+     BOOL isRecording;
+     BOOL isInitialized;
+     BOOL hasListeners;
+     pitchy::PitchDetector *pitchDetector;
++    std::deque<double> rollingSamples;
+ }
+ 
+ RCT_EXPORT_MODULE()
+@@ -84,8 +88,11 @@ - (void)stopObserving {
+             AVAudioFormat *format = [inputNode inputFormatForBus:0];
+             sampleRate = format.sampleRate;
+             minVolume = [config[@"minVolume"] doubleValue];
++            analysisBufferSize = MAX((NSUInteger)512, [config[@"bufferSize"] unsignedIntValue]);
++            tapBufferSize = MAX((NSUInteger)256, analysisBufferSize / 4);
++            rollingSamples.clear();
+ 
+-            [inputNode installTapOnBus:0 bufferSize:[config[@"bufferSize"] unsignedIntValue] format:format block:^(AVAudioPCMBuffer * _Nonnull buffer, AVAudioTime * _Nonnull when) {
++            [inputNode installTapOnBus:0 bufferSize:tapBufferSize format:format block:^(AVAudioPCMBuffer * _Nonnull buffer, AVAudioTime * _Nonnull when) {
+                 [self detectPitch:buffer];
+             }];
+ 
+@@ -115,6 +122,7 @@ - (void)stopObserving {
+ 
+     @try {
+         NSError *error = nil;
++        rollingSamples.clear();
+         [audioEngine startAndReturnError:&error];
+         if (error) {
+             reject(@"start_error", @"Failed to start audio engine", error);
+@@ -137,22 +145,36 @@ - (void)stopObserving {
+ 
+     [audioEngine stop];
+     isRecording = NO;
++    rollingSamples.clear();
+     resolve(@(YES));
+ }
+ 
+ - (void)detectPitch:(AVAudioPCMBuffer *)buffer {
+-    if (!hasListeners) return;
++    if (!hasListeners || !isRecording) return;
+ 
+     float *channelData = buffer.floatChannelData[0];
+     UInt32 frameLength = buffer.frameLength;
+-    std::vector<double> buf(channelData, channelData + frameLength);
++
++    for (UInt32 i = 0; i < frameLength; i++) {
++        rollingSamples.push_back(channelData[i]);
++    }
++
++    while (rollingSamples.size() > analysisBufferSize) {
++        rollingSamples.pop_front();
++    }
++
++    if (rollingSamples.size() < analysisBufferSize) {
++        return;
++    }
++
++    std::vector<double> buf(rollingSamples.begin(), rollingSamples.end());
+ 
+     // Calculate volume (RMS → dB)
+     double rms = 0;
+-    for (UInt32 i = 0; i < frameLength; i++) {
+-        rms += buf[i] * buf[i];
++    for (double sample : buf) {
++        rms += sample * sample;
+     }
+-    rms = sqrt(rms / frameLength);
++    rms = sqrt(rms / buf.size());
+     double volume = 20.0 * log10(rms + 1e-10);
+ 
+     pitchy::PitchDetectionResult result = pitchDetector->detect(buf, sampleRate, minVolume);
+diff --git a/node_modules/react-native-pitchy/react-native-pitchy.podspec b/node_modules/react-native-pitchy/react-native-pitchy.podspec
+index 1d4a18a..f244a38 100644
+--- a/node_modules/react-native-pitchy/react-native-pitchy.podspec
++++ b/node_modules/react-native-pitchy/react-native-pitchy.podspec
+@@ -15,6 +15,7 @@ Pod::Spec.new do |s|
+   s.source       = { :git => "https://github.com/yigithanyucedag/react-native-pitchy.git", :tag => "#{s.version}" }
+ 
+   s.source_files = "ios/**/*.{h,m,mm}", "cpp/**/*.{hpp,cpp,c,h}"
++  s.exclude_files = "cpp/test_algorithms.cpp"
+   s.pod_target_xcconfig = { "CLANG_CXX_LANGUAGE_STANDARD" => "c++17" }
+ 
+   # Use install_modules_dependencies helper to install the dependencies if React Native version >=0.71.0.

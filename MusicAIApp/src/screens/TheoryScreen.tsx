@@ -15,7 +15,7 @@ import {
 import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { FadeInDown, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import { getProgressSnapshot } from '../database/services';
@@ -26,9 +26,10 @@ import {
     TheoryPuzzle,
 } from '../data/theoryPuzzles';
 import { AudioChordQuestion, getRandomAudioQuestion } from '../data/audioChordQuiz';
-import { getLessonPackagesByInstrument, LESSON_PACK_COUNTS, LessonInstrument } from '../data/lessonLibrary';
+import { getLessonPackagesByInstrument, LESSON_PACK_COUNTS, LessonInstrument, LessonPackage } from '../data/lessonLibrary';
 import { getRandomTheoryQuizQuestion, TheoryQuizQuestion } from '../data/theoryQuizQuestions';
 import { COLORS, SHADOWS } from '../theme';
+import Breadcrumb, { BreadcrumbSegment } from '../components/Breadcrumb';
 import LessonVisualGallery from '../components/LessonVisualGallery';
 import GamificationDeck from '../components/GamificationDeck';
 import PageTransitionView from '../components/PageTransitionView';
@@ -157,6 +158,45 @@ function DraggableNote({
     );
 }
 
+interface AnimatedLessonPickerChipProps {
+    index: number;
+    isActive: boolean;
+    lesson: LessonPackage;
+    animationsEnabled: boolean;
+    onPress: () => void;
+}
+
+function AnimatedLessonPickerChip({
+    index,
+    isActive,
+    lesson,
+    animationsEnabled,
+    onPress,
+}: AnimatedLessonPickerChipProps) {
+    return (
+        <Animated.View
+            entering={animationsEnabled
+                ? FadeInDown.delay(index * 55).springify().damping(18).stiffness(185)
+                : undefined}
+        >
+            <TouchableOpacity
+                style={[styles.lessonPickerChip, isActive && styles.lessonPickerChipActive]}
+                onPress={onPress}
+            >
+                <Text style={[styles.lessonPickerNumber, isActive && styles.lessonPickerNumberActive]}>
+                    {index + 1}
+                </Text>
+                <View style={styles.lessonPickerTextWrap}>
+                    <Text numberOfLines={1} style={[styles.lessonPickerTitle, isActive && styles.lessonPickerTitleActive]}>
+                        {lesson.title}
+                    </Text>
+                    <Text style={styles.lessonPickerMeta}>{lesson.tier}</Text>
+                </View>
+            </TouchableOpacity>
+        </Animated.View>
+    );
+}
+
 export default function TheoryScreen() {
     const tabBarHeight = useBottomTabBarHeight();
     const initialPuzzle = useMemo(() => getRandomPuzzle(), []);
@@ -203,8 +243,12 @@ export default function TheoryScreen() {
 
     const [slotLayouts, setSlotLayouts] = useState<Record<number, LayoutRectangle>>({});
     const [staffWindow, setStaffWindow] = useState({ x: 0, y: 0, width: 0, height: 0 });
+    const [lessonsSectionY, setLessonsSectionY] = useState(0);
+    const [instrumentSectionY, setInstrumentSectionY] = useState(0);
+    const [lessonListSectionY, setLessonListSectionY] = useState(0);
     const { celebration, showCelebration } = useCelebration();
 
+    const theoryScrollRef = useRef<ScrollView | null>(null);
     const staffRef = useRef<View | null>(null);
     const chordSoundRef = useRef<Audio.Sound | null>(null);
     const lessonOptions = useMemo(() => getLessonPackagesByInstrument(lessonInstrument), [lessonInstrument]);
@@ -212,6 +256,12 @@ export default function TheoryScreen() {
         () => lessonOptions.find((lesson) => lesson.id === selectedLessonId) ?? lessonOptions[0],
         [lessonOptions, selectedLessonId],
     );
+    const scrollToTheoryY = useCallback((targetY: number) => {
+        theoryScrollRef.current?.scrollTo({
+            y: Math.max(0, targetY - 18),
+            animated: true,
+        });
+    }, []);
 
     const syncProgress = useCallback(async () => {
         setIsProgressLoading(true);
@@ -638,6 +688,53 @@ export default function TheoryScreen() {
                 ? 'Build'
                 : 'Performance';
     const isLessonCompleted = !!selectedLesson && !!gameSnapshot?.completedLessonIds.includes(selectedLesson.id);
+    const completedInstrumentLessons = useMemo(
+        () => lessonOptions.filter((lesson) => gameSnapshot?.completedLessonIds.includes(lesson.id)).length,
+        [gameSnapshot, lessonOptions],
+    );
+    const breadcrumbProgress = lessonOptions.length > 0
+        ? completedInstrumentLessons / lessonOptions.length
+        : 0;
+    const breadcrumbProgressLabel = `${completedInstrumentLessons}/${lessonOptions.length || 0} complete`;
+    const breadcrumbSegments = useMemo<BreadcrumbSegment[]>(() => [
+        {
+            key: 'lessons-root',
+            label: 'Lessons',
+            onPress: () => {
+                setMode('lessons');
+                scrollToTheoryY(lessonsSectionY);
+            },
+        },
+        {
+            key: `instrument-${lessonInstrument}`,
+            label: lessonInstrument,
+            onPress: () => {
+                setMode('lessons');
+                scrollToTheoryY(instrumentSectionY);
+            },
+        },
+        {
+            key: `level-${selectedLessonIndex + 1}`,
+            label: `Level ${selectedLessonIndex + 1}`,
+            onPress: () => {
+                setMode('lessons');
+                scrollToTheoryY(lessonListSectionY);
+            },
+        },
+        {
+            key: selectedLesson.id,
+            label: selectedLesson.title,
+        },
+    ], [
+        instrumentSectionY,
+        lessonInstrument,
+        lessonListSectionY,
+        lessonsSectionY,
+        scrollToTheoryY,
+        selectedLesson.id,
+        selectedLesson.title,
+        selectedLessonIndex,
+    ]);
 
     const quickNoteTop = BOTTOM_LINE_Y - (currentNote.position * (STAFF_HEIGHT / 2));
 
@@ -656,6 +753,7 @@ export default function TheoryScreen() {
         <PremiumBackdrop variant="light" />
         <PageTransitionView style={styles.container}>
         <ScrollView
+            ref={theoryScrollRef}
             style={styles.container}
             contentContainerStyle={[styles.contentContainer, { paddingBottom: tabBarHeight + 28 }]}
             showsVerticalScrollIndicator={false}
@@ -768,7 +866,19 @@ export default function TheoryScreen() {
             </View>
 
             {mode === 'lessons' && selectedLesson && (
-                <View style={styles.card}>
+                <View
+                    style={styles.card}
+                    onLayout={(event) => setLessonsSectionY(event.nativeEvent.layout.y)}
+                >
+                    <Breadcrumb
+                        key={`lesson-breadcrumb-${lessonInstrument}-${selectedLesson.id}-${selectedLessonIndex}`}
+                        accentColor={lessonAccent}
+                        animationsEnabled={lessonAnimationsEnabled}
+                        progress={breadcrumbProgress}
+                        progressLabel={breadcrumbProgressLabel}
+                        segments={breadcrumbSegments}
+                    />
+
                     <View style={styles.cardTopRow}>
                         <Text style={styles.cardTitle}>Ready Lesson Packs</Text>
                         <View style={[styles.diffPill, { borderColor: COLORS.primary }]}>
@@ -780,7 +890,10 @@ export default function TheoryScreen() {
                         Premium English lesson paths for guitar, piano, and drums. Pick the instrument, then step through the pack like a real curriculum.
                     </Text>
 
-                    <View style={styles.lessonCountRow}>
+                    <View
+                        style={styles.lessonCountRow}
+                        onLayout={(event) => setInstrumentSectionY(event.nativeEvent.layout.y)}
+                    >
                         {(['Guitar', 'Piano', 'Drums'] as LessonInstrument[]).map((instrument) => {
                             const isActive = lessonInstrument === instrument;
                             return (
@@ -800,106 +913,146 @@ export default function TheoryScreen() {
                         })}
                     </View>
 
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.lessonPickerRow}>
+                    <ScrollView
+                        horizontal
+                        key={`lesson-row-${lessonInstrument}`}
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.lessonPickerRow}
+                        onLayout={(event) => setLessonListSectionY(event.nativeEvent.layout.y)}
+                    >
                         {lessonOptions.map((lesson, index) => {
                             const isActive = selectedLesson.id === lesson.id;
                             return (
-                                <TouchableOpacity
+                                <AnimatedLessonPickerChip
                                     key={lesson.id}
-                                    style={[styles.lessonPickerChip, isActive && styles.lessonPickerChipActive]}
+                                    animationsEnabled={lessonAnimationsEnabled}
+                                    index={index}
+                                    isActive={isActive}
+                                    lesson={lesson}
                                     onPress={() => setSelectedLessonId(lesson.id)}
-                                >
-                                    <Text style={[styles.lessonPickerNumber, isActive && styles.lessonPickerNumberActive]}>
-                                        {index + 1}
-                                    </Text>
-                                    <View style={styles.lessonPickerTextWrap}>
-                                        <Text numberOfLines={1} style={[styles.lessonPickerTitle, isActive && styles.lessonPickerTitleActive]}>
-                                            {lesson.title}
-                                        </Text>
-                                        <Text style={styles.lessonPickerMeta}>{lesson.tier}</Text>
-                                    </View>
-                                </TouchableOpacity>
+                                />
                             );
                         })}
                     </ScrollView>
 
-                    <LinearGradient
-                        colors={[withOpacity(lessonAccent, 0.16), withOpacity(lessonAccent, 0.05)]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.lessonHero}
+                    <Animated.View
+                        key={`lesson-hero-${selectedLesson.id}`}
+                        entering={lessonAnimationsEnabled
+                            ? FadeInDown.delay(80).springify().damping(18).stiffness(185)
+                            : undefined}
                     >
-                        <View style={[styles.lessonHeroBadge, { borderColor: withOpacity(lessonAccent, 0.26) }]}>
-                            <Text style={[styles.lessonHeroBadgeText, { color: lessonAccent }]}>{lessonMarker}</Text>
-                        </View>
+                        <LinearGradient
+                            colors={[withOpacity(lessonAccent, 0.16), withOpacity(lessonAccent, 0.05)]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.lessonHero}
+                        >
+                            <View style={[styles.lessonHeroBadge, { borderColor: withOpacity(lessonAccent, 0.26) }]}>
+                                <Text style={[styles.lessonHeroBadgeText, { color: lessonAccent }]}>{lessonMarker}</Text>
+                            </View>
 
-                        <View style={styles.lessonHeroBody}>
-                            <View style={styles.lessonHeroTopRow}>
-                                <View style={styles.lessonHeroMain}>
-                                    <Text style={styles.lessonHeroTitle}>{selectedLesson.title}</Text>
-                                    <Text style={styles.lessonHeroSubtitle}>{selectedLesson.subtitle}</Text>
+                            <View style={styles.lessonHeroBody}>
+                                <View style={styles.lessonHeroTopRow}>
+                                    <View style={styles.lessonHeroMain}>
+                                        <Text style={styles.lessonHeroTitle}>{selectedLesson.title}</Text>
+                                        <Text style={styles.lessonHeroSubtitle}>{selectedLesson.subtitle}</Text>
+                                    </View>
+
+                                    <View style={[styles.lessonHeroTierPill, { borderColor: withOpacity(lessonAccent, 0.24) }]}>
+                                        <Text style={[styles.lessonHeroTierText, { color: lessonAccent }]}>{selectedLesson.tier}</Text>
+                                    </View>
                                 </View>
 
-                                <View style={[styles.lessonHeroTierPill, { borderColor: withOpacity(lessonAccent, 0.24) }]}>
-                                    <Text style={[styles.lessonHeroTierText, { color: lessonAccent }]}>{selectedLesson.tier}</Text>
+                                <View style={styles.lessonHeroProgressRow}>
+                                    <Text style={styles.lessonHeroProgressText}>
+                                        Lesson {selectedLessonIndex + 1} of {lessonOptions.length}
+                                    </Text>
+                                    <Text style={[styles.lessonHeroProgressText, { color: lessonAccent }]}>{lessonPhase}</Text>
+                                </View>
+
+                                <View style={styles.lessonProgressRail}>
+                                    <View
+                                        style={[
+                                            styles.lessonProgressFill,
+                                            {
+                                                width: `${Math.max(8, lessonPackProgress * 100)}%`,
+                                                backgroundColor: lessonAccent,
+                                            },
+                                        ]}
+                                    />
                                 </View>
                             </View>
+                        </LinearGradient>
+                    </Animated.View>
 
-                            <View style={styles.lessonHeroProgressRow}>
-                                <Text style={styles.lessonHeroProgressText}>
-                                    Lesson {selectedLessonIndex + 1} of {lessonOptions.length}
-                                </Text>
-                                <Text style={[styles.lessonHeroProgressText, { color: lessonAccent }]}>{lessonPhase}</Text>
+                    <Animated.View
+                        key={`lesson-stats-${selectedLesson.id}`}
+                        entering={lessonAnimationsEnabled
+                            ? FadeInDown.delay(120).springify().damping(18).stiffness(185)
+                            : undefined}
+                    >
+                        <View style={styles.lessonStatsRow}>
+                            <View style={styles.lessonStatBox}>
+                                <Text style={styles.lessonStatLabel}>INSTRUMENT</Text>
+                                <Text style={styles.lessonStatValue}>{selectedLesson.instrument}</Text>
                             </View>
-
-                            <View style={styles.lessonProgressRail}>
-                                <View
-                                    style={[
-                                        styles.lessonProgressFill,
-                                        {
-                                            width: `${Math.max(8, lessonPackProgress * 100)}%`,
-                                            backgroundColor: lessonAccent,
-                                        },
-                                    ]}
-                                />
+                            <View style={styles.lessonStatBox}>
+                                <Text style={styles.lessonStatLabel}>DURATION</Text>
+                                <Text style={styles.lessonStatValue}>{selectedLesson.durationMin} min</Text>
+                            </View>
+                            <View style={styles.lessonStatBox}>
+                                <Text style={styles.lessonStatLabel}>FOCUS</Text>
+                                <Text style={[styles.lessonStatValue, { color: lessonAccent }]}>{selectedLesson.focusTags.length} lanes</Text>
                             </View>
                         </View>
-                    </LinearGradient>
+                    </Animated.View>
 
-                    <View style={styles.lessonStatsRow}>
-                        <View style={styles.lessonStatBox}>
-                            <Text style={styles.lessonStatLabel}>INSTRUMENT</Text>
-                            <Text style={styles.lessonStatValue}>{selectedLesson.instrument}</Text>
+                    <Animated.View
+                        key={`lesson-goal-${selectedLesson.id}`}
+                        entering={lessonAnimationsEnabled
+                            ? FadeInDown.delay(160).springify().damping(18).stiffness(185)
+                            : undefined}
+                    >
+                        <View style={styles.lessonGoalCard}>
+                            <Text style={styles.lessonSectionTitle}>Session Goal</Text>
+                            <Text style={styles.lessonBody}>{selectedLesson.goal}</Text>
                         </View>
-                        <View style={styles.lessonStatBox}>
-                            <Text style={styles.lessonStatLabel}>DURATION</Text>
-                            <Text style={styles.lessonStatValue}>{selectedLesson.durationMin} min</Text>
+                    </Animated.View>
+
+                    <Animated.View
+                        key={`lesson-tags-${selectedLesson.id}`}
+                        entering={lessonAnimationsEnabled
+                            ? FadeInDown.delay(200).springify().damping(18).stiffness(185)
+                            : undefined}
+                    >
+                        <View style={styles.lessonTagRow}>
+                            {selectedLesson.focusTags.map((tag) => (
+                                <View key={tag} style={[styles.lessonTag, { borderColor: withOpacity(lessonAccent, 0.18) }]}>
+                                    <Text style={styles.lessonTagText}>{tag}</Text>
+                                </View>
+                            ))}
                         </View>
-                        <View style={styles.lessonStatBox}>
-                            <Text style={styles.lessonStatLabel}>FOCUS</Text>
-                            <Text style={[styles.lessonStatValue, { color: lessonAccent }]}>{selectedLesson.focusTags.length} lanes</Text>
-                        </View>
-                    </View>
+                    </Animated.View>
 
-                    <View style={styles.lessonGoalCard}>
-                        <Text style={styles.lessonSectionTitle}>Session Goal</Text>
-                        <Text style={styles.lessonBody}>{selectedLesson.goal}</Text>
-                    </View>
+                    <Animated.View
+                        key={`lesson-visuals-${selectedLesson.id}`}
+                        entering={lessonAnimationsEnabled
+                            ? FadeInDown.delay(240).springify().damping(18).stiffness(185)
+                            : undefined}
+                    >
+                        <LessonVisualGallery
+                            visuals={selectedLesson.visuals}
+                            accentColor={lessonAccent}
+                            animationsEnabled={lessonAnimationsEnabled}
+                        />
+                    </Animated.View>
 
-                    <View style={styles.lessonTagRow}>
-                        {selectedLesson.focusTags.map((tag) => (
-                            <View key={tag} style={[styles.lessonTag, { borderColor: withOpacity(lessonAccent, 0.18) }]}>
-                                <Text style={styles.lessonTagText}>{tag}</Text>
-                            </View>
-                        ))}
-                    </View>
-
-                    <LessonVisualGallery
-                        visuals={selectedLesson.visuals}
-                        accentColor={lessonAccent}
-                        animationsEnabled={lessonAnimationsEnabled}
-                    />
-
+                    <Animated.View
+                        key={`lesson-warmup-${selectedLesson.id}`}
+                        entering={lessonAnimationsEnabled
+                            ? FadeInDown.delay(280).springify().damping(18).stiffness(185)
+                            : undefined}
+                    >
                     <View style={styles.lessonSectionCard}>
                         <View style={styles.lessonSectionHeading}>
                             <View style={[styles.lessonSectionIcon, { backgroundColor: withOpacity(lessonAccent, 0.14) }]}>
@@ -917,7 +1070,14 @@ export default function TheoryScreen() {
                             </View>
                         ))}
                     </View>
+                    </Animated.View>
 
+                    <Animated.View
+                        key={`lesson-flow-${selectedLesson.id}`}
+                        entering={lessonAnimationsEnabled
+                            ? FadeInDown.delay(320).springify().damping(18).stiffness(185)
+                            : undefined}
+                    >
                     <View style={styles.lessonSectionCard}>
                         <View style={styles.lessonSectionHeading}>
                             <View style={[styles.lessonSectionIcon, { backgroundColor: withOpacity(lessonAccent, 0.14) }]}>
@@ -943,7 +1103,14 @@ export default function TheoryScreen() {
                             </View>
                         ))}
                     </View>
+                    </Animated.View>
 
+                    <Animated.View
+                        key={`lesson-loop-${selectedLesson.id}`}
+                        entering={lessonAnimationsEnabled
+                            ? FadeInDown.delay(360).springify().damping(18).stiffness(185)
+                            : undefined}
+                    >
                     <View style={styles.lessonSectionCard}>
                         <View style={styles.lessonSectionHeading}>
                             <View style={[styles.lessonSectionIcon, { backgroundColor: withOpacity(lessonAccent, 0.14) }]}>
@@ -961,7 +1128,14 @@ export default function TheoryScreen() {
                             </View>
                         ))}
                     </View>
+                    </Animated.View>
 
+                    <Animated.View
+                        key={`lesson-coach-${selectedLesson.id}`}
+                        entering={lessonAnimationsEnabled
+                            ? FadeInDown.delay(400).springify().damping(18).stiffness(185)
+                            : undefined}
+                    >
                     <View style={styles.lessonSectionCard}>
                         <View style={styles.lessonSectionHeading}>
                             <View style={[styles.lessonSectionIcon, { backgroundColor: withOpacity(lessonAccent, 0.14) }]}>
@@ -979,34 +1153,49 @@ export default function TheoryScreen() {
                             </View>
                         ))}
                     </View>
+                    </Animated.View>
 
-                    <View style={styles.quizExplanationCard}>
-                        <Text style={styles.noteLabel}>CHECKPOINT</Text>
-                        <Text style={styles.noteText}>{selectedLesson.checkpoint}</Text>
-                    </View>
-
-                    <View style={styles.lessonActionCard}>
-                        <View style={styles.lessonActionTextWrap}>
-                            <Text style={styles.lessonActionTitle}>
-                                {isLessonCompleted ? 'Lesson completed' : 'Lock this lesson in'}
-                            </Text>
-                            <Text style={styles.lessonActionBody}>
-                                {isLessonCompleted
-                                    ? 'This lesson already counts toward your streak, badges, and leaderboard profile.'
-                                    : 'Mark this one done when you finish the full loop and checkpoint cleanly.'}
-                            </Text>
-                            {lessonActionText && <Text style={styles.lessonActionFeedback}>{lessonActionText}</Text>}
+                    <Animated.View
+                        key={`lesson-checkpoint-${selectedLesson.id}`}
+                        entering={lessonAnimationsEnabled
+                            ? FadeInDown.delay(440).springify().damping(18).stiffness(185)
+                            : undefined}
+                    >
+                        <View style={styles.quizExplanationCard}>
+                            <Text style={styles.noteLabel}>CHECKPOINT</Text>
+                            <Text style={styles.noteText}>{selectedLesson.checkpoint}</Text>
                         </View>
+                    </Animated.View>
 
-                        <TouchableOpacity
-                            style={[styles.lessonCompleteButton, isLessonCompleted && styles.lessonCompleteButtonDone]}
-                            onPress={() => void markLessonComplete()}
-                        >
-                            <Text style={[styles.lessonCompleteButtonText, isLessonCompleted && styles.lessonCompleteButtonTextDone]}>
-                                {isLessonCompleted ? 'Completed' : 'Complete Lesson'}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
+                    <Animated.View
+                        key={`lesson-action-${selectedLesson.id}`}
+                        entering={lessonAnimationsEnabled
+                            ? FadeInDown.delay(480).springify().damping(18).stiffness(185)
+                            : undefined}
+                    >
+                        <View style={styles.lessonActionCard}>
+                            <View style={styles.lessonActionTextWrap}>
+                                <Text style={styles.lessonActionTitle}>
+                                    {isLessonCompleted ? 'Lesson completed' : 'Lock this lesson in'}
+                                </Text>
+                                <Text style={styles.lessonActionBody}>
+                                    {isLessonCompleted
+                                        ? 'This lesson already counts toward your streak, badges, and leaderboard profile.'
+                                        : 'Mark this one done when you finish the full loop and checkpoint cleanly.'}
+                                </Text>
+                                {lessonActionText && <Text style={styles.lessonActionFeedback}>{lessonActionText}</Text>}
+                            </View>
+
+                            <TouchableOpacity
+                                style={[styles.lessonCompleteButton, isLessonCompleted && styles.lessonCompleteButtonDone]}
+                                onPress={() => void markLessonComplete()}
+                            >
+                                <Text style={[styles.lessonCompleteButtonText, isLessonCompleted && styles.lessonCompleteButtonTextDone]}>
+                                    {isLessonCompleted ? 'Completed' : 'Complete Lesson'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </Animated.View>
                 </View>
             )}
 

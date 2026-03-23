@@ -3,6 +3,7 @@ import { LESSON_PACK_COUNTS, LessonInstrument } from '../data/lessonLibrary';
 import { addXp, getProgressSnapshot, ProgressSnapshot, setStreakDays } from '../database/services';
 import { getAppSettings } from './appSettings';
 import { fetchLeaderboard, LeaderboardEntry, syncLeaderboardProfile } from './api';
+import { getAuthenticatedIdentity, supabase } from './supabaseClient';
 
 export type BadgeId =
     | 'first_song'
@@ -57,7 +58,9 @@ export interface RewardResult {
 }
 
 const GAME_DIR = `${FileSystem.documentDirectory}gamification`;
-const GAME_FILE = `${GAME_DIR}/state.json`;
+const GAME_FILE_LEGACY = `${GAME_DIR}/state.json`;
+
+type AuthIdentity = Awaited<ReturnType<typeof getAuthenticatedIdentity>>;
 
 export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     {
@@ -121,11 +124,11 @@ function getBadgeById(id: BadgeId) {
     return BADGE_DEFINITIONS.find((badge) => badge.id === id);
 }
 
-function createDefaultState(): StoredGamificationState {
+function createDefaultState(identity: AuthIdentity = null): StoredGamificationState {
     const seed = Math.floor(1000 + (Math.random() * 9000));
     return {
-        userId: `player-${Date.now()}-${seed}`,
-        displayName: `Player ${seed}`,
+        userId: identity?.userId ?? `player-${Date.now()}-${seed}`,
+        displayName: identity?.displayName ?? `Player ${seed}`,
         lastActivityDate: null,
         streakDays: 0,
         longestStreak: 0,
@@ -143,40 +146,109 @@ async function ensureStorageDir() {
     }
 }
 
-async function readStoredState(): Promise<StoredGamificationState> {
+function sanitizeStorageKey(value: string) {
+    return value.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function getStateFilePath(identity: AuthIdentity) {
+    const storageKey = identity?.userId ? sanitizeStorageKey(identity.userId) : 'guest';
+    return `${GAME_DIR}/state-${storageKey}.json`;
+}
+
+function isPlaceholderDisplayName(displayName: string) {
+    const trimmed = displayName.trim();
+    return trimmed.length === 0 || /^Player \d{4}$/.test(trimmed);
+}
+
+function normalizeStoredState(
+    parsed: Partial<StoredGamificationState>,
+    fallback: StoredGamificationState,
+): StoredGamificationState {
+    return {
+        userId: parsed.userId || fallback.userId,
+        displayName: parsed.displayName || fallback.displayName,
+        lastActivityDate: parsed.lastActivityDate || null,
+        streakDays: typeof parsed.streakDays === 'number' ? parsed.streakDays : 0,
+        longestStreak: typeof parsed.longestStreak === 'number' ? parsed.longestStreak : 0,
+        completedLessonIds: Array.isArray(parsed.completedLessonIds) ? parsed.completedLessonIds : [],
+        completedSongIds: Array.isArray(parsed.completedSongIds) ? parsed.completedSongIds : [],
+        completedQuizIds: Array.isArray(parsed.completedQuizIds) ? parsed.completedQuizIds : [],
+        unlockedBadgeIds: Array.isArray(parsed.unlockedBadgeIds) ? parsed.unlockedBadgeIds as BadgeId[] : [],
+    };
+}
+
+function applyAuthenticatedIdentity(state: StoredGamificationState, identity: AuthIdentity) {
+    if (!identity) {
+        return state;
+    }
+
+    const shouldReplaceDisplayName = state.userId !== identity.userId || isPlaceholderDisplayName(state.displayName);
+
+    return {
+        ...state,
+        userId: identity.userId,
+        displayName: shouldReplaceDisplayName ? identity.displayName : state.displayName,
+    };
+}
+
+async function writeStoredState(state: StoredGamificationState, targetFilePath?: string) {
     await ensureStorageDir();
-    const info = await FileSystem.getInfoAsync(GAME_FILE);
-    if (!info.exists) {
-        const initial = createDefaultState();
-        await writeStoredState(initial);
-        return initial;
+    const identity = await getAuthenticatedIdentity();
+    const nextTargetFilePath = targetFilePath ?? getStateFilePath(identity);
+    await FileSystem.writeAsStringAsync(nextTargetFilePath, JSON.stringify(state, null, 2));
+}
+
+async function ensureInitialStateFile(filePath: string, identity: AuthIdentity) {
+    const currentInfo = await FileSystem.getInfoAsync(filePath);
+    if (currentInfo.exists) {
+        return;
+    }
+
+    const fallback = createDefaultState(identity);
+    const legacyInfo = await FileSystem.getInfoAsync(GAME_FILE_LEGACY);
+
+    if (!legacyInfo.exists) {
+        await writeStoredState(fallback, filePath);
+        return;
     }
 
     try {
-        const raw = await FileSystem.readAsStringAsync(GAME_FILE);
+        const raw = await FileSystem.readAsStringAsync(GAME_FILE_LEGACY);
         const parsed = JSON.parse(raw) as Partial<StoredGamificationState>;
-        const fallback = createDefaultState();
-        return {
-            userId: parsed.userId || fallback.userId,
-            displayName: parsed.displayName || fallback.displayName,
-            lastActivityDate: parsed.lastActivityDate || null,
-            streakDays: typeof parsed.streakDays === 'number' ? parsed.streakDays : 0,
-            longestStreak: typeof parsed.longestStreak === 'number' ? parsed.longestStreak : 0,
-            completedLessonIds: Array.isArray(parsed.completedLessonIds) ? parsed.completedLessonIds : [],
-            completedSongIds: Array.isArray(parsed.completedSongIds) ? parsed.completedSongIds : [],
-            completedQuizIds: Array.isArray(parsed.completedQuizIds) ? parsed.completedQuizIds : [],
-            unlockedBadgeIds: Array.isArray(parsed.unlockedBadgeIds) ? parsed.unlockedBadgeIds as BadgeId[] : [],
-        };
-    } catch (error) {
-        const fresh = createDefaultState();
-        await writeStoredState(fresh);
-        return fresh;
+        const migratedState = applyAuthenticatedIdentity(normalizeStoredState(parsed, fallback), identity);
+        await writeStoredState(migratedState, filePath);
+    } catch {
+        await writeStoredState(fallback, filePath);
     }
 }
 
-async function writeStoredState(state: StoredGamificationState) {
+async function readStoredState(): Promise<StoredGamificationState> {
     await ensureStorageDir();
-    await FileSystem.writeAsStringAsync(GAME_FILE, JSON.stringify(state, null, 2));
+    const identity = await getAuthenticatedIdentity();
+    const filePath = getStateFilePath(identity);
+
+    await ensureInitialStateFile(filePath, identity);
+
+    try {
+        const raw = await FileSystem.readAsStringAsync(filePath);
+        const parsed = JSON.parse(raw) as Partial<StoredGamificationState>;
+        const fallback = createDefaultState(identity);
+        const normalized = normalizeStoredState(parsed, fallback);
+        const hydratedState = applyAuthenticatedIdentity(normalized, identity);
+
+        if (
+            hydratedState.userId !== normalized.userId
+            || hydratedState.displayName !== normalized.displayName
+        ) {
+            await writeStoredState(hydratedState, filePath);
+        }
+
+        return hydratedState;
+    } catch {
+        const fresh = createDefaultState(identity);
+        await writeStoredState(fresh, filePath);
+        return fresh;
+    }
 }
 
 function getStreakMessage(streakDays: number, didPracticeToday: boolean) {
@@ -298,6 +370,18 @@ export async function updateDisplayName(displayName: string): Promise<Gamificati
 
     state.displayName = trimmed.length > 0 ? trimmed : state.displayName;
     await writeStoredState(state);
+
+    const identity = await getAuthenticatedIdentity();
+    if (identity) {
+        const { error } = await supabase.auth.updateUser({
+            data: { display_name: state.displayName },
+        });
+
+        if (error) {
+            console.error('Could not update Supabase user metadata:', error.message);
+        }
+    }
+
     await syncStateToBackend(state, progress);
 
     return toSnapshot(state, progress);

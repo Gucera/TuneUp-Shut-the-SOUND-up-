@@ -1,96 +1,101 @@
 import { Buffer } from 'buffer';
 
-const NOTE_STRINGS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
 export interface NoteInfo {
     name: string;
+    noteClass: string;
     octave: number;
     cents: number;
+    frequency: number;
     midi: number;
 }
 
-function getPcmStartOffset(buffer: Buffer): number {
-    const riff = buffer.toString('ascii', 0, 4);
-    if (riff === 'RIFF') {
-        let offset = 12;
-        while (offset + 8 <= buffer.length) {
-            const chunkId = buffer.toString('ascii', offset, offset + 4);
-            const chunkSize = buffer.readUInt32LE(offset + 4);
-            if (chunkId === 'data') {
-                return offset + 8;
-            }
-            offset += 8 + chunkSize;
-        }
-    }
+const NOTE_SEQUENCE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+const A4_HZ = 440;
 
-    return 0;
+function clamp(value: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, value));
 }
 
-export function getNote(frequency: number): string {
+function findWavDataOffset(buffer: Buffer) {
+    if (buffer.length < 44 || buffer.toString('ascii', 0, 4) !== 'RIFF') {
+        return 0;
+    }
+
+    let offset = 12;
+    while (offset + 8 <= buffer.length) {
+        const chunkId = buffer.toString('ascii', offset, offset + 4);
+        const chunkSize = buffer.readUInt32LE(offset + 4);
+        const chunkStart = offset + 8;
+
+        if (chunkId === 'data') {
+            return chunkStart;
+        }
+
+        offset = chunkStart + chunkSize;
+    }
+
+    return 44;
+}
+
+export function getNearestNoteName(frequency: number) {
     return getNoteInfo(frequency).name;
 }
 
 export function getNoteInfo(frequency: number): NoteInfo {
-    const midi = Math.round(69 + (12 * Math.log2(frequency / 440)));
-    const noteIndex = ((midi % 12) + 12) % 12;
+    if (!Number.isFinite(frequency) || frequency <= 0) {
+        return {
+            name: '--',
+            noteClass: '--',
+            octave: 0,
+            cents: 0,
+            frequency: 0,
+            midi: 0,
+        };
+    }
+
+    const midiFloat = 69 + (12 * Math.log2(frequency / A4_HZ));
+    const midi = clamp(Math.round(midiFloat), 0, 127);
+    const noteClass = NOTE_SEQUENCE[((midi % 12) + 12) % 12];
     const octave = Math.floor(midi / 12) - 1;
-    const nearestFrequency = 440 * Math.pow(2, (midi - 69) / 12);
-    const cents = 1200 * Math.log2(frequency / nearestFrequency);
+    const targetFrequency = A4_HZ * Math.pow(2, (midi - 69) / 12);
+    const cents = 1200 * Math.log2(frequency / targetFrequency);
 
     return {
-        name: `${NOTE_STRINGS[noteIndex]}${octave}`,
+        name: `${noteClass}${octave}`,
+        noteClass,
         octave,
         cents,
+        frequency,
         midi,
     };
 }
 
 export function autoCorrelate(buffer: Float32Array, sampleRate: number, minFreq = 40, maxFreq = 1200) {
-    let size = buffer.length;
-    if (size < 512) {
-        return -1;
+    if (!buffer.length || !Number.isFinite(sampleRate) || sampleRate <= 0) {
+        return 0;
     }
 
-    let mean = 0;
-    for (let i = 0; i < size; i += 1) {
-        mean += buffer[i];
-    }
-    mean /= size;
-
-    const prepared = new Float32Array(size);
     let rms = 0;
-    for (let i = 0; i < size; i += 1) {
-        const window = 0.5 - (0.5 * Math.cos((2 * Math.PI * i) / (size - 1)));
-        const centered = (buffer[i] - mean) * window;
-        prepared[i] = centered;
-        rms += centered * centered;
+    for (let i = 0; i < buffer.length; i += 1) {
+        rms += buffer[i] * buffer[i];
     }
 
-    rms = Math.sqrt(rms / size);
-    if (rms < 0.008) {
-        return -1;
+    rms = Math.sqrt(rms / buffer.length);
+    if (rms < 0.01) {
+        return 0;
     }
 
-    const minLag = Math.max(2, Math.floor(sampleRate / maxFreq));
-    const maxLag = Math.min(Math.floor(sampleRate / minFreq), size - 1);
-    if (maxLag <= minLag) {
-        return -1;
-    }
-
-    const correlations = new Float32Array(maxLag + 1);
+    const minLag = Math.max(1, Math.floor(sampleRate / maxFreq));
+    const maxLag = Math.max(minLag + 1, Math.floor(sampleRate / minFreq));
     let bestLag = -1;
-    let bestCorrelation = 0;
+    let bestCorrelation = Number.NEGATIVE_INFINITY;
 
     for (let lag = minLag; lag <= maxLag; lag += 1) {
-        let difference = 0;
-        const limit = size - lag;
+        let correlation = 0;
 
-        for (let i = 0; i < limit; i += 1) {
-            difference += Math.abs(prepared[i] - prepared[i + lag]);
+        for (let i = 0; i + lag < buffer.length; i += 1) {
+            correlation += buffer[i] * buffer[i + lag];
         }
-
-        const correlation = 1 - (difference / limit);
-        correlations[lag] = correlation;
 
         if (correlation > bestCorrelation) {
             bestCorrelation = correlation;
@@ -98,17 +103,7 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number, minFreq 
         }
     }
 
-    if (bestLag < 0 || bestCorrelation < 0.82) {
-        return -1;
-    }
-
-    const prev = correlations[bestLag - 1] || correlations[bestLag];
-    const center = correlations[bestLag];
-    const next = correlations[bestLag + 1] || correlations[bestLag];
-    const denom = (2 * center) - prev - next;
-    const shift = denom !== 0 ? (next - prev) / (2 * denom) : 0;
-
-    return sampleRate / (bestLag + shift);
+    return bestLag > 0 ? sampleRate / bestLag : 0;
 }
 
 export function decodeAudioData(base64String: string): Float32Array {
@@ -116,29 +111,30 @@ export function decodeAudioData(base64String: string): Float32Array {
         return new Float32Array(0);
     }
 
-    const buffer = Buffer.from(base64String, 'base64');
-    const startOffset = getPcmStartOffset(buffer);
-    const pcmLength = Math.floor((buffer.length - startOffset) / 2);
-    const pcmValues = new Float32Array(pcmLength);
+    const binary = Buffer.from(base64String, 'base64');
+    const pcm = binary.slice(findWavDataOffset(binary));
+    const sampleCount = Math.floor(pcm.length / 2);
+    const samples = new Float32Array(sampleCount);
 
-    for (let i = 0; i < pcmLength; i += 1) {
-        const byteIndex = startOffset + (i * 2);
-        pcmValues[i] = buffer.readInt16LE(byteIndex) / 32768;
+    for (let i = 0; i < sampleCount; i += 1) {
+        const sample = pcm.readInt16LE(i * 2);
+        samples[i] = sample / 32768;
     }
 
-    return pcmValues;
+    return samples;
 }
 
 export function medianFrequency(values: number[]): number | null {
-    if (values.length === 0) {
+    if (!values.length) {
         return null;
     }
 
-    const sorted = [...values].sort((a, b) => a - b);
+    const sorted = [...values].sort((left, right) => left - right);
     const middle = Math.floor(sorted.length / 2);
-    if (sorted.length % 2 === 0) {
-        return (sorted[middle - 1] + sorted[middle]) / 2;
+
+    if (sorted.length % 2 === 1) {
+        return sorted[middle];
     }
 
-    return sorted[middle];
+    return (sorted[middle - 1] + sorted[middle]) / 2;
 }

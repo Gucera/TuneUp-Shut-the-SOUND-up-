@@ -36,6 +36,7 @@ import {
 } from '../services/gamification';
 import { fetchTrafficAnalyses, LeaderboardEntry, TrafficAnalysisEntry } from '../services/api';
 import { loadImportedSongs } from '../services/songLibrary';
+import { supabase } from '../services/supabaseClient';
 
 const GOAL_OPTIONS = [10, 20, 30, 45];
 const SEEK_STEP_OPTIONS = [5, 10, 15, 20];
@@ -250,6 +251,14 @@ export default function ProfileScreen() {
             Alert.alert('Save failed', 'Could not update the profile name right now.');
         } finally {
             setIsSavingName(false);
+        }
+    };
+
+    const handleSignOut = async () => {
+        const { error } = await supabase.auth.signOut();
+
+        if (error) {
+            Alert.alert('Sign out failed', error.message);
         }
     };
 
@@ -584,7 +593,13 @@ export default function ProfileScreen() {
                             <Text style={styles.title}>Profile</Text>
                             <Text style={styles.subTitle}>Your stats, streaks, saved work, badges, and app setup all in one place.</Text>
                         </View>
-                        <ScreenSettingsButton onPress={scrollToSettings} />
+                        <View style={styles.headerActions}>
+                            <TouchableOpacity style={styles.signOutButton} onPress={() => void handleSignOut()}>
+                                <Ionicons name="log-out-outline" size={16} color={COLORS.textStrong} />
+                                <Text style={styles.signOutButtonText}>Sign out</Text>
+                            </TouchableOpacity>
+                            <ScreenSettingsButton onPress={scrollToSettings} />
+                        </View>
                     </View>
 
                     <PremiumHeroStrip
@@ -1627,6 +1642,28 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '900',
         marginBottom: 10,
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    signOutButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: COLORS.pixelLine,
+        backgroundColor: COLORS.panelAlt,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        ...SHADOWS.soft,
+    },
+    signOutButtonText: {
+        color: COLORS.textStrong,
+        fontSize: 12,
+        fontWeight: '800',
     },
     settingRow: {
         flexDirection: 'row',

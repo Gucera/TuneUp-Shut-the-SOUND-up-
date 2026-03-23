@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import { Canvas, Circle, Line, Path, Rect, Skia } from '@shopify/react-native-skia';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -27,10 +26,15 @@ import PremiumHeroStrip from '../components/PremiumHeroStrip';
 import ScreenSettingsButton from '../components/ScreenSettingsButton';
 import SkeletonBlock from '../components/SkeletonBlock';
 import { useCelebration } from '../hooks/useCelebration';
-import { detectPitchFromClip } from '../services/api';
+import {
+    buildTabTarget,
+    isPitchMatchForTarget,
+    TUNER_A4_HZ,
+    TUNER_NATIVE_MODULE_MESSAGE,
+    useTuner,
+} from '../hooks/useTuner';
 import { GamificationSnapshot, getGamificationSnapshot, rewardPracticeActivity } from '../services/gamification';
 import { importSongFromFiles, loadImportedSongs } from '../services/songLibrary';
-import { autoCorrelate, decodeAudioData, getNoteInfo, medianFrequency } from '../utils/pitchDetection';
 import { COLORS, SHADOWS } from '../theme';
 
 const { width } = Dimensions.get('window');
@@ -43,6 +47,7 @@ const PIXELS_PER_SECOND = 112;
 const PERFECT_WINDOW_SEC = 0.2;
 const GOOD_WINDOW_SEC = 0.45;
 const GOOD_WEIGHT = 0.65;
+const TAB_HIT_WINDOW_SEC = 0.18;
 const MONO_FONT = Platform.select({ ios: 'Menlo', default: 'monospace', android: 'monospace' });
 const STRING_LABELS = ['e', 'B', 'G', 'D', 'A', 'E'];
 
@@ -65,33 +70,6 @@ const SONG_COLORS = {
     border: COLORS.pixelLine,
 };
 
-const RECORDING_OPTIONS: any = {
-    isMeteringEnabled: true,
-    android: {
-        extension: '.m4a',
-        outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-        audioEncoder: Audio.AndroidAudioEncoder.AAC,
-        sampleRate: 44100,
-        numberOfChannels: 1,
-        bitRate: 128000,
-    },
-    ios: {
-        extension: '.wav',
-        outputFormat: Audio.IOSOutputFormat.LINEARPCM,
-        audioQuality: Audio.IOSAudioQuality.MAX,
-        sampleRate: 44100,
-        numberOfChannels: 1,
-        bitRate: 128000,
-        linearPCMBitDepth: 16,
-        linearPCMIsBigEndian: false,
-        linearPCMIsFloat: false,
-    },
-    web: {
-        mimeType: 'audio/webm',
-        bitsPerSecond: 128000,
-    },
-};
-
 interface SongScore {
     accuracy: number;
     perfect: number;
@@ -101,9 +79,14 @@ interface SongScore {
 }
 
 interface HitResult {
-    label: 'PERFECT' | 'GOOD' | 'MISS';
+    label: 'PERFECT' | 'GOOD' | 'MISS' | 'HIT';
     color: string;
 }
+
+type LiveTabTarget = SongLesson['tabNotes'][number] & {
+    index: number;
+    target: ReturnType<typeof buildTabTarget>;
+};
 
 const CHORD_TONES: Record<string, string[]> = {
     C: ['C', 'E', 'G'],
@@ -226,8 +209,24 @@ function getAcceptedNotes(chord: string): string[] {
     return [...new Set(notes)];
 }
 
-function getNoteClass(noteName: string) {
-    return noteName.replace(/-?\d+/g, '');
+function getIdleSongStatus(panel: SongPanel) {
+    if (panel === 'guide') {
+        return 'Preview ready';
+    }
+
+    if (panel === 'tabs') {
+        return 'Zero-lag tabs ready';
+    }
+
+    return 'Zero-lag tuner ready';
+}
+
+function toLiveTabTarget(note: SongLesson['tabNotes'][number], index: number): LiveTabTarget {
+    return {
+        ...note,
+        index,
+        target: buildTabTarget(note.stringIndex, note.fret, TUNER_A4_HZ),
+    };
 }
 
 function getChordLaneY(row: number) {
@@ -238,23 +237,12 @@ function getStringY(index: number) {
     return 62 + (index * 36);
 }
 
-function getNextTabLabel(song: SongLesson, playbackSec: number) {
-    const nextNote = song.tabNotes.find((note) => note.timeSec >= playbackSec - 0.05);
-    if (!nextNote) {
-        return '--';
-    }
-
-    return `${nextNote.fret}@${STRING_LABELS[nextNote.stringIndex]}`;
-}
-
 export default function SongScreen() {
     const tabBarHeight = useBottomTabBarHeight();
-    const [permissionResponse, requestPermission] = Audio.usePermissions();
     const [librarySongs, setLibrarySongs] = useState<SongLesson[]>([]);
     const [selectedSong, setSelectedSong] = useState<SongLesson>(SONG_LESSONS[0]);
     const [activePanel, setActivePanel] = useState<SongPanel>('chords');
     const [isPlaying, setIsPlaying] = useState(false);
-    const [isListening, setIsListening] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [playbackSec, setPlaybackSec] = useState(0);
     const [perfectCount, setPerfectCount] = useState(0);
@@ -264,31 +252,64 @@ export default function SongScreen() {
     const [bestCombo, setBestCombo] = useState(0);
     const [score, setScore] = useState<SongScore | null>(null);
     const [flashResult, setFlashResult] = useState<HitResult | null>(null);
-    const [detectedNote, setDetectedNote] = useState('--');
-    const [detectedHz, setDetectedHz] = useState<number | null>(null);
-    const [micStatus, setMicStatus] = useState('Mic idle');
-    const [usingBackendPitch, setUsingBackendPitch] = useState(false);
+    const [micStatus, setMicStatus] = useState(getIdleSongStatus('chords'));
     const [animationNow, setAnimationNow] = useState(Date.now());
     const [gameSnapshot, setGameSnapshot] = useState<GamificationSnapshot | null>(null);
     const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
     const [isBootLoading, setIsBootLoading] = useState(true);
+    const [tabHitNonce, setTabHitNonce] = useState(0);
     const { celebration, showCelebration } = useCelebration();
 
     const soundRef = useRef<Audio.Sound | null>(null);
-    const recordingRef = useRef<Audio.Recording | null>(null);
     const loadedSongIdRef = useRef<string | null>(null);
     const selectedSongRef = useRef<SongLesson>(selectedSong);
     const judgedEventIndexesRef = useRef<Set<number>>(new Set());
     const missedEventIndexesRef = useRef<Set<number>>(new Set());
-    const isLoopingRef = useRef(false);
+    const hitTabIndexesRef = useRef<Set<number>>(new Set());
+    const tabHitMomentsRef = useRef<Map<number, number>>(new Map());
     const hasScoredRef = useRef(false);
     const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const pitchHistoryRef = useRef<number[]>([]);
-    const tickCountRef = useRef(0);
     const pulseStartedAtRef = useRef<number | null>(null);
     const playbackAnchorSecRef = useRef(0);
     const playbackAnchorStampRef = useRef(Date.now());
     const isPlayingRef = useRef(false);
+    const nextTabTarget = useMemo(() => {
+        const nextNote = selectedSong.tabNotes
+            .map((note, index) => toLiveTabTarget(note, index))
+            .find((note) => (
+                !hitTabIndexesRef.current.has(note.index)
+                && note.timeSec >= playbackSec - 0.05
+            ));
+
+        return nextNote ?? null;
+    }, [playbackSec, selectedSong, tabHitNonce]);
+    const activeTabTarget = useMemo(() => {
+        let bestTarget: LiveTabTarget | null = null;
+        let bestDistance = Number.POSITIVE_INFINITY;
+
+        selectedSong.tabNotes.forEach((note, index) => {
+            if (hitTabIndexesRef.current.has(index)) {
+                return;
+            }
+
+            const distance = Math.abs(note.timeSec - playbackSec);
+            if (distance > TAB_HIT_WINDOW_SEC || distance >= bestDistance) {
+                return;
+            }
+
+            bestDistance = distance;
+            bestTarget = toLiveTabTarget(note, index);
+        });
+
+        return bestTarget;
+    }, [playbackSec, selectedSong, tabHitNonce]);
+    const tabTargetAtLine = activeTabTarget ?? nextTabTarget;
+    const tuner = useTuner({
+        instrument: 'Guitar',
+        targetMidi: activePanel === 'tabs' ? tabTargetAtLine?.target.midi ?? null : null,
+    });
+    const startTuner = tuner.start;
+    const stopTuner = tuner.stop;
 
     const allSongs = useMemo(() => [...librarySongs, ...SONG_LESSONS], [librarySongs]);
 
@@ -308,12 +329,6 @@ export default function SongScreen() {
 
     useEffect(() => {
         void (async () => {
-            if (permissionResponse?.status !== 'granted') {
-                await requestPermission();
-            }
-        })();
-
-        void (async () => {
             try {
                 const [importedSongs] = await Promise.all([
                     loadImportedSongs(),
@@ -326,7 +341,7 @@ export default function SongScreen() {
         })();
 
         return () => {
-            void stopListening();
+            void stopTuner();
             if (soundRef.current) {
                 void soundRef.current.unloadAsync();
             }
@@ -334,13 +349,19 @@ export default function SongScreen() {
                 clearTimeout(flashTimeoutRef.current);
             }
         };
-    }, [loadSessionPrefs]);
+    }, [loadSessionPrefs, stopTuner]);
 
     useFocusEffect(
         useCallback(() => {
             void loadSessionPrefs();
         }, [loadSessionPrefs]),
     );
+
+    useEffect(() => {
+        if (!isPlaying) {
+            setMicStatus(getIdleSongStatus(activePanel));
+        }
+    }, [activePanel]);
 
     useEffect(() => {
         // This keeps the lane moving even between audio status updates.
@@ -365,19 +386,67 @@ export default function SongScreen() {
     }, [playbackSec, isPlaying, activePanel]);
 
     useEffect(() => {
+        if (!isPlaying || activePanel !== 'chords' || !tuner.frequency || !tuner.hasSignal) {
+            return;
+        }
+
+        judgeDetectedNote(tuner.noteClass);
+    }, [activePanel, isPlaying, playbackSec, tuner.frequency, tuner.hasSignal, tuner.noteClass]);
+
+    useEffect(() => {
+        if (!isPlaying || activePanel !== 'tabs' || !tuner.frequency || !tuner.hasSignal) {
+            return;
+        }
+
+        const liveFrequency = tuner.frequency;
+        let bestTarget: LiveTabTarget | null = null;
+        let bestDistance = Number.POSITIVE_INFINITY;
+
+        for (const [index, note] of selectedSongRef.current.tabNotes.entries()) {
+            if (hitTabIndexesRef.current.has(index)) {
+                continue;
+            }
+
+            const distance = Math.abs(note.timeSec - playbackSec);
+            if (distance > TAB_HIT_WINDOW_SEC || distance >= bestDistance) {
+                continue;
+            }
+
+            const target = buildTabTarget(note.stringIndex, note.fret, TUNER_A4_HZ);
+            if (!isPitchMatchForTarget(liveFrequency, target.midi, TUNER_A4_HZ)) {
+                continue;
+            }
+
+            bestDistance = distance;
+            bestTarget = {
+                ...note,
+                index,
+                target,
+            };
+        }
+
+        if (!bestTarget) {
+            return;
+        }
+
+        hitTabIndexesRef.current.add(bestTarget.index);
+        tabHitMomentsRef.current.set(bestTarget.index, Date.now());
+        setTabHitNonce((prev) => prev + 1);
+        setCombo((prevCombo) => {
+            const nextCombo = prevCombo + 1;
+            setBestCombo((prevBest) => Math.max(prevBest, nextCombo));
+            return nextCombo;
+        });
+        showHitFlash({ label: 'HIT', color: '#45FF92' });
+    }, [activePanel, isPlaying, playbackSec, tuner.frequency, tuner.hasSignal]);
+
+    useEffect(() => {
         if (!isPlaying) {
             return;
         }
 
-        if (activePanel === 'chords' && !isListening && !hasScoredRef.current) {
-            void startListening();
-            return;
-        }
-
-        if (activePanel !== 'chords' && isListening) {
-            void stopListening();
-        }
-    }, [activePanel, isPlaying, isListening]);
+        void syncLiveTuner(activePanel);
+    }, [activePanel, isPlaying]);
 
     const displayMode: Exclude<SongPanel, 'guide'> = activePanel === 'guide' ? 'tabs' : activePanel;
     const progress = Math.min(1, playbackSec / selectedSong.durationSec);
@@ -390,7 +459,9 @@ export default function SongScreen() {
         ));
         return next?.chord ?? '--';
     }, [selectedSong, playbackSec]);
-    const nextTabLabel = useMemo(() => getNextTabLabel(selectedSong, playbackSec), [selectedSong, playbackSec]);
+    const nextTabLabel = nextTabTarget
+        ? `${nextTabTarget.fret}@${STRING_LABELS[nextTabTarget.stringIndex]}`
+        : '--';
 
     const visibleChordEvents = selectedSong.chordEvents
         .map((event, index) => ({ ...event, index }))
@@ -418,20 +489,34 @@ export default function SongScreen() {
     const rippleProgress = flashResult && pulseStartedAtRef.current
         ? Math.min(1, (animationNow - pulseStartedAtRef.current) / 520)
         : 1;
+    const detectedNote = tuner.frequency ? tuner.noteName : '--';
+    const detectedHz = tuner.frequency;
+    const liveTabMatch = !!(
+        tabTargetAtLine
+        && tuner.frequency
+        && tuner.hasSignal
+        && isPitchMatchForTarget(tuner.frequency, tabTargetAtLine.target.midi, TUNER_A4_HZ)
+    );
 
-    const engineLabel = activePanel === 'chords'
-        ? isListening
-            ? usingBackendPitch ? 'AI Assist' : 'Listening'
-            : 'Mic Idle'
-        : activePanel === 'tabs'
-            ? 'Timing Guide'
-            : 'Preview';
+    const engineLabel = activePanel === 'guide'
+        ? 'Preview'
+        : tuner.isListening
+            ? activePanel === 'tabs' ? 'Zero-Lag Tabs' : 'Zero-Lag Pitch'
+            : 'Mic Idle';
 
-    const engineText = activePanel === 'chords'
-        ? micStatus
+    const engineText = activePanel === 'guide'
+        ? 'Guide mode shows the hit-line and the live tab layout before you play.'
         : activePanel === 'tabs'
-            ? 'Tabs mode follows the backing track. Live scoring stays in Chords mode.'
-            : 'Guide mode shows how the lane works before you play.';
+            ? isPlaying
+                ? tabTargetAtLine
+                    ? liveTabMatch
+                        ? `Hit ${tabTargetAtLine.target.noteName} right on the line.`
+                        : `Aim for ${tabTargetAtLine.target.noteName} as it crosses the mint line.`
+                    : 'Listening for the next tab target...'
+                : micStatus
+            : isPlaying
+                ? tuner.displayStatus
+                : micStatus;
 
     const showHitFlash = (result: HitResult) => {
         if (flashTimeoutRef.current) {
@@ -460,28 +545,26 @@ export default function SongScreen() {
     const resetScoreState = () => {
         judgedEventIndexesRef.current = new Set();
         missedEventIndexesRef.current = new Set();
+        hitTabIndexesRef.current = new Set();
+        tabHitMomentsRef.current = new Map();
         hasScoredRef.current = false;
         setPerfectCount(0);
         setGoodCount(0);
         setMissedCount(0);
         setCombo(0);
         setBestCombo(0);
+        setTabHitNonce(0);
         setScore(null);
         setFlashResult(null);
     };
 
     const resetRunStats = () => {
         resetScoreState();
-        pitchHistoryRef.current = [];
-        tickCountRef.current = 0;
         playbackAnchorSecRef.current = 0;
         playbackAnchorStampRef.current = Date.now();
         isPlayingRef.current = false;
         setPlaybackSec(0);
-        setDetectedNote('--');
-        setDetectedHz(null);
-        setMicStatus(activePanel === 'chords' ? 'Mic ready' : 'Timing guide ready');
-        setUsingBackendPitch(false);
+        setMicStatus(getIdleSongStatus(activePanel));
     };
 
     const syncSongDuration = (songId: string, nextDuration: number) => {
@@ -613,182 +696,25 @@ export default function SongScreen() {
         });
     };
 
-    const analyzeLocalClip = async (uri: string): Promise<number | null> => {
-        if (Platform.OS !== 'ios') {
-            return null;
-        }
-
-        try {
-            const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-            let float32Data = decodeAudioData(base64);
-            if (float32Data.length > 8192) {
-                float32Data = float32Data.slice(0, 8192);
-            }
-
-            const detectedFreq = autoCorrelate(float32Data, 44100, 55, 1100);
-            return detectedFreq > 0 ? detectedFreq : null;
-        } catch (error) {
-            return null;
-        }
-    };
-
-    const analyzeBackendClip = async (uri: string) => {
-        const extension = Platform.OS === 'ios' ? '.wav' : '.m4a';
-        const result = await detectPitchFromClip(uri, `song-${Date.now()}${extension}`, 'Guitar');
-        if (result.status === 'success' && typeof result.frequency === 'number') {
-            return result.frequency as number;
-        }
-        return null;
-    };
-
-    const applyDetectedPitch = (frequency: number) => {
-        pitchHistoryRef.current = [...pitchHistoryRef.current.slice(-5), frequency];
-        const stableFrequency = medianFrequency(pitchHistoryRef.current) ?? frequency;
-        const noteInfo = getNoteInfo(stableFrequency);
-        const noteClass = getNoteClass(noteInfo.name);
-
-        setDetectedNote(noteInfo.name);
-        setDetectedHz(stableFrequency);
-        setMicStatus(`Hearing ${noteClass}`);
-        judgeDetectedNote(noteClass);
-    };
-
-    const analyzeLatestClip = async (uri: string) => {
-        tickCountRef.current += 1;
-
-        const preferBackendPitch = appSettings?.songsPreferBackendPitchAssist ?? true;
-        let frequency = preferBackendPitch ? await analyzeBackendClip(uri) : await analyzeLocalClip(uri);
-        let usedBackend = false;
-
-        if (preferBackendPitch) {
-            usedBackend = !!frequency;
-            if (!frequency) {
-                frequency = await analyzeLocalClip(uri);
-            }
-        } else if (!frequency || tickCountRef.current % 2 === 0) {
-            // When the local read gets shaky, the backend gives us a steadier answer.
-            const backendFrequency = await analyzeBackendClip(uri);
-            if (backendFrequency) {
-                frequency = backendFrequency;
-                usedBackend = true;
-            }
-        }
-
-        setUsingBackendPitch(usedBackend);
-
-        if (frequency) {
-            applyDetectedPitch(frequency);
-            return;
-        }
-
-        pitchHistoryRef.current = [];
-        setDetectedNote('--');
-        setDetectedHz(null);
-        setMicStatus(isPlaying ? 'Listening...' : 'Mic ready');
-    };
-
-    const tick = async () => {
-        if (!isLoopingRef.current || activePanel !== 'chords') {
-            return;
-        }
-
-        try {
-            const { recording } = await Audio.Recording.createAsync(RECORDING_OPTIONS);
-            recordingRef.current = recording;
-
-            await new Promise((resolve) => setTimeout(resolve, 180));
-
-            if (!isLoopingRef.current) {
-                try {
-                    await recording.stopAndUnloadAsync();
-                } catch (error) {
-                    // We are already stopping here.
-                }
-                return;
-            }
-
-            await recording.stopAndUnloadAsync();
-            const uri = recording.getURI();
-            if (uri) {
-                await analyzeLatestClip(uri);
-            }
-        } catch (error) {
-            setUsingBackendPitch(false);
-            setMicStatus(isPlaying ? 'Listening...' : 'Mic ready');
-        } finally {
-            recordingRef.current = null;
-            if (isLoopingRef.current && activePanel === 'chords') {
-                setTimeout(() => {
-                    void tick();
-                }, 70);
-            }
-        }
-    };
-
-    const startListening = async () => {
-        if (activePanel !== 'chords') {
+    async function syncLiveTuner(panel: SongPanel = activePanel) {
+        if (panel === 'guide') {
+            await stopTuner();
             return true;
         }
 
-        if (isLoopingRef.current) {
-            return true;
+        if (!tuner.isNativeModuleAvailable) {
+            setMicStatus(TUNER_NATIVE_MODULE_MESSAGE);
+            return false;
         }
 
-        const permission = permissionResponse?.status === 'granted'
-            ? permissionResponse
-            : await requestPermission();
-
-        if (permission.status !== 'granted') {
+        const didStart = await startTuner();
+        if (!didStart) {
             setMicStatus('Mic permission needed');
             return false;
         }
 
-        await Audio.setAudioModeAsync({
-            allowsRecordingIOS: true,
-            playsInSilentModeIOS: true,
-            staysActiveInBackground: false,
-            shouldDuckAndroid: true,
-            playThroughEarpieceAndroid: false,
-        });
-
-        pitchHistoryRef.current = [];
-        tickCountRef.current = 0;
-        isLoopingRef.current = true;
-        setIsListening(true);
-        setMicStatus('Listening...');
-        void tick();
         return true;
-    };
-
-    const stopListening = async () => {
-        isLoopingRef.current = false;
-        setIsListening(false);
-
-        if (recordingRef.current) {
-            try {
-                await recordingRef.current.stopAndUnloadAsync();
-            } catch (error) {
-                // The recorder can already be closed when we stop quickly.
-            }
-            recordingRef.current = null;
-        }
-
-        pitchHistoryRef.current = [];
-        tickCountRef.current = 0;
-        setUsingBackendPitch(false);
-
-        await Audio.setAudioModeAsync({
-            allowsRecordingIOS: false,
-            playsInSilentModeIOS: true,
-            staysActiveInBackground: false,
-            shouldDuckAndroid: true,
-            playThroughEarpieceAndroid: false,
-        });
-
-        setDetectedNote('--');
-        setDetectedHz(null);
-        setMicStatus('Mic idle');
-    };
+    }
 
     const seekToTime = async (targetSec: number) => {
         try {
@@ -806,18 +732,16 @@ export default function SongScreen() {
             setPlaybackSec(clamped);
             await soundRef.current.setPositionAsync(clamped * 1000);
 
-            if (activePanel === 'chords') {
-                if (isPlayingRef.current) {
-                    await stopListening();
-                    const micReady = await startListening();
-                    if (!micReady) {
-                        return;
-                    }
-                } else {
-                    setMicStatus('Mic ready');
+            if (activePanel !== 'guide' && isPlayingRef.current) {
+                const micReady = await syncLiveTuner(activePanel);
+                if (!micReady) {
+                    return;
                 }
+            } else if (activePanel === 'guide') {
+                await stopTuner();
+                setMicStatus(isPlayingRef.current ? 'Timeline moved' : 'Preview ready');
             } else {
-                setMicStatus(isPlayingRef.current ? 'Timeline moved' : 'Ready to seek');
+                setMicStatus(getIdleSongStatus(activePanel));
             }
         } catch (error) {
             setMicStatus('Seek missed');
@@ -878,7 +802,7 @@ export default function SongScreen() {
             await soundRef.current.pauseAsync();
         }
 
-        await stopListening();
+        await stopTuner();
         setIsPlaying(false);
         const nextScore = activePanel === 'chords' ? buildScore(song) : null;
         setScore(nextScore);
@@ -955,14 +879,9 @@ export default function SongScreen() {
         playbackAnchorStampRef.current = Date.now();
         setPlaybackSec(0);
 
-        if (displayMode === 'chords') {
-            const micReady = await startListening();
-            if (!micReady) {
-                return;
-            }
-        } else {
-            await stopListening();
-            setMicStatus(activePanel === 'guide' ? 'Preview ready' : 'Timing guide ready');
+        const micReady = await syncLiveTuner(activePanel);
+        if (!micReady) {
+            return;
         }
 
         await soundRef.current.playAsync();
@@ -976,14 +895,9 @@ export default function SongScreen() {
             return;
         }
 
-        if (displayMode === 'chords') {
-            const micReady = await startListening();
-            if (!micReady) {
-                return;
-            }
-        } else {
-            await stopListening();
-            setMicStatus(activePanel === 'guide' ? 'Preview playing' : 'Timing guide playing');
+        const micReady = await syncLiveTuner(activePanel);
+        if (!micReady) {
+            return;
         }
 
         playbackAnchorStampRef.current = Date.now();
@@ -999,9 +913,9 @@ export default function SongScreen() {
                     await soundRef.current.pauseAsync();
                 }
                 isPlayingRef.current = false;
-                await stopListening();
+                await stopTuner();
                 setIsPlaying(false);
-                setMicStatus(activePanel === 'chords' ? 'Mic ready' : 'Playback paused');
+                setMicStatus(activePanel === 'guide' ? 'Preview paused' : 'Playback paused');
                 return;
             }
 
@@ -1036,7 +950,7 @@ export default function SongScreen() {
             soundRef.current = null;
         }
 
-        await stopListening();
+        await stopTuner();
         loadedSongIdRef.current = null;
         setSelectedSong(song);
         setIsPlaying(false);
@@ -1045,12 +959,15 @@ export default function SongScreen() {
         hasScoredRef.current = false;
         judgedEventIndexesRef.current = new Set();
         missedEventIndexesRef.current = new Set();
+        hitTabIndexesRef.current = new Set();
+        tabHitMomentsRef.current = new Map();
+        setTabHitNonce(0);
         setCombo(0);
         setBestCombo(0);
         setPerfectCount(0);
         setGoodCount(0);
         setMissedCount(0);
-        setMicStatus(activePanel === 'chords' ? 'Mic ready' : 'Timing guide ready');
+        setMicStatus(getIdleSongStatus(activePanel));
     };
 
     return (
@@ -1202,8 +1119,8 @@ export default function SongScreen() {
                             <Text style={styles.hudValue}>{displayMode === 'tabs' ? nextTabLabel : nextChord}</Text>
                         </View>
                         <View style={styles.hudPill}>
-                            <Text style={styles.hudLabel}>{displayMode === 'chords' ? 'COMBO' : 'NOTES'}</Text>
-                            <Text style={styles.hudValue}>{displayMode === 'chords' ? combo : selectedSong.tabNotes.length}</Text>
+                            <Text style={styles.hudLabel}>{activePanel === 'tabs' ? 'HITS' : displayMode === 'chords' ? 'COMBO' : 'NOTES'}</Text>
+                            <Text style={styles.hudValue}>{activePanel === 'tabs' ? tabHitNonce : displayMode === 'chords' ? combo : selectedSong.tabNotes.length}</Text>
                         </View>
                     </View>
 
@@ -1317,23 +1234,45 @@ export default function SongScreen() {
                                 const x = PLAYHEAD_X + ((note.timeSec - playbackSec) * PIXELS_PER_SECOND);
                                 const y = getStringY(note.stringIndex) + (Math.sin((animationNow / 250) + (note.index * 0.8)) * 2.5);
                                 const tailWidth = Math.max(18, (note.durationSec ?? 0.18) * PIXELS_PER_SECOND);
-                                const noteColor = note.fret >= 5 ? SONG_COLORS.highlight : SONG_COLORS.primary;
+                                const wasHit = hitTabIndexesRef.current.has(note.index);
+                                const hitStamp = tabHitMomentsRef.current.get(note.index) ?? null;
+                                const hitProgress = hitStamp ? Math.min(1, (animationNow - hitStamp) / 560) : 1;
+                                const showHitSpark = hitProgress < 1;
+                                const noteColor = wasHit
+                                    ? '#45FF92'
+                                    : note.fret >= 5 ? SONG_COLORS.highlight : SONG_COLORS.primary;
 
                                 return (
                                     <React.Fragment key={`tab-shape-${selectedSong.id}-${note.index}`}>
+                                        {showHitSpark && (
+                                            <>
+                                                <Circle
+                                                    cx={x}
+                                                    cy={y}
+                                                    r={16 + (hitProgress * 18)}
+                                                    color={withOpacity('#45FF92', Math.max(0, 0.22 - (hitProgress * 0.18)))}
+                                                />
+                                                <Circle
+                                                    cx={x}
+                                                    cy={y}
+                                                    r={8 + (hitProgress * 10)}
+                                                    color={withOpacity('#CFFFF0', Math.max(0, 0.34 - (hitProgress * 0.28)))}
+                                                />
+                                            </>
+                                        )}
                                         <Rect
                                             x={x}
                                             y={y - 2}
                                             width={tailWidth}
                                             height={4}
-                                            color={withOpacity(noteColor, 0.42)}
+                                            color={withOpacity(noteColor, wasHit ? 0.6 : 0.42)}
                                         />
                                         <Rect
                                             x={x - 13}
                                             y={y - 13}
                                             width={26}
                                             height={26}
-                                            color={withOpacity(SONG_COLORS.panel, 0.95)}
+                                            color={withOpacity(wasHit ? '#CFFFF0' : SONG_COLORS.panel, 0.95)}
                                         />
                                         <Rect
                                             x={x - 11}
@@ -1397,6 +1336,7 @@ export default function SongScreen() {
                             {displayMode === 'tabs' && visibleTabNotes.map((note) => {
                                 const x = PLAYHEAD_X + ((note.timeSec - playbackSec) * PIXELS_PER_SECOND);
                                 const y = getStringY(note.stringIndex) + (Math.sin((animationNow / 250) + (note.index * 0.8)) * 2.5);
+                                const wasHit = hitTabIndexesRef.current.has(note.index);
 
                                 return (
                                     <Text
@@ -1406,7 +1346,9 @@ export default function SongScreen() {
                                             {
                                                 left: x - 7,
                                                 top: y - 9,
+                                                color: wasHit ? SONG_COLORS.backgroundA : SONG_COLORS.backgroundA,
                                             },
+                                            wasHit && styles.chordLabelHit,
                                         ]}
                                     >
                                         {note.fret}
@@ -1430,8 +1372,8 @@ export default function SongScreen() {
                             {activePanel === 'guide' && (
                                 <View style={styles.guideOverlayCard}>
                                     <Text style={styles.guideOverlayTitle}>Read the line, then play into it</Text>
-                                    <Text style={styles.guideOverlayText}>Chords mode listens and scores.</Text>
-                                    <Text style={styles.guideOverlayText}>Tabs mode scrolls the frets cleanly with the track.</Text>
+                                    <Text style={styles.guideOverlayText}>Chords mode scores accepted chord tones live.</Text>
+                                    <Text style={styles.guideOverlayText}>Tabs mode now lights up note hits when live pitch matches the target.</Text>
                                 </View>
                             )}
 
@@ -1485,7 +1427,9 @@ export default function SongScreen() {
                                 <Text style={styles.statusMiniText}>{detectedHz ? `${detectedHz.toFixed(1)} Hz` : 'Waiting for a clean read'}</Text>
                             )}
                             {activePanel === 'tabs' && (
-                                <Text style={styles.statusMiniText}>Live scoring stays in Chords mode.</Text>
+                                <Text style={styles.statusMiniText}>
+                                    {tabTargetAtLine ? `Target ${tabTargetAtLine.target.noteName}` : 'Waiting for the next live tab target'}
+                                </Text>
                             )}
                         </View>
 
@@ -1497,12 +1441,12 @@ export default function SongScreen() {
                                 <Text style={styles.statusMetricValue}>{displayMode === 'tabs' ? nextTabLabel : nextChord}</Text>
                             </View>
                             <View style={styles.statusMetricBox}>
-                                <Text style={styles.statusMetricLabel}>{activePanel === 'chords' ? 'HEARD' : 'MODE'}</Text>
-                                <Text style={styles.statusMetricValue}>{activePanel === 'chords' ? detectedNote : activePanel === 'tabs' ? 'Guided' : 'Preview'}</Text>
+                                <Text style={styles.statusMetricLabel}>{activePanel === 'tabs' ? 'LIVE' : activePanel === 'chords' ? 'HEARD' : 'MODE'}</Text>
+                                <Text style={styles.statusMetricValue}>{activePanel === 'guide' ? 'Preview' : detectedNote}</Text>
                             </View>
                             <View style={styles.statusMetricBox}>
-                                <Text style={styles.statusMetricLabel}>{activePanel === 'chords' ? 'BEST' : 'TRACK'}</Text>
-                                <Text style={styles.statusMetricValue}>{activePanel === 'chords' ? `${bestCombo}` : `${selectedSong.durationSec}s`}</Text>
+                                <Text style={styles.statusMetricLabel}>{activePanel === 'tabs' ? 'HITS' : activePanel === 'chords' ? 'BEST' : 'TRACK'}</Text>
+                                <Text style={styles.statusMetricValue}>{activePanel === 'tabs' ? `${tabHitNonce}` : activePanel === 'chords' ? `${bestCombo}` : `${selectedSong.durationSec}s`}</Text>
                             </View>
                         </View>
 
@@ -1513,11 +1457,18 @@ export default function SongScreen() {
                             </View>
                         )}
 
+                        {activePanel === 'tabs' && (
+                            <View style={styles.scoreStrip}>
+                                <Text style={styles.scoreStripText}>{tabHitNonce}/{selectedSong.tabNotes.length}</Text>
+                                <Text style={styles.scoreStripMeta}>Live tab hits • Best combo {bestCombo}</Text>
+                            </View>
+                        )}
+
                         {activePanel === 'guide' && (
                             <View style={styles.guideList}>
                                 <Text style={styles.guideLine}>1. Chords = live mic scoring and combo tracking.</Text>
-                                <Text style={styles.guideLine}>2. Tabs = six-string timing view with fret markers and sustain tails.</Text>
-                                <Text style={styles.guideLine}>3. Hit when the note crosses the mint line on the left.</Text>
+                                <Text style={styles.guideLine}>2. Tabs = six-string timing view with live pitch matching at the hit-line.</Text>
+                                <Text style={styles.guideLine}>3. Hit when the live note matches the target as it crosses the mint line on the left.</Text>
                                 <Text style={styles.guideLine}>4. Import uses two files: one audio file and one JSON file with chordEvents and tabNotes.</Text>
                             </View>
                         )}

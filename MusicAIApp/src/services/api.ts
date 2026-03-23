@@ -1,4 +1,4 @@
-const BASE_URL = 'https://tuneup-shut-the-sound-up.onrender.com';
+const BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL?.trim() || 'http://localhost:8000').replace(/\/$/, '');
 const WARMUP_WINDOW_MS = 45_000;
 
 let lastWarmupAt = 0;
@@ -159,7 +159,12 @@ function buildApiError(response: Response | null, payload: ApiPayload, fallback:
     };
 }
 
-function createAudioFormData(fileUri: string, fileName: string, fallbackFileName: string) {
+function createAudioFormData(
+    fileUri: string,
+    fileName: string,
+    fallbackFileName: string,
+    userId?: string,
+) {
     const normalizedFileName = fileName && fileName.includes('.')
         ? fileName
         : fallbackFileName;
@@ -170,6 +175,10 @@ function createAudioFormData(fileUri: string, fileName: string, fallbackFileName
         name: normalizedFileName,
         type: inferAudioMimeType(normalizedFileName, fileUri),
     } as any);
+
+    if (userId) {
+        formData.append('user_id', userId);
+    }
 
     return formData;
 }
@@ -313,11 +322,12 @@ export const fetchTrafficAnalyses = async (userId?: string): Promise<TrafficAnal
 export const uploadAudioForAnalysis = async (
     fileUri: string,
     fileName: string,
+    userId?: string,
 ): Promise<UploadAudioAcceptedResponse | ApiErrorResponse> => {
     try {
         const { response, payload } = await requestJson('/upload-audio', {
             method: 'POST',
-            body: createAudioFormData(fileUri, fileName, 'song.mp3'),
+            body: createAudioFormData(fileUri, fileName, 'song.mp3', userId),
         }, { warmup: true });
 
         if (!response.ok) {
@@ -395,22 +405,6 @@ export const analyzeSongFile = async (
             status: 'success',
             ...result,
         };
-    } catch {
-        return { status: 'error', message: 'Could not connect to server.' };
-    }
-};
-
-export const detectPitchFromClip = async (fileUri: string, fileName: string, instrument: string) => {
-    try {
-        const formData = createAudioFormData(fileUri, fileName, 'clip.m4a');
-        formData.append('instrument', instrument);
-
-        const { payload } = await requestJson('/detect-pitch', {
-            method: 'POST',
-            body: formData,
-        });
-
-        return payload;
     } catch {
         return { status: 'error', message: 'Could not connect to server.' };
     }

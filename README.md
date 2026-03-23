@@ -51,6 +51,18 @@ The most important developer-facing flow is the Studio Grid analysis loop, which
 
 ---
 
+## 🧩 System At a Glance
+
+| Layer | What it owns | Key files |
+|---|---|---|
+| **Expo app** | screen rendering, audio picking, task polling, app-state-aware scan UX, local settings/import persistence | `MusicAIApp/src/screens/TrafficScreen.tsx`, `MusicAIApp/src/hooks/useAudioAnalysisJob.ts`, `MusicAIApp/src/services/api.ts` |
+| **FastAPI backend** | async upload handling, BPM + segmentation analysis, health checks, fallback pitch detection, persistence APIs | `backend/main.py`, `backend/models.py` |
+| **Persistence layer** | Firestore-backed traffic saves and leaderboard data, with local JSON fallback for degraded-mode recovery | `backend/traffic_db.json`, `backend/leaderboard_db.json`, `backend/.env.example` |
+
+This split is intentional: the app owns responsiveness and session UX, the backend owns heavier analysis work, and persistence can degrade gracefully without breaking scan and save flows.
+
+---
+
 ## 🖼️ App Preview
 
 ### Song Flow preview
@@ -70,6 +82,7 @@ The most important developer-facing flow is the Studio Grid analysis loop, which
 ## 🧭 Table of Contents
 
 - [✨ Overview](#-overview)
+- [🧩 System At a Glance](#-system-at-a-glance)
 - [🖼️ App Preview](#️-app-preview)
 - [🚀 Core Product Experience](#-core-product-experience)
 - [🗂️ Shipped Content](#️-shipped-content)
@@ -248,6 +261,11 @@ flowchart TD
 - Frontend API requests currently point at `BASE_URL` inside [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts), while [`MusicAIApp/.env.example`](./MusicAIApp/.env.example) documents the intended `EXPO_PUBLIC_API_BASE_URL` value for hosted environments.
 - Backend Firebase credentials can come from `FIREBASE_SERVICE_ACCOUNT_JSON`, `GOOGLE_APPLICATION_CREDENTIALS`, or a local `backend/serviceAccountKey.json`.
 - Traffic saves and leaderboard records use Firestore when available, then fall back to local JSON stores for recovery-friendly behavior during local development or temporary cloud misconfiguration.
+
+### Persistence model
+- **On-device:** app settings, imported songs, and local experience state stay inside the mobile app for a fast, resilient UX.
+- **Backend shared data:** traffic-analysis saves and leaderboard records flow through FastAPI so the app only deals with one API surface.
+- **Recovery mode:** if Firestore is missing or unhealthy, the backend writes to `backend/traffic_db.json` and `backend/leaderboard_db.json` so user actions still complete.
 
 ---
 
@@ -693,7 +711,7 @@ The current frontend request target is the `BASE_URL` constant in [`MusicAIApp/s
 
 [`MusicAIApp/.env.example`](./MusicAIApp/.env.example) documents the intended `EXPO_PUBLIC_API_BASE_URL` value for hosted deployments, but this repo snapshot still uses the in-file constant unless you wire the env var into the app code.
 
-Start by using the example file:
+Use the example file as the naming reference for hosted configuration, or wire it into the app if you want env-driven frontend URL resolution:
 
 ```text
 MusicAIApp/.env.example
@@ -710,6 +728,16 @@ To find your local IP on macOS:
 ```bash
 ipconfig getifaddr en0
 ```
+
+### 5. End-to-end smoke path
+
+Once both services are running, this is the fastest way to confirm the full stack is healthy:
+
+1. Open `http://127.0.0.1:8000/healthz` and confirm the backend responds.
+2. Launch the Expo app and point `BASE_URL` at the backend you want to test.
+3. Open **Studio Grid**, pick an audio file, and tap **Scan**.
+4. Confirm the UI shows upload/progress messaging first, then BPM + section markers after completion.
+5. Save the study and verify the backend reports either Firestore storage or local JSON fallback.
 
 ---
 

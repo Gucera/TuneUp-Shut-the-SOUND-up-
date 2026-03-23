@@ -303,7 +303,11 @@ export default function TrafficScreen() {
 
         setMarkers([]);
         setBpm(null);
-        await startScan({ fileUri, fileName: songName });
+        await startScan({
+            fileUri,
+            fileName: songName,
+            userId: currentUserId ?? undefined,
+        });
     };
 
     const handleSave = async () => {
