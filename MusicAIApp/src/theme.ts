@@ -1,3 +1,16 @@
+export const PREMIUM_GRADIENT = [
+    '#7400b8',
+    '#6930c3',
+    '#5e60ce',
+    '#5390d9',
+    '#4ea8de',
+    '#48bfe3',
+    '#56cfe1',
+    '#64dfdf',
+    '#72efdd',
+    '#80ffdb',
+] as const;
+
 export const COLORS = {
     background: '#d8eef7',
     backgroundAlt: '#c6eff1',
@@ -9,9 +22,13 @@ export const COLORS = {
     accent: '#6930c3',
     success: '#64dfdf',
     danger: '#5e60ce',
-    warning: '#48bfe3',
-    gold: '#56cfe1',
+    warning: '#4ea8de',
+    gold: '#48bfe3',
     mint: '#80ffdb',
+    cyan: '#72efdd',
+    deepBackground: '#19072f',
+    deepSurface: '#25114a',
+    deepSurfaceAlt: '#34205f',
     text: '#3e5476',
     textStrong: '#1f0f39',
     textDim: '#62759c',
@@ -30,8 +47,8 @@ export const SPACING = {
 
 export const RADII = {
     s: 8,
-    m: 14,
-    l: 18,
+    m: 20,
+    l: 24,
 };
 
 export const SHADOWS = {

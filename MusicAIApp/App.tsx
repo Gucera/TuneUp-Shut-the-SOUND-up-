@@ -3,32 +3,36 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Session } from '@supabase/supabase-js';
 
+import HomeScreen from './src/screens/HomeScreen';
 import TheoryScreen from './src/screens/TheoryScreen';
-import TrafficScreen from './src/screens/TrafficScreen';
+import LessonDetailScreen from './src/screens/LessonDetailScreen';
 import PracticalScreen from './src/screens/PracticalScreen';
 import SongScreen from './src/screens/SongScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import { COLORS, SHADOWS } from './src/theme';
+import type { LessonsStackParamList } from './src/navigation/lessonStack';
 import { supabase } from './src/services/supabaseClient';
 
 const Tab = createBottomTabNavigator();
+const LessonsStack = createNativeStackNavigator<LessonsStackParamList>();
 
 const navTheme = {
     ...DefaultTheme,
     colors: {
         ...DefaultTheme.colors,
-        background: COLORS.background,
-        card: COLORS.panel,
-        text: COLORS.text,
-        border: COLORS.pixelLine,
-        primary: COLORS.primary,
+        background: COLORS.deepBackground,
+        card: COLORS.deepSurface,
+        text: '#F7FAFF',
+        border: COLORS.accent,
+        primary: COLORS.mint,
     },
 };
 
@@ -44,20 +48,44 @@ function PixelIcon({
     size: number;
 }) {
     let iconName: keyof typeof Ionicons.glyphMap = 'musical-notes';
+    const isHome = routeName === 'Home';
 
-    if (routeName === 'Theory') iconName = focused ? 'library' : 'library-outline';
-    else if (routeName === 'Practice') iconName = focused ? 'radio' : 'radio-outline';
-    else if (routeName === 'Studio') iconName = focused ? 'pulse' : 'pulse-outline';
+    if (routeName === 'Home') iconName = focused ? 'home' : 'home-outline';
+    else if (routeName === 'Lessons') iconName = focused ? 'library' : 'library-outline';
+    else if (routeName === 'Tuner') iconName = focused ? 'radio' : 'radio-outline';
     else if (routeName === 'Songs') iconName = focused ? 'disc' : 'disc-outline';
     else if (routeName === 'Profile') iconName = focused ? 'person-circle' : 'person-circle-outline';
 
     return (
-        <View style={styles.iconWrap}>
-            <View style={[styles.iconFrame, focused && styles.iconFrameActive]}>
-                <Ionicons name={iconName} size={size - 2} color={color} />
+        <View style={[styles.iconWrap, isHome && styles.iconWrapHome]}>
+            <View
+                style={[
+                    styles.iconFrame,
+                    isHome && styles.iconFrameHome,
+                    focused && styles.iconFrameActive,
+                    focused && isHome && styles.iconFrameHomeActive,
+                ]}
+            >
+                <Ionicons name={iconName} size={isHome ? size : size - 2} color={color} />
             </View>
-            <View style={[styles.activePip, focused && styles.activePipVisible]} />
+            <View style={[styles.activePip, isHome && styles.activePipHome, focused && styles.activePipVisible]} />
         </View>
+    );
+}
+
+function LessonsNavigator() {
+    return (
+        <LessonsStack.Navigator
+            initialRouteName="LessonLibrary"
+            screenOptions={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                contentStyle: { backgroundColor: COLORS.deepBackground },
+            }}
+        >
+            <LessonsStack.Screen name="LessonLibrary" component={TheoryScreen} />
+            <LessonsStack.Screen name="LessonDetail" component={LessonDetailScreen} />
+        </LessonsStack.Navigator>
     );
 }
 
@@ -65,11 +93,13 @@ function AuthenticatedTabs() {
     return (
         <NavigationContainer theme={navTheme}>
             <Tab.Navigator
+                initialRouteName="Home"
+                backBehavior="history"
                 screenOptions={({ route }) => ({
                     headerShown: false,
                     animation: 'fade',
-                    tabBarActiveTintColor: COLORS.primary,
-                    tabBarInactiveTintColor: COLORS.textDim,
+                    tabBarActiveTintColor: COLORS.mint,
+                    tabBarInactiveTintColor: 'rgba(223,237,255,0.62)',
                     tabBarShowLabel: true,
                     tabBarLabelStyle: {
                         fontSize: 10,
@@ -85,7 +115,7 @@ function AuthenticatedTabs() {
                     ),
                     tabBarBackground: () => (
                         <LinearGradient
-                            colors={[COLORS.secondary, COLORS.panel, COLORS.backgroundAlt]}
+                            colors={['rgba(116,0,184,0.96)', 'rgba(105,48,195,0.94)', 'rgba(94,96,206,0.92)']}
                             end={{ x: 1, y: 1 }}
                             start={{ x: 0, y: 0 }}
                             style={styles.tabBarBackground}
@@ -95,9 +125,16 @@ function AuthenticatedTabs() {
                     ),
                 })}
             >
-                <Tab.Screen name="Theory" component={TheoryScreen} />
-                <Tab.Screen name="Practice" component={PracticalScreen} />
-                <Tab.Screen name="Studio" component={TrafficScreen} />
+                <Tab.Screen
+                    name="Lessons"
+                    component={LessonsNavigator}
+                    options={{
+                        popToTopOnBlur: true,
+                        freezeOnBlur: false,
+                    }}
+                />
+                <Tab.Screen name="Tuner" component={PracticalScreen} />
+                <Tab.Screen name="Home" component={HomeScreen} />
                 <Tab.Screen name="Songs" component={SongScreen} />
                 <Tab.Screen name="Profile" component={ProfileScreen} />
             </Tab.Navigator>
@@ -167,7 +204,7 @@ export default function App() {
 
     return (
         <GestureHandlerRootView style={styles.root}>
-            <StatusBar style={session ? 'dark' : 'light'} />
+            <StatusBar style="light" />
             {isBooting ? <LoadingScreen /> : session ? <AuthenticatedTabs /> : <AuthScreen />}
         </GestureHandlerRootView>
     );
@@ -254,7 +291,7 @@ const styles = StyleSheet.create({
         flex: 1,
         borderRadius: 28,
         borderWidth: 1,
-        borderColor: COLORS.pixelLine,
+        borderColor: 'rgba(128,255,219,0.26)',
         overflow: 'hidden',
         ...SHADOWS.card,
     },
@@ -265,32 +302,44 @@ const styles = StyleSheet.create({
         right: 20,
         height: 28,
         borderRadius: 16,
-        backgroundColor: 'rgba(116,0,184,0.16)',
+        backgroundColor: 'rgba(128,255,219,0.16)',
     },
     iconWrap: {
         alignItems: 'center',
+    },
+    iconWrapHome: {
+        transform: [{ translateY: -2 }],
     },
     iconFrame: {
         width: 42,
         height: 42,
         borderRadius: 21,
         borderWidth: 1,
-        borderColor: COLORS.pixelLine,
-        backgroundColor: COLORS.panel,
+        borderColor: 'rgba(255,255,255,0.12)',
+        backgroundColor: 'rgba(25,7,47,0.44)',
         alignItems: 'center',
         justifyContent: 'center',
         marginTop: 5,
         marginBottom: 2,
         ...SHADOWS.soft,
     },
+    iconFrameHome: {
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+    },
     iconFrameActive: {
-        borderColor: COLORS.primary,
-        backgroundColor: COLORS.backgroundAlt,
-        shadowColor: COLORS.primary,
+        borderColor: COLORS.mint,
+        backgroundColor: 'rgba(37,17,74,0.82)',
+        shadowColor: COLORS.mint,
         shadowOpacity: 0.28,
         shadowRadius: 20,
         shadowOffset: { width: 0, height: 12 },
         elevation: 12,
+    },
+    iconFrameHomeActive: {
+        shadowRadius: 24,
+        elevation: 14,
     },
     activePip: {
         width: 6,
@@ -299,7 +348,12 @@ const styles = StyleSheet.create({
         marginTop: 3,
         backgroundColor: 'transparent',
     },
+    activePipHome: {
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
+    },
     activePipVisible: {
-        backgroundColor: COLORS.primary,
+        backgroundColor: COLORS.mint,
     },
 });

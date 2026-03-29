@@ -23,6 +23,9 @@ export interface LeaderboardProfilePayload {
     completedLessons: number;
     completedSongs: number;
     completedQuizzes: number;
+    completedLessonIds?: string[];
+    completedSongIds?: string[];
+    completedQuizIds?: string[];
 }
 
 export interface LeaderboardEntry {
@@ -68,6 +71,39 @@ export interface AnalysisResultPayload {
     message: string;
 }
 
+export interface SongImportChordEventPayload {
+    timeSec: number;
+    chord: string;
+    laneRow: number;
+}
+
+export interface SongImportTabNotePayload {
+    timeSec: number;
+    stringIndex: number;
+    fret: number;
+    durationSec?: number;
+}
+
+export interface SongImportManifestPayload {
+    title: string;
+    artist: string;
+    difficulty: 'Easy' | 'Medium' | 'Hard';
+    durationSec: number;
+    chordEvents: SongImportChordEventPayload[];
+    tabNotes: SongImportTabNotePayload[];
+}
+
+export interface SongImportResultPayload {
+    songId: string | null;
+    audioUrl: string | null;
+    bpm: number;
+    beatGrid: number[];
+    confidence: number;
+    fallbackUsed: boolean;
+    message: string;
+    songManifest: SongImportManifestPayload;
+}
+
 export interface LegacySongAnalysisResponse {
     status: 'success';
     bpm: number;
@@ -76,6 +112,13 @@ export interface LegacySongAnalysisResponse {
 }
 
 export interface UploadAudioAcceptedResponse {
+    status: 'accepted';
+    taskId: string;
+    progressText: string;
+    message: string;
+}
+
+export interface AnalyzeSongAudioAcceptedResponse {
     status: 'accepted';
     taskId: string;
     progressText: string;
@@ -109,6 +152,35 @@ export type AnalysisTaskStatusResponse =
     | AnalysisTaskProcessingResponse
     | AnalysisTaskCompletedResponse
     | AnalysisTaskFailedResponse
+    | ApiErrorResponse;
+
+export interface SongImportTaskProcessingResponse {
+    status: 'processing';
+    taskId: string;
+    progressText: string;
+    updatedAt: string | null;
+}
+
+export interface SongImportTaskCompletedResponse {
+    status: 'completed';
+    taskId: string;
+    progressText: string;
+    updatedAt: string | null;
+    result: SongImportResultPayload;
+}
+
+export interface SongImportTaskFailedResponse {
+    status: 'failed';
+    taskId: string;
+    progressText: string;
+    updatedAt: string | null;
+    message: string;
+}
+
+export type SongImportTaskStatusResponse =
+    | SongImportTaskProcessingResponse
+    | SongImportTaskCompletedResponse
+    | SongImportTaskFailedResponse
     | ApiErrorResponse;
 
 function inferAudioMimeType(fileName: string, fileUri: string) {
@@ -235,6 +307,83 @@ function mapAnalysisResult(payload: ApiPayload, fallbackMessage: string): Analys
     };
 }
 
+function mapSongImportManifest(payload: ApiPayload): SongImportManifestPayload {
+    const difficulty = payload.difficulty === 'Easy' || payload.difficulty === 'Hard' || payload.difficulty === 'Medium'
+        ? payload.difficulty
+        : 'Medium';
+
+    const chordEvents = Array.isArray(payload.chordEvents)
+        ? payload.chordEvents
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') {
+                    return null;
+                }
+
+                const next = entry as Record<string, unknown>;
+                if (typeof next.timeSec !== 'number' || typeof next.chord !== 'string' || typeof next.laneRow !== 'number') {
+                    return null;
+                }
+
+                return {
+                    timeSec: next.timeSec,
+                    chord: next.chord,
+                    laneRow: next.laneRow,
+                };
+            })
+            .filter((entry): entry is SongImportChordEventPayload => !!entry)
+        : [];
+
+    const tabNotes = Array.isArray(payload.tabNotes)
+        ? payload.tabNotes
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') {
+                    return null;
+                }
+
+                const next = entry as Record<string, unknown>;
+                if (typeof next.timeSec !== 'number' || typeof next.stringIndex !== 'number' || typeof next.fret !== 'number') {
+                    return null;
+                }
+
+                return {
+                    timeSec: next.timeSec,
+                    stringIndex: next.stringIndex,
+                    fret: next.fret,
+                    ...(typeof next.durationSec === 'number' ? { durationSec: next.durationSec } : {}),
+                };
+            })
+            .filter((entry): entry is SongImportTabNotePayload => !!entry)
+        : [];
+
+    return {
+        title: getString(payload, 'title', 'Imported Song'),
+        artist: getString(payload, 'artist', 'AI Transcription'),
+        difficulty,
+        durationSec: typeof payload.durationSec === 'number' ? payload.durationSec : 0,
+        chordEvents,
+        tabNotes,
+    };
+}
+
+function mapSongImportResult(payload: ApiPayload): SongImportResultPayload {
+    const manifestPayload = payload.songManifest && typeof payload.songManifest === 'object'
+        ? payload.songManifest as ApiPayload
+        : {};
+
+    return {
+        songId: getNullableString(payload, 'songId'),
+        audioUrl: getNullableString(payload, 'audioUrl'),
+        bpm: typeof payload.bpm === 'number' ? payload.bpm : 0,
+        beatGrid: Array.isArray(payload.beatGrid)
+            ? payload.beatGrid.filter((entry): entry is number => typeof entry === 'number')
+            : [],
+        confidence: typeof payload.confidence === 'number' ? payload.confidence : 0,
+        fallbackUsed: payload.fallbackUsed === true,
+        message: getString(payload, 'message', 'AI transcription complete.'),
+        songManifest: mapSongImportManifest(manifestPayload),
+    };
+}
+
 function mapLeaderboardEntry(entry: any): LeaderboardEntry {
     return {
         userId: entry?.user_id ?? 'unknown',
@@ -345,6 +494,32 @@ export const uploadAudioForAnalysis = async (
     }
 };
 
+export const analyzeAudioForSongImport = async (
+    fileUri: string,
+    fileName: string,
+    userId?: string,
+): Promise<AnalyzeSongAudioAcceptedResponse | ApiErrorResponse> => {
+    try {
+        const { response, payload } = await requestJson('/analyze-audio', {
+            method: 'POST',
+            body: createAudioFormData(fileUri, fileName, 'song.mp3', userId),
+        }, { warmup: true });
+
+        if (!response.ok) {
+            return buildApiError(response, payload, 'Could not start AI transcription.');
+        }
+
+        return {
+            status: 'accepted',
+            taskId: getString(payload, 'task_id', ''),
+            progressText: getString(payload, 'progress_text', 'AI transcription started.'),
+            message: getString(payload, 'message', 'AI transcription started.'),
+        };
+    } catch {
+        return { status: 'error', message: 'Could not connect to server.' };
+    }
+};
+
 export const fetchAnalysisTaskStatus = async (taskId: string): Promise<AnalysisTaskStatusResponse> => {
     try {
         const { response, payload } = await requestJson(`/task-status/${encodeURIComponent(taskId)}`, {
@@ -379,6 +554,47 @@ export const fetchAnalysisTaskStatus = async (taskId: string): Promise<AnalysisT
             status: 'processing',
             taskId: getString(payload, 'task_id', taskId),
             progressText: getString(payload, 'progress_text', 'Analysis is still running...'),
+            updatedAt: getNullableString(payload, 'updated_at'),
+        };
+    } catch {
+        return { status: 'error', message: 'Could not connect to server.' };
+    }
+};
+
+export const fetchSongImportTaskStatus = async (taskId: string): Promise<SongImportTaskStatusResponse> => {
+    try {
+        const { response, payload } = await requestJson(`/task-status/${encodeURIComponent(taskId)}`, {
+            method: 'GET',
+        });
+
+        if (!response.ok) {
+            return buildApiError(response, payload, 'Could not load AI transcription status.');
+        }
+
+        if (payload.status === 'completed') {
+            return {
+                status: 'completed',
+                taskId: getString(payload, 'task_id', taskId),
+                progressText: getString(payload, 'progress_text', 'AI transcription complete.'),
+                updatedAt: getNullableString(payload, 'updated_at'),
+                result: mapSongImportResult((payload.result as ApiPayload) ?? {}),
+            };
+        }
+
+        if (payload.status === 'failed') {
+            return {
+                status: 'failed',
+                taskId: getString(payload, 'task_id', taskId),
+                progressText: getString(payload, 'progress_text', 'AI transcription failed.'),
+                updatedAt: getNullableString(payload, 'updated_at'),
+                message: getString(payload, 'message', 'AI transcription failed.'),
+            };
+        }
+
+        return {
+            status: 'processing',
+            taskId: getString(payload, 'task_id', taskId),
+            progressText: getString(payload, 'progress_text', 'AI is still transcribing...'),
             updatedAt: getNullableString(payload, 'updated_at'),
         };
     } catch {
@@ -425,6 +641,9 @@ export const syncLeaderboardProfile = async (payload: LeaderboardProfilePayload)
             completed_lessons: payload.completedLessons,
             completed_songs: payload.completedSongs,
             completed_quizzes: payload.completedQuizzes,
+            completed_lesson_ids: payload.completedLessonIds ?? [],
+            completed_song_ids: payload.completedSongIds ?? [],
+            completed_quiz_ids: payload.completedQuizIds ?? [],
         }),
     });
 

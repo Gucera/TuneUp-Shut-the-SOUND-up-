@@ -343,6 +343,9 @@ async function syncStateToBackend(state: StoredGamificationState, progress: Prog
             completedLessons: state.completedLessonIds.length,
             completedSongs: state.completedSongIds.length,
             completedQuizzes: state.completedQuizIds.length,
+            completedLessonIds: state.completedLessonIds,
+            completedSongIds: state.completedSongIds,
+            completedQuizIds: state.completedQuizIds,
         });
     } catch (error) {
         // Leaderboard sync is best-effort so practice flow never gets blocked.

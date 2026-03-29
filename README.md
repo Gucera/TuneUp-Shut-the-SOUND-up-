@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>A premium mobile music-learning platform built with Expo, React Native, FastAPI, and Firebase.</strong>
+  <strong>A premium mobile music-learning platform built with Expo, React Native, FastAPI, and Supabase.</strong>
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Expo-54-000020?style=for-the-badge&logo=expo" alt="Expo 54" />
   <img src="https://img.shields.io/badge/React_Native-0.81-61DAFB?style=for-the-badge&logo=react" alt="React Native 0.81" />
   <img src="https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi" alt="FastAPI Backend" />
-  <img src="https://img.shields.io/badge/Firebase-Firestore-FFCA28?style=for-the-badge&logo=firebase" alt="Firebase Firestore" />
+  <img src="https://img.shields.io/badge/Supabase-Auth_+_Storage-3ECF8E?style=for-the-badge&logo=supabase" alt="Supabase Auth and Storage" />
   <img src="https://img.shields.io/badge/TypeScript-App-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript App" />
 </p>
 
@@ -30,9 +30,9 @@ It includes:
 - 🎸 **Practice Deck** for instrument tuning and live microphone-based pitch feedback
 - 📚 **Theory Lab** for lessons, theory quiz, drag puzzles, audio quiz, and quick note drills
 - 🎛️ **Studio Grid** for arrangement analysis, BPM detection, section markers, and song structure study
-- 🎵 **Song Flow** for chord-following, tab playback, guided practice, imported songs, and performance scoring
-- 👤 **Profile & Settings** for progress tracking, badges, streaks, leaderboard data, saved songs, lesson history, and app preferences
-- 🏆 **Gamification** with XP, levels, streaks, leaderboard sync, and unlockable badges
+- 🎵 **Song Flow** for chord-following, tab playback, guided practice, AI-assisted imports, and performance scoring
+- 👤 **Profile & Settings** for Supabase-authenticated identity, progress tracking, badges, leaderboard data, saved songs, lesson history, and app preferences
+- 🏆 **Gamification** with XP, levels, streaks, Supabase-backed leaderboard sync, and unlockable badges
 
 The project is split into:
 - a **React Native + Expo** mobile app in [`MusicAIApp`](./MusicAIApp)
@@ -43,11 +43,12 @@ The most important developer-facing flow is the Studio Grid analysis loop, which
 1. The user selects an audio file in the Expo app.
 2. The frontend uploads it to `POST /upload-audio`.
 3. The backend immediately returns a `task_id`.
-4. FastAPI `BackgroundTasks` runs BPM + segmentation analysis with `librosa`.
+4. A backend worker thread downloads the persisted upload from Supabase Storage and runs BPM + segmentation analysis with `librosa`.
 5. The frontend polls `GET /task-status/{task_id}` for progress and completion.
 6. If the app backgrounds, polling pauses; when the app becomes active again, polling resumes.
 7. Once complete, the frontend receives BPM and section markers and updates the Studio UI.
-8. Traffic-analysis saves and leaderboard data persist through Firestore, with local JSON fallback when cloud storage is unavailable.
+8. Tracks, async job state, uploaded audio, and leaderboard data persist through Supabase.
+9. If the backend restarts mid-job, startup recovery can resume incomplete work from the persisted job rows.
 
 ---
 
@@ -55,11 +56,11 @@ The most important developer-facing flow is the Studio Grid analysis loop, which
 
 | Layer | What it owns | Key files |
 |---|---|---|
-| **Expo app** | screen rendering, audio picking, task polling, app-state-aware scan UX, local settings/import persistence | `MusicAIApp/src/screens/TrafficScreen.tsx`, `MusicAIApp/src/hooks/useAudioAnalysisJob.ts`, `MusicAIApp/src/services/api.ts` |
-| **FastAPI backend** | async upload handling, BPM + segmentation analysis, health checks, fallback pitch detection, persistence APIs | `backend/main.py`, `backend/models.py` |
-| **Persistence layer** | Firestore-backed traffic saves and leaderboard data, with local JSON fallback for degraded-mode recovery | `backend/traffic_db.json`, `backend/leaderboard_db.json`, `backend/.env.example` |
+| **Expo app** | auth/session UX, screen rendering, audio picking, task polling, local settings/import persistence | `MusicAIApp/App.tsx`, `MusicAIApp/src/services/api.ts`, `MusicAIApp/src/services/supabaseClient.ts` |
+| **FastAPI backend** | async upload handling, worker-thread analysis, health checks, pitch fallback, persistence APIs | `backend/main.py`, `backend/models.py`, `backend/requirements.txt` |
+| **Persistence layer** | Supabase Auth, Postgres tables, and Storage bucket for tracks, jobs, markers, imports, and leaderboards | Supabase project config plus `SUPABASE_URL`, `SUPABASE_KEY`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` |
 
-This split is intentional: the app owns responsiveness and session UX, the backend owns heavier analysis work, and persistence can degrade gracefully without breaking scan and save flows.
+This split is intentional: the app owns responsiveness and session UX, the backend owns heavier analysis work, and Supabase acts as the shared system of record for auth, uploads, jobs, and synced progress.
 
 ---
 
@@ -84,6 +85,7 @@ This split is intentional: the app owns responsiveness and session UX, the backe
 - [✨ Overview](#-overview)
 - [🧩 System At a Glance](#-system-at-a-glance)
 - [🖼️ App Preview](#️-app-preview)
+- [⚡ Quick Start](#-quick-start)
 - [🚀 Core Product Experience](#-core-product-experience)
 - [🗂️ Shipped Content](#️-shipped-content)
 - [🏗️ Architecture](#️-architecture)
@@ -93,13 +95,46 @@ This split is intentional: the app owns responsiveness and session UX, the backe
 - [🧠 Feature Deep Dive](#-feature-deep-dive)
 - [📦 Project Structure](#-project-structure)
 - [🔌 API Endpoints](#-api-endpoints)
-- [🎼 Song Import Format](#-song-import-format)
+- [🎼 Song Import Workflows](#-song-import-workflows)
 - [🛠️ Local Development Setup](#️-local-development-setup)
 - [🔐 Security Notes](#-security-notes)
 - [🧪 Quality Checks](#-quality-checks)
 - [🚚 Deployment Notes](#-deployment-notes)
 - [🧭 Suggested Git Workflow](#-suggested-git-workflow)
 - [📝 Current Status](#-current-status)
+
+---
+
+## ⚡ Quick Start
+
+### 1. Start the backend
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+export SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
+export SUPABASE_KEY="YOUR_SUPABASE_SERVER_KEY"
+export CORS_ALLOW_ORIGINS="*"
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 2. Start the Expo app
+
+```bash
+cd MusicAIApp
+npm install
+export EXPO_PUBLIC_API_BASE_URL="http://127.0.0.1:8000"
+export EXPO_PUBLIC_SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
+export EXPO_PUBLIC_SUPABASE_ANON_KEY="YOUR_SUPABASE_ANON_KEY"
+npx expo start -c
+```
+
+### 3. Verify the happy path
+- open `http://127.0.0.1:8000/healthz` and confirm Supabase is connected
+- sign in or create an account in the app
+- run a **Studio Grid** scan or start an **AI song import** from **Song Flow**
 
 ---
 
@@ -181,7 +216,7 @@ The guided song-learning mode, designed for a “play with the track” experien
 - Chord scoring through live mic listening
 - Tabs mode for guided timing playback
 - Seek bar + jump controls
-- Song import flow for audio + JSON chart pairing
+- Song import flow for AI audio transcription or manual audio + JSON pairing
 - Backing tracks and imported library persistence
 
 ---
@@ -221,12 +256,12 @@ The app already contains meaningful learning content, not just shell UI.
 ### Song / structure content
 - 🎵 **4 built-in demo songs** with chords and tabs
 - 🎛️ **10 built-in traffic studies** for structure learning
-- 📥 imported songs supported through local JSON + audio pairing
+- 📥 imported songs supported through manual JSON + audio pairing or AI-generated manifests from a single audio upload
 
 ### Gamification content
 - 🏅 badge catalog with unlock rules
 - 🔥 streak tracking
-- 🥇 leaderboard sync support
+- 🥇 Supabase-backed leaderboard sync support
 - ⭐ XP and level progression
 
 ---
@@ -235,37 +270,38 @@ The app already contains meaningful learning content, not just shell UI.
 
 ```mermaid
 flowchart TD
-    A["Expo App\nStudio Grid + Song Flow + Profile"] -->|Upload audio| B["POST /upload-audio"]
-    B -->|Return task_id| A
-    B --> C["FastAPI BackgroundTasks"]
-    C --> D["Audio analysis\nlibrosa + numpy + scikit-learn"]
-    A -->|Poll progress| E["GET /task-status/{task_id}"]
-    D --> E
-    E -->|BPM + markers| A
-    A --> F["Studio UI\nWaveform + section markers"]
-    A --> G["Traffic saves + leaderboard sync"]
-    G --> H["Firestore"]
-    G --> I["Local JSON fallback"]
-    A --> J["Local app state\nWatermelonDB + FileSystem"]
+    A["Expo App\nAuth + Studio Grid + Song Flow"] -->|Auth/session| B["Supabase Auth"]
+    A -->|Upload track| C["POST /upload-audio\nor POST /analyze-audio"]
+    C --> D["FastAPI worker threads"]
+    C --> E["Supabase Storage\naudio uploads"]
+    C --> F["Supabase Postgres\ntracks + ai_analysis_jobs"]
+    D --> G["librosa analysis\nBPM + structure + chord/tab inference"]
+    G --> F
+    A -->|Poll progress| H["GET /task-status/{task_id}"]
+    F --> H
+    H -->|Result payload| A
+    A --> I["Device-local persistence\nsettings + imported songs + caches"]
 ```
 
 ### Architectural goals
-- Keep the mobile experience **offline-friendly where possible**
-- Use the backend for **heavier or more reliable audio analysis**
+- Keep the mobile experience **responsive and resilient** even when analysis is asynchronous
+- Use the backend for **heavier or more reliable audio analysis and transcription**
 - Persist user-facing state locally for a smooth app feel
-- Sync competitive / shared data to Firestore only where it makes sense
+- Use Supabase as the **shared system of record** for auth, uploads, jobs, and synced progress
 
 ### Operational notes
-- `GET /healthz` reports backend readiness, active storage mode, and Firebase connectivity state.
-- The async scan path is `POST /upload-audio` followed by `GET /task-status/{task_id}` polling, with `POST /analyze-full` kept as a synchronous fallback path.
-- Frontend API requests currently point at `BASE_URL` inside [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts), while [`MusicAIApp/.env.example`](./MusicAIApp/.env.example) documents the intended `EXPO_PUBLIC_API_BASE_URL` value for hosted environments.
-- Backend Firebase credentials can come from `FIREBASE_SERVICE_ACCOUNT_JSON`, `GOOGLE_APPLICATION_CREDENTIALS`, or a local `backend/serviceAccountKey.json`.
-- Traffic saves and leaderboard records use Firestore when available, then fall back to local JSON stores for recovery-friendly behavior during local development or temporary cloud misconfiguration.
+- `GET /healthz` performs a live Supabase table check and returns `503` with a degraded payload if connectivity is broken.
+- `POST /upload-audio` persists a track row, stores audio in Supabase Storage, creates an `ai_analysis_jobs` row, and schedules a worker thread.
+- `POST /analyze-audio` uses the same async job model, but produces an AI-generated song manifest for Song Flow imports.
+- The frontend API base URL comes from `EXPO_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000` when unset.
+- The frontend Supabase client requires `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+- The backend requires `SUPABASE_URL` and `SUPABASE_KEY`; optional knobs include `SUPABASE_AUDIO_BUCKET`, `SUPABASE_AUDIO_PREFIX`, `CORS_ALLOW_ORIGINS`, and `LOG_LEVEL`.
+- `POST /analyze-full` still exists as a synchronous fallback path for older deployments or troubleshooting.
 
 ### Persistence model
-- **On-device:** app settings, imported songs, and local experience state stay inside the mobile app for a fast, resilient UX.
-- **Backend shared data:** traffic-analysis saves and leaderboard records flow through FastAPI so the app only deals with one API surface.
-- **Recovery mode:** if Firestore is missing or unhealthy, the backend writes to `backend/traffic_db.json` and `backend/leaderboard_db.json` so user actions still complete.
+- **On-device:** app settings, imported songs, and gamification cache stay inside the mobile app for a fast, resilient UX.
+- **Supabase-backed:** auth sessions, uploaded audio, tracks, markers, AI jobs, generated song lessons, and leaderboard data live in Supabase.
+- **Recovery mode:** incomplete analysis jobs can resume on backend startup because audio URLs and job metadata are persisted in Supabase before worker threads begin.
 
 ---
 
@@ -277,6 +313,7 @@ The mobile app lives in [`./MusicAIApp`](./MusicAIApp).
 - **Expo 54**
 - **React Native 0.81**
 - **TypeScript**
+- **Supabase JS**
 - **React Navigation**
 - **React Native Reanimated**
 - **Gesture Handler**
@@ -289,6 +326,7 @@ The mobile app lives in [`./MusicAIApp`](./MusicAIApp).
 - **WatermelonDB**
 
 ### Frontend responsibilities
+- handle auth state and authenticated identity
 - render all learning and practice screens
 - manage local UI state
 - store app settings locally
@@ -310,16 +348,18 @@ The backend lives in [`./backend`](./backend).
 - **librosa**
 - **NumPy**
 - **scikit-learn**
-- **Firebase Admin SDK**
-- **Firestore**
+- **Supabase Python client**
+- **Supabase Storage + Postgres**
+- **SoundFile**
 
 ### Backend responsibilities
 - BPM analysis
 - full-track structure analysis
+- AI song-manifest generation for imports
 - pitch detection fallback from uploaded audio clips
-- traffic-analysis persistence
-- leaderboard profile sync
-- leaderboard retrieval
+- upload persistence to Supabase Storage
+- job persistence and recovery through `ai_analysis_jobs`
+- leaderboard profile sync and retrieval
 
 ---
 
@@ -368,6 +408,31 @@ sequenceDiagram
     A->>U: Show combo, accuracy, and summary
 ```
 
+### AI song import flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Song Flow
+    participant B as FastAPI
+    participant S as Supabase
+    participant W as Worker Thread
+
+    U->>A: Pick one audio file
+    A->>B: POST /analyze-audio
+    B->>S: Upload audio + insert track/job rows
+    B->>W: Schedule transcription worker
+    B-->>A: Return task_id
+    loop Poll task status
+        A->>B: GET /task-status/{task_id}
+        B-->>A: processing / completed
+    end
+    W->>W: Infer BPM, beat grid, chords, and tab notes
+    W->>S: Insert generated song lesson + update job result
+    B-->>A: Completed song manifest payload
+    A->>A: Save imported song locally and open it
+```
+
 ### Traffic analysis flow
 
 ```mermaid
@@ -375,12 +440,13 @@ sequenceDiagram
     participant U as User
     participant A as Expo App
     participant B as FastAPI
-    participant T as BackgroundTasks
-    participant F as Firestore / local JSON
+    participant S as Supabase
+    participant W as Worker Thread
 
     U->>A: Pick audio file
     A->>B: POST /upload-audio
-    B->>T: Queue background job
+    B->>S: Upload audio + insert track/job rows
+    B->>W: Schedule analysis worker
     B-->>A: Return task_id
     loop While app is active
         A->>B: GET /task-status/{task_id}
@@ -390,15 +456,15 @@ sequenceDiagram
         A->>A: Pause polling
         A->>A: Resume polling when active again
     end
-    T->>T: Load audio with librosa
-    T->>T: Estimate BPM
-    T->>T: Segment song structure
-    T-->>B: Store BPM + markers
+    W->>W: Load audio with librosa
+    W->>W: Estimate BPM
+    W->>W: Segment song structure
+    W->>S: Persist BPM + markers
     B-->>A: Completed analysis payload
     A->>U: Update Studio waveform + markers
     U->>A: Save study
     A->>B: POST /save-traffic
-    B->>F: Persist analysis
+    B->>S: Persist analysis
 ```
 
 ---
@@ -474,7 +540,7 @@ sequenceDiagram
 - receives a `task_id` immediately and polls for progress/result updates
 - pauses polling while the app is backgrounded and resumes when the app returns active
 - applies BPM + section markers to the waveform strip when the job completes
-- saves analysis data for later review through Firestore with local JSON fallback
+- saves analysis data for later review through Supabase-backed track and marker rows
 
 **Built-in use cases**
 - arrangement study
@@ -489,6 +555,7 @@ sequenceDiagram
 **Files involved**
 - [`MusicAIApp/src/screens/SongScreen.tsx`](./MusicAIApp/src/screens/SongScreen.tsx)
 - [`MusicAIApp/src/data/songLessons.ts`](./MusicAIApp/src/data/songLessons.ts)
+- [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts)
 - [`MusicAIApp/src/services/songLibrary.ts`](./MusicAIApp/src/services/songLibrary.ts)
 
 **What it does**
@@ -496,6 +563,7 @@ sequenceDiagram
 - plays backing tracks with transport controls
 - renders chord and tab guidance in a premium shell
 - scores chord mode with live microphone listening
+- imports a single audio file and lets the backend generate a starter chord/tab chart through `POST /analyze-audio`
 - uses tabs mode as timing-guided playback
 - stores imported songs locally for reuse
 
@@ -514,7 +582,7 @@ sequenceDiagram
 - [`MusicAIApp/src/services/appSettings.ts`](./MusicAIApp/src/services/appSettings.ts)
 
 **What it does**
-- stores player identity locally
+- uses Supabase-backed auth for player identity
 - tracks streaks and completions
 - unlocks badges based on actual activity
 - syncs leaderboard data when enabled
@@ -577,30 +645,40 @@ TuneUp/
 | Method | Endpoint | Purpose |
 |---|---|---|
 | `GET` | `/` | readiness message with storage summary |
-| `GET` | `/healthz` | backend status, storage mode, and Firebase health |
+| `GET` | `/healthz` | backend status and live Supabase connectivity |
 | `POST` | `/recommend` | mood-based song recommendation demo |
 | `POST` | `/analyze-bpm` | simple BPM detection |
 | `POST` | `/detect-pitch` | backend pitch detection fallback |
-| `POST` | `/upload-audio` | upload a track and create a background song-analysis job |
-| `GET` | `/task-status/{task_id}` | fetch progress or completed results for an analysis task |
-| `POST` | `/save-traffic` | persist a traffic analysis to Firestore or local JSON fallback |
-| `GET` | `/get-traffic` | fetch saved traffic analyses from the active persistence layer |
-| `POST` | `/sync-leaderboard` | sync leaderboard profile data to the active persistence layer |
-| `GET` | `/leaderboard` | fetch top leaderboard entries from the active persistence layer |
+| `POST` | `/upload-audio` | upload a track and create an async Studio Grid analysis job |
+| `POST` | `/analyze-audio` | upload a track and create an async AI song-import job |
+| `GET` | `/task-status/{task_id}` | fetch progress or completed results for either async job type |
+| `POST` | `/save-traffic` | persist a saved traffic study into Supabase-backed track data |
+| `GET` | `/get-traffic` | fetch saved traffic analyses from Supabase |
+| `POST` | `/sync-leaderboard` | sync profile progress into Supabase-backed user/progress tables |
+| `GET` | `/leaderboard` | fetch top leaderboard entries from Supabase |
 | `POST` | `/analyze-full` | legacy synchronous BPM + structure analysis fallback |
 
 ---
 
-## 🎼 Song Import Format
+## 🎼 Song Import Workflows
 
 Song import is handled by [`MusicAIApp/src/services/songLibrary.ts`](./MusicAIApp/src/services/songLibrary.ts).
 
-### Required import flow
+### AI-assisted import flow
+- choose a single **audio file** inside Song Flow
+- the app uploads it to `POST /analyze-audio`
+- the frontend polls `GET /task-status/{task_id}`
+- the backend returns an AI-generated `songManifest`
+- the app persists the imported song locally and opens it immediately
+
+If transcription confidence is too low, the backend can still return a safe starter strum map with `fallbackUsed = true` so the song remains playable.
+
+### Manual import flow
 - choose an **audio file**
 - choose a **JSON manifest**
 - import into the local Song Flow library
 
-### Supported JSON structure
+### Supported JSON manifest structure
 
 ```json
 {
@@ -634,12 +712,15 @@ Song import is handled by [`MusicAIApp/src/services/songLibrary.ts`](./MusicAIAp
 ### Frontend
 - Node.js 18+
 - npm
+- Supabase project URL + anon key for Expo
 - Xcode Simulator for iOS testing or Android Studio for Android testing
 
 ### Backend
 - Python 3.11+ recommended
 - virtual environment support
-- Firebase credentials for Firestore-backed features if you want durable cloud storage
+- Supabase project URL + server-side key with storage and database access
+
+No `.env.example` files are currently checked in, so create local `.env` files for the frontend and backend using the snippets below.
 
 ---
 
@@ -660,37 +741,54 @@ Create and activate a Python virtual environment if needed, then install the bac
 cd backend
 python3 -m venv venv
 source venv/bin/activate
-pip install fastapi uvicorn python-multipart librosa numpy scikit-learn firebase-admin
+pip install -r requirements.txt
 ```
 
 ### Backend environment setup
 
-The backend now supports both local-file credentials and environment-based deployment credentials.
+Create a local `backend/.env` file:
 
-Firebase credential resolution currently works in this order:
-1. `FIREBASE_SERVICE_ACCOUNT_JSON`
-2. `GOOGLE_APPLICATION_CREDENTIALS`
-3. `backend/serviceAccountKey.json`
-
-Example values live in:
-
-```text
-backend/.env.example
+```dotenv
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_KEY=YOUR_SUPABASE_SERVER_KEY
+CORS_ALLOW_ORIGINS=*
+SUPABASE_AUDIO_BUCKET=audio-uploads
+SUPABASE_AUDIO_PREFIX=analysis
+LOG_LEVEL=INFO
 ```
 
-If Firebase is unavailable, the backend still boots, `GET /healthz` reports the degraded state, and the API falls back to local JSON storage for traffic saves and leaderboard data.
+What these values do:
+- `SUPABASE_URL` and `SUPABASE_KEY` are required for backend startup.
+- `SUPABASE_AUDIO_BUCKET` and `SUPABASE_AUDIO_PREFIX` control where uploaded audio is stored.
+- `CORS_ALLOW_ORIGINS` is optional and can stay `*` for local mobile development.
+- `LOG_LEVEL` is optional and defaults to `INFO`.
+
+The backend will not boot without `SUPABASE_URL` and `SUPABASE_KEY`. If Supabase becomes unreachable after boot, `GET /healthz` returns a degraded response and async writes will fail until connectivity is restored.
 
 ### Run the backend
 
 ```bash
 cd "/path/to/project/backend"
 source venv/bin/activate
+set -a
+source .env
+set +a
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
 
 ### 3. Start the frontend
+
+Create a local `MusicAIApp/.env` file:
+
+```dotenv
+EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+```
+
+Then install dependencies and start Expo:
 
 ```bash
 cd "/path/to/project/MusicAIApp"
@@ -707,15 +805,7 @@ You can then open:
 
 ### 4. Configure frontend API access
 
-The current frontend request target is the `BASE_URL` constant in [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts).
-
-[`MusicAIApp/.env.example`](./MusicAIApp/.env.example) documents the intended `EXPO_PUBLIC_API_BASE_URL` value for hosted deployments, but this repo snapshot still uses the in-file constant unless you wire the env var into the app code.
-
-Use the example file as the naming reference for hosted configuration, or wire it into the app if you want env-driven frontend URL resolution:
-
-```text
-MusicAIApp/.env.example
-```
+The frontend resolves its backend target from `EXPO_PUBLIC_API_BASE_URL` inside [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts), falling back to `http://localhost:8000` when the variable is not set.
 
 ### Typical values
 - Render: `https://YOUR_RENDER_SERVICE.onrender.com`
@@ -729,15 +819,20 @@ To find your local IP on macOS:
 ipconfig getifaddr en0
 ```
 
+The frontend Supabase client also requires:
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+
 ### 5. End-to-end smoke path
 
 Once both services are running, this is the fastest way to confirm the full stack is healthy:
 
-1. Open `http://127.0.0.1:8000/healthz` and confirm the backend responds.
-2. Launch the Expo app and point `BASE_URL` at the backend you want to test.
+1. Open `http://127.0.0.1:8000/healthz` and confirm Supabase is connected.
+2. Launch the Expo app and sign in or create an account.
 3. Open **Studio Grid**, pick an audio file, and tap **Scan**.
 4. Confirm the UI shows upload/progress messaging first, then BPM + section markers after completion.
-5. Save the study and verify the backend reports either Firestore storage or local JSON fallback.
+5. Open **Song Flow**, import one audio file, and confirm the AI-generated song opens after polling completes.
+6. Save a traffic study and verify the backend reports `storage: "supabase"`.
 
 ---
 
@@ -748,9 +843,8 @@ Security is critical for this project because it contains mobile app code, backe
 ### Never commit
 - `.env`
 - `.env.*`
-- `serviceAccountKey.json`
-- `backend/traffic_db.json`
-- `backend/leaderboard_db.json`
+- Supabase service-role or other server-side keys
+- exported storage objects or database dumps
 - `node_modules/`
 - `venv/`
 - `.venv/`
@@ -761,12 +855,12 @@ Security is critical for this project because it contains mobile app code, backe
 
 ### Included protections
 - a root-level `.gitignore` should block sensitive and bulky files
-- `backend/serviceAccountKey.json` is intended to stay local only
-- backend JSON fallback stores are runtime data and should stay local only
+- frontend only needs the public anon key, while the backend should keep the server-side key private
 - uploads and generated caches should stay out of version control
 
 ### Recommended security practices
-- use a dedicated Firebase service account with the minimum required permissions
+- use the anon key in Expo and keep elevated Supabase keys on the backend only
+- audit and remove any stale legacy cloud-service keys from the repo before publishing it
 - rotate credentials if a secret was ever committed in the past
 - keep repository visibility private until secret hygiene is verified
 - use environment-specific backend configs instead of hardcoding production secrets
@@ -780,6 +874,7 @@ Recommended checks before every push:
 ```bash
 cd MusicAIApp
 npx tsc --noEmit
+npm test
 npx expo-doctor
 ```
 
@@ -797,16 +892,23 @@ curl http://127.0.0.1:8000/
 curl http://127.0.0.1:8000/healthz
 ```
 
+Manual async smoke checks:
+- run one Studio Grid scan through `POST /upload-audio`
+- run one Song Flow AI import through `POST /analyze-audio`
+
 ---
 
 ## 🚚 Deployment Notes
 
 ### Mobile app
-This project is optimized for Expo development, and the mobile app can point at either a local backend or a hosted service such as Render. In the current repo snapshot, that target is still controlled by `BASE_URL` in [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts).
+This project is optimized for Expo development, and the mobile app is now configured through Expo public env vars:
+- `EXPO_PUBLIC_API_BASE_URL`
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 
 A production release path would typically include:
 - EAS Build for mobile binaries
-- environment-backed API configuration or a deployment-specific `BASE_URL`
+- environment-backed API and Supabase configuration
 - proper asset optimization
 - analytics / crash reporting
 - app-store compliant permission copy
@@ -825,16 +927,20 @@ Production hardening would include:
 - request limits / abuse protection
 - monitoring and logs
 - storage cleanup policies for uploaded files
-- durable cloud storage for leaderboard and traffic-analysis persistence
+- reliable Supabase connectivity for auth, storage, jobs, and synced progress
+- verifying worker-thread recovery behavior after restarts
 
 ### Render-specific notes
-- use `/` or `/healthz` to verify the service is awake and whether Firestore is connected
-- set `FIREBASE_SERVICE_ACCOUNT_JSON` if you want Firestore-backed traffic saves and leaderboard sync
+- set `SUPABASE_URL` and `SUPABASE_KEY`
 - set `CORS_ALLOW_ORIGINS` if you are calling the API from web origins
-- point the mobile app to the live backend by updating `BASE_URL` in [`MusicAIApp/src/services/api.ts`](./MusicAIApp/src/services/api.ts), or by wiring `EXPO_PUBLIC_API_BASE_URL` into the app first
+- optionally set `SUPABASE_AUDIO_BUCKET`, `SUPABASE_AUDIO_PREFIX`, and `LOG_LEVEL`
+- point the mobile app to the live backend with `EXPO_PUBLIC_API_BASE_URL`
 - expect Studio Grid scans to use `POST /upload-audio` plus `GET /task-status/{task_id}` polling instead of one long blocking request
+- expect Song Flow imports to use `POST /analyze-audio` plus the same task polling endpoint
 - expect hosted instances to cold-start occasionally; the frontend already warms the backend before uploads
-- if Firebase is misconfigured, the backend falls back to local JSON storage so analysis and save flows keep responding, but Firestore is still the durable production path
+- use `/healthz` to confirm the backend can still reach Supabase after deploys or restarts
+- incomplete async jobs can resume on backend startup because job state is stored in Supabase
+- if Supabase is unavailable, the backend reports degraded health and async writes fail until connectivity returns
 
 ---
 
@@ -846,7 +952,7 @@ Production hardening would include:
 git branch -M main
 git remote set-url origin <YOUR_GITHUB_REPO_URL>
 git rm -r --cached --ignore-unmatch backend/__pycache__ backend/uploads backend/venv .venv MusicAIApp/node_modules MusicAIApp/.expo
-git rm --cached --ignore-unmatch backend/serviceAccountKey.json .env .env.*
+git rm --cached --ignore-unmatch backend/serviceAccountKey.json backend/.env MusicAIApp/.env .env .env.*
 git add -A
 git commit -m "Initial secure project import"
 git push -u origin main
@@ -877,16 +983,18 @@ This helps catch accidental commits before they go to GitHub.
 ## 📝 Current Status
 
 ### Product areas already implemented
+- ✅ Supabase-authenticated app shell
 - ✅ multi-tab mobile app shell
 - ✅ live tuner / practice experience
 - ✅ structured lesson packs
 - ✅ theory quiz and puzzle modes
 - ✅ audio chord quiz
 - ✅ song flow with chords + tabs
+- ✅ async AI song import from a single audio file
 - ✅ local song import
 - ✅ studio traffic analysis workflow
 - ✅ profile dashboard
-- ✅ streaks, XP, badges, leaderboard sync
+- ✅ streaks, XP, badges, and Supabase-backed leaderboard sync
 - ✅ premium transitions, loading states, and celebration overlays
 
 ### Current packaged content
@@ -902,7 +1010,7 @@ This helps catch accidental commits before they go to GitHub.
 - more advanced chord recognition
 - deeper analytics and session history
 - additional badge sets and seasonal challenges
-- cloud-authenticated user accounts
+- richer collaborative and social layers on top of the existing auth stack
 
 ---
 
@@ -915,5 +1023,5 @@ This repository is structured to support both:
 If you want this README to go one level further, the next strong step would be adding:
 - more simulator screenshots for each tab
 - an animated demo GIF
-- EAS build / release instructions
-- backend deployment instructions for one specific host
+- checked-in `.env.example` files for frontend and backend
+- one concrete Supabase schema / deployment guide for a chosen host

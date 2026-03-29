@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
+    Animated,
     Dimensions,
+    Easing,
     Platform,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
-    TouchableOpacity,
     View,
 } from 'react-native';
 import { Audio, AVPlaybackStatus } from 'expo-av';
@@ -23,6 +24,7 @@ import PageTransitionView from '../components/PageTransitionView';
 import PremiumBackdrop from '../components/PremiumBackdrop';
 import PremiumCelebrationOverlay from '../components/PremiumCelebrationOverlay';
 import PremiumHeroStrip from '../components/PremiumHeroStrip';
+import PracticeFlowShell from '../components/PracticeFlowShell';
 import ScreenSettingsButton from '../components/ScreenSettingsButton';
 import SkeletonBlock from '../components/SkeletonBlock';
 import { useCelebration } from '../hooks/useCelebration';
@@ -34,7 +36,8 @@ import {
     useTuner,
 } from '../hooks/useTuner';
 import { GamificationSnapshot, getGamificationSnapshot, rewardPracticeActivity } from '../services/gamification';
-import { importSongFromFiles, loadImportedSongs } from '../services/songLibrary';
+import { analyzeAudioForSongImport, fetchSongImportTaskStatus } from '../services/api';
+import { importSongFromGeneratedManifest, loadImportedSongs } from '../services/songLibrary';
 import { COLORS, SHADOWS } from '../theme';
 
 const { width } = Dimensions.get('window');
@@ -54,20 +57,20 @@ const STRING_LABELS = ['e', 'B', 'G', 'D', 'A', 'E'];
 type SongPanel = 'chords' | 'tabs' | 'guide';
 
 const SONG_COLORS = {
-    backgroundA: COLORS.background,
-    backgroundB: COLORS.backgroundAlt,
-    panel: COLORS.panel,
-    panelRaised: COLORS.panelAlt,
-    rail: COLORS.panelInset,
-    railSoft: COLORS.backgroundAlt,
-    primary: COLORS.primary,
-    secondary: COLORS.secondary,
-    highlight: COLORS.accent,
+    backgroundA: COLORS.deepBackground,
+    backgroundB: COLORS.deepSurface,
+    panel: COLORS.deepSurface,
+    panelRaised: COLORS.deepSurfaceAlt,
+    rail: '#3c2a6c',
+    railSoft: '#2d2251',
+    primary: '#64dfdf',
+    secondary: '#56cfe1',
+    highlight: '#80ffdb',
     miss: COLORS.danger,
-    text: COLORS.textStrong,
-    textDim: COLORS.textDim,
-    textMute: COLORS.text,
-    border: COLORS.pixelLine,
+    text: '#F7FAFF',
+    textDim: '#B8CCE3',
+    textMute: '#8FAAC7',
+    border: '#56cfe1',
 };
 
 interface SongScore {
@@ -142,13 +145,13 @@ function buildWaveBandPath(w: number, h: number, phase: number, baseline: number
 
 function getChordColor(chord: string) {
     const palette: Record<string, string> = {
-        C: COLORS.primary,
-        Dm: COLORS.secondary,
-        Em: COLORS.success,
-        F: COLORS.warning,
-        G: COLORS.accent,
-        Am: '#72efdd',
-        Bm: '#80ffdb',
+        C: '#7400b8',
+        Dm: '#6930c3',
+        Em: '#5e60ce',
+        F: '#5390d9',
+        G: '#4ea8de',
+        Am: '#64dfdf',
+        Bm: '#72efdd',
     };
 
     return palette[chord] ?? SONG_COLORS.primary;
@@ -229,6 +232,48 @@ function toLiveTabTarget(note: SongLesson['tabNotes'][number], index: number): L
     };
 }
 
+function estimateSongImportProgress(progressText: string) {
+    const normalized = progressText.toLowerCase();
+
+    if (normalized.includes('complete')) {
+        return 1;
+    }
+
+    if (normalized.includes('saving')) {
+        return 0.92;
+    }
+
+    if (normalized.includes('tab pattern')) {
+        return 0.82;
+    }
+
+    if (normalized.includes('chord')) {
+        return 0.68;
+    }
+
+    if (normalized.includes('bpm') || normalized.includes('beat')) {
+        return 0.52;
+    }
+
+    if (normalized.includes('transcribing')) {
+        return 0.36;
+    }
+
+    if (normalized.includes('preparing')) {
+        return 0.24;
+    }
+
+    if (normalized.includes('upload')) {
+        return 0.16;
+    }
+
+    return 0.28;
+}
+
+function delay(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function getChordLaneY(row: number) {
     return 82 + (row * 52);
 }
@@ -237,13 +282,19 @@ function getStringY(index: number) {
     return 62 + (index * 36);
 }
 
-export default function SongScreen() {
+export default function SongScreen({
+    route,
+}: {
+    route?: { params?: { focusSongId?: string } };
+}) {
     const tabBarHeight = useBottomTabBarHeight();
     const [librarySongs, setLibrarySongs] = useState<SongLesson[]>([]);
     const [selectedSong, setSelectedSong] = useState<SongLesson>(SONG_LESSONS[0]);
     const [activePanel, setActivePanel] = useState<SongPanel>('chords');
     const [isPlaying, setIsPlaying] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
+    const [importProgressText, setImportProgressText] = useState('Pick one audio file and AI will build your chords and tabs.');
+    const [importProgressValue, setImportProgressValue] = useState(0);
     const [playbackSec, setPlaybackSec] = useState(0);
     const [perfectCount, setPerfectCount] = useState(0);
     const [goodCount, setGoodCount] = useState(0);
@@ -273,6 +324,7 @@ export default function SongScreen() {
     const playbackAnchorSecRef = useRef(0);
     const playbackAnchorStampRef = useRef(Date.now());
     const isPlayingRef = useRef(false);
+    const importShimmerAnim = useRef(new Animated.Value(0)).current;
     const nextTabTarget = useMemo(() => {
         const nextNote = selectedSong.tabNotes
             .map((note, index) => toLiveTabTarget(note, index))
@@ -312,6 +364,7 @@ export default function SongScreen() {
     const stopTuner = tuner.stop;
 
     const allSongs = useMemo(() => [...librarySongs, ...SONG_LESSONS], [librarySongs]);
+    const focusSongId = route?.params?.focusSongId ?? null;
 
     const loadSessionPrefs = useCallback(async () => {
         const [snapshot, settings] = await Promise.all([
@@ -326,6 +379,19 @@ export default function SongScreen() {
     useEffect(() => {
         selectedSongRef.current = selectedSong;
     }, [selectedSong]);
+
+    useEffect(() => {
+        if (!focusSongId) {
+            return;
+        }
+
+        const targetSong = allSongs.find((song) => song.id === focusSongId);
+        if (!targetSong || targetSong.id === selectedSong.id) {
+            return;
+        }
+
+        void selectSong(targetSong);
+    }, [allSongs, focusSongId, selectedSong.id]);
 
     useEffect(() => {
         void (async () => {
@@ -362,6 +428,29 @@ export default function SongScreen() {
             setMicStatus(getIdleSongStatus(activePanel));
         }
     }, [activePanel]);
+
+    useEffect(() => {
+        if (!isImporting) {
+            importShimmerAnim.stopAnimation();
+            importShimmerAnim.setValue(0);
+            return;
+        }
+
+        const loop = Animated.loop(
+            Animated.timing(importShimmerAnim, {
+                toValue: 1,
+                duration: 1450,
+                easing: Easing.linear,
+                useNativeDriver: true,
+            }),
+        );
+        loop.start();
+
+        return () => {
+            loop.stop();
+            importShimmerAnim.setValue(0);
+        };
+    }, [importShimmerAnim, isImporting]);
 
     useEffect(() => {
         // This keeps the lane moving even between audio status updates.
@@ -517,6 +606,11 @@ export default function SongScreen() {
             : isPlaying
                 ? tuner.displayStatus
                 : micStatus;
+
+    const importShimmerTranslateX = importShimmerAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [-180, 280],
+    });
 
     const showHitFlash = (result: HitResult) => {
         if (flashTimeoutRef.current) {
@@ -754,6 +848,8 @@ export default function SongScreen() {
 
     const importSong = async () => {
         setIsImporting(true);
+        setImportProgressText('Choose an audio file to start AI transcription.');
+        setImportProgressValue(0.08);
 
         try {
             const audioResult = await DocumentPicker.getDocumentAsync({
@@ -765,21 +861,53 @@ export default function SongScreen() {
                 return;
             }
 
-            const chartResult = await DocumentPicker.getDocumentAsync({
-                type: ['application/json', 'text/json', 'public.json'],
-                copyToCacheDirectory: true,
-            });
+            const audioAsset = audioResult.assets[0];
+            setImportProgressText('Uploading audio for AI transcription...');
+            setImportProgressValue(0.14);
 
-            if (chartResult.canceled) {
-                return;
+            const accepted = await analyzeAudioForSongImport(audioAsset.uri, audioAsset.name, gameSnapshot?.userId);
+            if (accepted.status !== 'accepted') {
+                throw new Error(accepted.message);
             }
 
-            const importedSong = await importSongFromFiles(audioResult.assets[0], chartResult.assets[0]);
+            setImportProgressText(accepted.progressText);
+            setImportProgressValue(estimateSongImportProgress(accepted.progressText));
+
+            let completedResult = null;
+            for (let attempt = 0; attempt < 90; attempt += 1) {
+                const status = await fetchSongImportTaskStatus(accepted.taskId);
+
+                if (status.status === 'completed') {
+                    completedResult = status.result;
+                    break;
+                }
+
+                if (status.status === 'failed' || status.status === 'error') {
+                    throw new Error(status.message);
+                }
+
+                if (status.status === 'processing') {
+                    setImportProgressText(status.progressText);
+                    setImportProgressValue((prev) => Math.max(prev, estimateSongImportProgress(status.progressText)));
+                }
+                await delay(2400);
+            }
+
+            if (!completedResult) {
+                throw new Error('AI transcription timed out. Please try the import again.');
+            }
+
+            setImportProgressText('Finalizing your imported song...');
+            setImportProgressValue(0.98);
+
+            const importedSong = await importSongFromGeneratedManifest(audioAsset, completedResult.songManifest);
             setLibrarySongs((prev) => [importedSong, ...prev.filter((song) => song.id !== importedSong.id)]);
             await selectSong(importedSong);
             showCelebration({
                 title: 'Song imported',
-                subtitle: `${importedSong.title} is ready in your library.`,
+                subtitle: completedResult.fallbackUsed
+                    ? `${importedSong.title} is ready with a safe starter strum map.`
+                    : `${importedSong.title} is ready at ${completedResult.bpm} BPM.`,
                 variant: 'confetti',
             }, 2200);
         } catch (error) {
@@ -787,6 +915,8 @@ export default function SongScreen() {
             Alert.alert('Import failed', message);
         } finally {
             setIsImporting(false);
+            setImportProgressValue(0);
+            setImportProgressText('Pick one audio file and AI will build your chords and tabs.');
         }
     };
 
@@ -1073,20 +1203,30 @@ export default function SongScreen() {
                 )}
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.songPickerRow}>
-                    <TouchableOpacity
-                        style={[styles.songChip, styles.importChip]}
+                    <Pressable
+                        style={({ pressed }) => [
+                            styles.songChip,
+                            styles.importChip,
+                            pressed && styles.songChipPressed,
+                        ]}
                         onPress={() => void importSong()}
                         disabled={isImporting}
                     >
-                        <Text style={styles.importChipTitle}>{isImporting ? 'Importing...' : 'Import Song'}</Text>
-                        <Text style={styles.importChipMeta}>Pick audio + JSON tabs/chords</Text>
+                        <Text style={styles.importChipTitle}>{isImporting ? 'AI Listening...' : 'AI Import'}</Text>
+                        <Text style={styles.importChipMeta}>
+                            {isImporting ? importProgressText : 'Pick one audio file. AI builds BPM, chords, beat grid, and tabs.'}
+                        </Text>
                         <Text style={styles.importChipTag}>YOUR LIBRARY</Text>
-                    </TouchableOpacity>
+                    </Pressable>
 
                     {allSongs.map((song) => (
-                        <TouchableOpacity
+                        <Pressable
                             key={song.id}
-                            style={[styles.songChip, selectedSong.id === song.id && styles.songChipActive]}
+                            style={({ pressed }) => [
+                                styles.songChip,
+                                selectedSong.id === song.id && styles.songChipActive,
+                                pressed && styles.songChipPressed,
+                            ]}
                             onPress={() => void selectSong(song)}
                         >
                             <Text style={styles.songChipTitle}>{song.title}</Text>
@@ -1094,64 +1234,109 @@ export default function SongScreen() {
                                 {song.artist}{song.isImported ? ' • Imported' : ' • Starter'}
                             </Text>
                             <Text style={styles.songChipDifficulty}>{song.difficulty}</Text>
-                        </TouchableOpacity>
+                        </Pressable>
                     ))}
                 </ScrollView>
 
-                <View style={styles.playerShell}>
-                    <View style={styles.songMetaRow}>
-                        <View style={styles.songMetaMain}>
-                            <Text style={styles.songTitle}>{selectedSong.title}</Text>
-                            <Text style={styles.songArtist}>{selectedSong.artist}</Text>
+                {isImporting ? (
+                    <LinearGradient
+                        colors={['rgba(116, 0, 184, 0.44)', 'rgba(94, 96, 206, 0.28)', 'rgba(128, 255, 219, 0.16)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.importProgressCard}
+                    >
+                        <View style={styles.importProgressHeader}>
+                            <Text style={styles.importProgressEyebrow}>AI Import</Text>
+                            <Text style={styles.importProgressPercent}>{Math.round(importProgressValue * 100)}%</Text>
                         </View>
-                        <View style={styles.difficultyPill}>
-                            <Text style={styles.difficultyText}>{selectedSong.difficulty}</Text>
+                        <Text style={styles.importProgressTitle}>AI is transcribing your song...</Text>
+                        <Text style={styles.importProgressBody}>{importProgressText}</Text>
+                        <View style={styles.importProgressTrack}>
+                            <LinearGradient
+                                colors={['#7400b8', '#5e60ce', '#64dfdf', '#80ffdb']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={[
+                                    styles.importProgressFill,
+                                    { width: `${Math.max(importProgressValue * 100, 8)}%` },
+                                ]}
+                            />
+                            <Animated.View
+                                pointerEvents="none"
+                                style={[
+                                    styles.importProgressShimmer,
+                                    { transform: [{ translateX: importShimmerTranslateX }, { skewX: '-16deg' }] },
+                                ]}
+                            />
                         </View>
-                    </View>
+                    </LinearGradient>
+                ) : null}
 
-                    <View style={styles.hudRibbon}>
-                        <View style={styles.hudPill}>
-                            <Text style={styles.hudLabel}>TIME</Text>
-                            <Text style={styles.hudValue}>{playbackSec.toFixed(1)}s / {selectedSong.durationSec.toFixed(1)}s</Text>
-                        </View>
-                        <View style={styles.hudPill}>
-                            <Text style={styles.hudLabel}>NEXT</Text>
-                            <Text style={styles.hudValue}>{displayMode === 'tabs' ? nextTabLabel : nextChord}</Text>
-                        </View>
-                        <View style={styles.hudPill}>
-                            <Text style={styles.hudLabel}>{activePanel === 'tabs' ? 'HITS' : displayMode === 'chords' ? 'COMBO' : 'NOTES'}</Text>
-                            <Text style={styles.hudValue}>{activePanel === 'tabs' ? tabHitNonce : displayMode === 'chords' ? combo : selectedSong.tabNotes.length}</Text>
-                        </View>
-                    </View>
+                <PracticeFlowShell
+                    headerContent={(
+                        <>
+                            <View style={styles.songMetaRow}>
+                                <View style={styles.songMetaMain}>
+                                    <Text style={styles.songTitle}>{selectedSong.title}</Text>
+                                    <Text style={styles.songArtist}>{selectedSong.artist}</Text>
+                                </View>
+                                <View style={styles.difficultyPill}>
+                                    <Text style={styles.difficultyText}>{selectedSong.difficulty}</Text>
+                                </View>
+                            </View>
 
-                    <View style={styles.seekHeaderRow}>
-                        <Text style={styles.seekHeaderText}>Tap the bar or jump with the seek buttons.</Text>
-                        <Text style={styles.seekHeaderText}>{Math.round(progress * 100)}%</Text>
-                    </View>
-                    <Pressable style={styles.seekTrack} onPress={(event) => void seekToTime((event.nativeEvent.locationX / LANE_WIDTH) * selectedSong.durationSec)}>
-                        <View style={[styles.seekFill, { width: `${progress * 100}%` }]} />
-                        <View style={[styles.seekThumb, { left: Math.max(0, Math.min(LANE_WIDTH - 16, (progress * LANE_WIDTH) - 8)) }]} />
-                    </Pressable>
+                            <View style={styles.hudRibbon}>
+                                <View style={styles.hudPill}>
+                                    <Text style={styles.hudLabel}>TIME</Text>
+                                    <Text style={styles.hudValue}>{playbackSec.toFixed(1)}s / {selectedSong.durationSec.toFixed(1)}s</Text>
+                                </View>
+                                <View style={styles.hudPill}>
+                                    <Text style={styles.hudLabel}>NEXT</Text>
+                                    <Text style={styles.hudValue}>{displayMode === 'tabs' ? nextTabLabel : nextChord}</Text>
+                                </View>
+                                <View style={styles.hudPill}>
+                                    <Text style={styles.hudLabel}>{activePanel === 'tabs' ? 'HITS' : displayMode === 'chords' ? 'COMBO' : 'NOTES'}</Text>
+                                    <Text style={styles.hudValue}>{activePanel === 'tabs' ? tabHitNonce : displayMode === 'chords' ? combo : selectedSong.tabNotes.length}</Text>
+                                </View>
+                            </View>
 
-                    <View style={styles.segmentedRow}>
-                        {(['chords', 'tabs', 'guide'] as SongPanel[]).map((panel) => {
-                            const isActive = activePanel === panel;
-                            return (
-                                <TouchableOpacity
-                                    key={panel}
-                                    style={[styles.segmentButton, isActive && styles.segmentButtonActive]}
-                                    onPress={() => setActivePanel(panel)}
-                                >
-                                    <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
-                                        {panel.charAt(0).toUpperCase() + panel.slice(1)}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
+                            <View style={styles.seekHeaderRow}>
+                                <Text style={styles.seekHeaderText}>Tap the bar or jump with the seek buttons.</Text>
+                                <Text style={styles.seekHeaderText}>{Math.round(progress * 100)}%</Text>
+                            </View>
+                            <Pressable
+                                style={({ pressed }) => [styles.seekTrack, pressed && styles.seekTrackPressed]}
+                                onPress={(event) => void seekToTime((event.nativeEvent.locationX / LANE_WIDTH) * selectedSong.durationSec)}
+                            >
+                                <View style={[styles.seekFill, { width: `${progress * 100}%` }]} />
+                                <View style={[styles.seekThumb, { left: Math.max(0, Math.min(LANE_WIDTH - 16, (progress * LANE_WIDTH) - 8)) }]} />
+                            </Pressable>
 
-                    <View style={styles.laneWrap}>
-                        <Canvas style={{ width: LANE_WIDTH, height: LANE_HEIGHT }}>
+                            <View style={styles.segmentedRow}>
+                                {(['chords', 'tabs', 'guide'] as SongPanel[]).map((panel) => {
+                                    const isActive = activePanel === panel;
+                                    return (
+                                        <Pressable
+                                            key={panel}
+                                            style={({ pressed }) => [
+                                                styles.segmentButton,
+                                                isActive && styles.segmentButtonActive,
+                                                pressed && styles.segmentButtonPressed,
+                                            ]}
+                                            onPress={() => setActivePanel(panel)}
+                                        >
+                                            <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
+                                                {panel.charAt(0).toUpperCase() + panel.slice(1)}
+                                            </Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+                        </>
+                    )}
+                    laneContent={(
+                        <View style={styles.laneWrap}>
+                            <Canvas style={{ width: LANE_WIDTH, height: LANE_HEIGHT }}>
                             <Rect x={0} y={0} width={LANE_WIDTH} height={LANE_HEIGHT} color={SONG_COLORS.panelRaised} />
                             <Rect x={0} y={0} width={LANE_WIDTH} height={LANE_HEIGHT} color={withOpacity(SONG_COLORS.railSoft, 0.32)} />
                             <Rect x={0} y={0} width={LANE_WIDTH} height={LANE_HEIGHT} color={withOpacity(SONG_COLORS.backgroundA, 0.16)} />
@@ -1239,7 +1424,7 @@ export default function SongScreen() {
                                 const hitProgress = hitStamp ? Math.min(1, (animationNow - hitStamp) / 560) : 1;
                                 const showHitSpark = hitProgress < 1;
                                 const noteColor = wasHit
-                                    ? '#45FF92'
+                                    ? SONG_COLORS.highlight
                                     : note.fret >= 5 ? SONG_COLORS.highlight : SONG_COLORS.primary;
 
                                 return (
@@ -1250,13 +1435,13 @@ export default function SongScreen() {
                                                     cx={x}
                                                     cy={y}
                                                     r={16 + (hitProgress * 18)}
-                                                    color={withOpacity('#45FF92', Math.max(0, 0.22 - (hitProgress * 0.18)))}
+                                                    color={withOpacity(SONG_COLORS.highlight, Math.max(0, 0.22 - (hitProgress * 0.18)))}
                                                 />
                                                 <Circle
                                                     cx={x}
                                                     cy={y}
                                                     r={8 + (hitProgress * 10)}
-                                                    color={withOpacity('#CFFFF0', Math.max(0, 0.34 - (hitProgress * 0.28)))}
+                                                    color={withOpacity('#D8FFF7', Math.max(0, 0.34 - (hitProgress * 0.28)))}
                                                 />
                                             </>
                                         )}
@@ -1285,10 +1470,10 @@ export default function SongScreen() {
                                 );
                             })}
 
-                            <Rect x={PLAYHEAD_X - 10} y={0} width={20} height={LANE_HEIGHT} color={withOpacity(SONG_COLORS.primary, 0.09)} />
-                            <Rect x={PLAYHEAD_X - 2} y={14} width={4} height={LANE_HEIGHT - 28} color={SONG_COLORS.primary} />
+                            <Rect x={PLAYHEAD_X - 10} y={0} width={20} height={LANE_HEIGHT} color={withOpacity(SONG_COLORS.highlight, 0.08)} />
+                            <Rect x={PLAYHEAD_X - 2} y={14} width={4} height={LANE_HEIGHT - 28} color={SONG_COLORS.highlight} />
                             <Circle cx={PLAYHEAD_X} cy={30} r={9} color={SONG_COLORS.highlight} />
-                            <Circle cx={PLAYHEAD_X} cy={30} r={18} color={withOpacity(SONG_COLORS.highlight, 0.12)} />
+                            <Circle cx={PLAYHEAD_X} cy={30} r={18} color={withOpacity(SONG_COLORS.highlight, 0.14)} />
 
                             {rippleProgress < 1 && flashResult && (
                                 <>
@@ -1306,9 +1491,9 @@ export default function SongScreen() {
                                     />
                                 </>
                             )}
-                        </Canvas>
+                            </Canvas>
 
-                        <View pointerEvents="none" style={styles.labelOverlay}>
+                            <View pointerEvents="none" style={styles.labelOverlay}>
                             {displayMode === 'chords' && visibleChordEvents.map((event) => {
                                 const x = PLAYHEAD_X + ((event.timeSec - playbackSec) * PIXELS_PER_SECOND);
                                 const y = getChordLaneY(event.laneRow) + (Math.sin((animationNow / 210) + (event.index * 0.7)) * 4);
@@ -1382,98 +1567,106 @@ export default function SongScreen() {
                                     <Text style={[styles.flashText, { color: flashResult.color }]}>{flashResult.label}</Text>
                                 </View>
                             )}
-                        </View>
-                    </View>
-
-                    <View style={styles.transportRow}>
-                        <TouchableOpacity
-                            style={[styles.transportButton, styles.transportPrimary]}
-                            onPress={() => void togglePlayback()}
-                        >
-                            <Text style={styles.transportPrimaryText}>{isPlaying ? 'Pause' : 'Play'}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.transportButton}
-                            onPress={() => void restartSong()}
-                        >
-                            <Text style={styles.transportText}>Restart</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.transportButton}
-                            onPress={() => void seekBy(-seekStepSeconds)}
-                        >
-                            <Text style={styles.transportText}>-{seekStepSeconds}s</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.transportButton}
-                            onPress={() => void seekBy(seekStepSeconds)}
-                        >
-                            <Text style={styles.transportText}>+{seekStepSeconds}s</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.transportButton}
-                            onPress={() => void finishSession(selectedSong)}
-                        >
-                            <Text style={styles.transportText}>Finish</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.statusPanel}>
-                        <View style={styles.statusHeadRow}>
-                            <View style={styles.enginePill}>
-                                <Text style={styles.enginePillText}>{engineLabel}</Text>
-                            </View>
-                            {activePanel === 'chords' && (
-                                <Text style={styles.statusMiniText}>{detectedHz ? `${detectedHz.toFixed(1)} Hz` : 'Waiting for a clean read'}</Text>
-                            )}
-                            {activePanel === 'tabs' && (
-                                <Text style={styles.statusMiniText}>
-                                    {tabTargetAtLine ? `Target ${tabTargetAtLine.target.noteName}` : 'Waiting for the next live tab target'}
-                                </Text>
-                            )}
-                        </View>
-
-                        <Text style={styles.statusTitle}>{engineText}</Text>
-
-                        <View style={styles.statusMetricsRow}>
-                            <View style={styles.statusMetricBox}>
-                                <Text style={styles.statusMetricLabel}>{activePanel === 'tabs' ? 'NEXT TAB' : 'NEXT CHORD'}</Text>
-                                <Text style={styles.statusMetricValue}>{displayMode === 'tabs' ? nextTabLabel : nextChord}</Text>
-                            </View>
-                            <View style={styles.statusMetricBox}>
-                                <Text style={styles.statusMetricLabel}>{activePanel === 'tabs' ? 'LIVE' : activePanel === 'chords' ? 'HEARD' : 'MODE'}</Text>
-                                <Text style={styles.statusMetricValue}>{activePanel === 'guide' ? 'Preview' : detectedNote}</Text>
-                            </View>
-                            <View style={styles.statusMetricBox}>
-                                <Text style={styles.statusMetricLabel}>{activePanel === 'tabs' ? 'HITS' : activePanel === 'chords' ? 'BEST' : 'TRACK'}</Text>
-                                <Text style={styles.statusMetricValue}>{activePanel === 'tabs' ? `${tabHitNonce}` : activePanel === 'chords' ? `${bestCombo}` : `${selectedSong.durationSec}s`}</Text>
                             </View>
                         </View>
-
-                        {activePanel === 'chords' && score && (
-                            <View style={styles.scoreStrip}>
-                                <Text style={styles.scoreStripText}>{score.accuracy}%</Text>
-                                <Text style={styles.scoreStripMeta}>Perfect {score.perfect} • Good {score.good} • Missed {score.missed}</Text>
+                    )}
+                    bottomContent={(
+                        <>
+                            <View style={styles.transportRow}>
+                                <Pressable
+                                    style={({ pressed }) => [
+                                        styles.transportButton,
+                                        styles.transportPrimary,
+                                        pressed && styles.transportButtonPressed,
+                                    ]}
+                                    onPress={() => void togglePlayback()}
+                                >
+                                    <Text style={styles.transportPrimaryText}>{isPlaying ? 'Pause' : 'Play'}</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={({ pressed }) => [styles.transportButton, pressed && styles.transportButtonPressed]}
+                                    onPress={() => void restartSong()}
+                                >
+                                    <Text style={styles.transportText}>Restart</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={({ pressed }) => [styles.transportButton, pressed && styles.transportButtonPressed]}
+                                    onPress={() => void seekBy(-seekStepSeconds)}
+                                >
+                                    <Text style={styles.transportText}>-{seekStepSeconds}s</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={({ pressed }) => [styles.transportButton, pressed && styles.transportButtonPressed]}
+                                    onPress={() => void seekBy(seekStepSeconds)}
+                                >
+                                    <Text style={styles.transportText}>+{seekStepSeconds}s</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={({ pressed }) => [styles.transportButton, pressed && styles.transportButtonPressed]}
+                                    onPress={() => void finishSession(selectedSong)}
+                                >
+                                    <Text style={styles.transportText}>Finish</Text>
+                                </Pressable>
                             </View>
-                        )}
 
-                        {activePanel === 'tabs' && (
-                            <View style={styles.scoreStrip}>
-                                <Text style={styles.scoreStripText}>{tabHitNonce}/{selectedSong.tabNotes.length}</Text>
-                                <Text style={styles.scoreStripMeta}>Live tab hits • Best combo {bestCombo}</Text>
-                            </View>
-                        )}
+                            <View style={styles.statusPanel}>
+                                <View style={styles.statusHeadRow}>
+                                    <View style={styles.enginePill}>
+                                        <Text style={styles.enginePillText}>{engineLabel}</Text>
+                                    </View>
+                                    {activePanel === 'chords' && (
+                                        <Text style={styles.statusMiniText}>{detectedHz ? `${detectedHz.toFixed(1)} Hz` : 'Waiting for a clean read'}</Text>
+                                    )}
+                                    {activePanel === 'tabs' && (
+                                        <Text style={styles.statusMiniText}>
+                                            {tabTargetAtLine ? `Target ${tabTargetAtLine.target.noteName}` : 'Waiting for the next live tab target'}
+                                        </Text>
+                                    )}
+                                </View>
 
-                        {activePanel === 'guide' && (
-                            <View style={styles.guideList}>
-                                <Text style={styles.guideLine}>1. Chords = live mic scoring and combo tracking.</Text>
-                                <Text style={styles.guideLine}>2. Tabs = six-string timing view with live pitch matching at the hit-line.</Text>
-                                <Text style={styles.guideLine}>3. Hit when the live note matches the target as it crosses the mint line on the left.</Text>
-                                <Text style={styles.guideLine}>4. Import uses two files: one audio file and one JSON file with chordEvents and tabNotes.</Text>
+                                <Text style={styles.statusTitle}>{engineText}</Text>
+
+                                <View style={styles.statusMetricsRow}>
+                                    <View style={styles.statusMetricBox}>
+                                        <Text style={styles.statusMetricLabel}>{activePanel === 'tabs' ? 'NEXT TAB' : 'NEXT CHORD'}</Text>
+                                        <Text style={styles.statusMetricValue}>{displayMode === 'tabs' ? nextTabLabel : nextChord}</Text>
+                                    </View>
+                                    <View style={styles.statusMetricBox}>
+                                        <Text style={styles.statusMetricLabel}>{activePanel === 'tabs' ? 'LIVE' : activePanel === 'chords' ? 'HEARD' : 'MODE'}</Text>
+                                        <Text style={styles.statusMetricValue}>{activePanel === 'guide' ? 'Preview' : detectedNote}</Text>
+                                    </View>
+                                    <View style={styles.statusMetricBox}>
+                                        <Text style={styles.statusMetricLabel}>{activePanel === 'tabs' ? 'HITS' : activePanel === 'chords' ? 'BEST' : 'TRACK'}</Text>
+                                        <Text style={styles.statusMetricValue}>{activePanel === 'tabs' ? `${tabHitNonce}` : activePanel === 'chords' ? `${bestCombo}` : `${selectedSong.durationSec}s`}</Text>
+                                    </View>
+                                </View>
+
+                                {activePanel === 'chords' && score && (
+                                    <View style={styles.scoreStrip}>
+                                        <Text style={styles.scoreStripText}>{score.accuracy}%</Text>
+                                        <Text style={styles.scoreStripMeta}>Perfect {score.perfect} • Good {score.good} • Missed {score.missed}</Text>
+                                    </View>
+                                )}
+
+                                {activePanel === 'tabs' && (
+                                    <View style={styles.scoreStrip}>
+                                        <Text style={styles.scoreStripText}>{tabHitNonce}/{selectedSong.tabNotes.length}</Text>
+                                        <Text style={styles.scoreStripMeta}>Live tab hits • Best combo {bestCombo}</Text>
+                                    </View>
+                                )}
+
+                                {activePanel === 'guide' && (
+                                    <View style={styles.guideList}>
+                                        <Text style={styles.guideLine}>1. Chords = live mic scoring and combo tracking.</Text>
+                                        <Text style={styles.guideLine}>2. Tabs = six-string timing view with live pitch matching at the hit-line.</Text>
+                                        <Text style={styles.guideLine}>3. Hit when the live note matches the target as it crosses the mint line on the left.</Text>
+                                        <Text style={styles.guideLine}>4. Import uses one audio file. AI builds BPM, chordEvents, and a playable tab pattern automatically.</Text>
+                                    </View>
+                                )}
                             </View>
-                        )}
-                    </View>
-                </View>
+                        </>
+                    )}
+                />
                 </>
                 )}
             </ScrollView>
@@ -1569,10 +1762,13 @@ const styles = StyleSheet.create({
         paddingVertical: 13,
         ...SHADOWS.soft,
     },
+    songChipPressed: {
+        transform: [{ scale: 0.985 }],
+    },
     songChipActive: {
-        borderColor: SONG_COLORS.primary,
+        borderColor: SONG_COLORS.highlight,
         backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.98),
-        shadowColor: SONG_COLORS.primary,
+        shadowColor: SONG_COLORS.highlight,
         shadowOpacity: 0.18,
         shadowRadius: 14,
         shadowOffset: { width: 0, height: 0 },
@@ -1580,6 +1776,68 @@ const styles = StyleSheet.create({
     importChip: {
         borderColor: withOpacity(SONG_COLORS.secondary, 0.3),
         backgroundColor: withOpacity(SONG_COLORS.secondary, 0.08),
+    },
+    importProgressCard: {
+        borderRadius: 24,
+        paddingHorizontal: 16,
+        paddingVertical: 15,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.34),
+        marginBottom: 14,
+        overflow: 'hidden',
+        ...SHADOWS.card,
+    },
+    importProgressHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
+    importProgressEyebrow: {
+        color: SONG_COLORS.highlight,
+        fontSize: 11,
+        fontWeight: '900',
+        letterSpacing: 1.1,
+        textTransform: 'uppercase',
+    },
+    importProgressPercent: {
+        color: SONG_COLORS.text,
+        fontSize: 12,
+        fontWeight: '800',
+    },
+    importProgressTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 18,
+        fontWeight: '900',
+        marginBottom: 6,
+    },
+    importProgressBody: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        lineHeight: 18,
+        marginBottom: 12,
+    },
+    importProgressTrack: {
+        height: 12,
+        borderRadius: 999,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.22),
+        backgroundColor: withOpacity(SONG_COLORS.railSoft, 0.92),
+    },
+    importProgressFill: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        borderRadius: 999,
+    },
+    importProgressShimmer: {
+        position: 'absolute',
+        top: -6,
+        bottom: -6,
+        width: 84,
+        backgroundColor: 'rgba(255,255,255,0.18)',
     },
     songChipTitle: {
         color: SONG_COLORS.text,
@@ -1716,6 +1974,9 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: SONG_COLORS.border,
     },
+    seekTrackPressed: {
+        transform: [{ scaleY: 0.95 }],
+    },
     seekFill: {
         position: 'absolute',
         left: 0,
@@ -1744,8 +2005,11 @@ const styles = StyleSheet.create({
         ...SHADOWS.soft,
     },
     segmentButtonActive: {
-        borderColor: SONG_COLORS.primary,
-        backgroundColor: withOpacity(SONG_COLORS.primary, 0.12),
+        borderColor: SONG_COLORS.highlight,
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.14),
+    },
+    segmentButtonPressed: {
+        transform: [{ scale: 0.985 }],
     },
     segmentText: {
         color: SONG_COLORS.textDim,
@@ -1756,12 +2020,10 @@ const styles = StyleSheet.create({
         color: SONG_COLORS.text,
     },
     laneWrap: {
-        borderRadius: 22,
+        width: LANE_WIDTH,
+        height: LANE_HEIGHT,
         overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: SONG_COLORS.border,
         backgroundColor: SONG_COLORS.panelRaised,
-        ...SHADOWS.card,
     },
     labelOverlay: {
         ...StyleSheet.absoluteFillObject,
@@ -1838,7 +2100,6 @@ const styles = StyleSheet.create({
     transportRow: {
         flexDirection: 'row',
         gap: 8,
-        marginTop: 12,
     },
     transportButton: {
         flex: 1,
@@ -1850,9 +2111,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         ...SHADOWS.soft,
     },
+    transportButtonPressed: {
+        transform: [{ scale: 0.985 }],
+    },
     transportPrimary: {
-        borderColor: withOpacity(SONG_COLORS.secondary, 0.34),
-        backgroundColor: withOpacity(SONG_COLORS.secondary, 0.12),
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.12),
     },
     transportText: {
         color: SONG_COLORS.text,
@@ -1865,7 +2129,6 @@ const styles = StyleSheet.create({
         fontWeight: '900',
     },
     statusPanel: {
-        marginTop: 12,
         borderRadius: 18,
         borderWidth: 1,
         borderColor: SONG_COLORS.border,

@@ -18,7 +18,7 @@ interface StoredSongLesson {
     isImported: true;
 }
 
-interface SongImportManifest {
+export interface SongImportManifest {
     id?: string;
     title?: string;
     artist?: string;
@@ -84,6 +84,47 @@ async function readStoredLibrary(): Promise<StoredSongLesson[]> {
 async function writeStoredLibrary(songs: StoredSongLesson[]) {
     await ensureLibraryDir();
     await FileSystem.writeAsStringAsync(SONG_LIBRARY_FILE, JSON.stringify(songs, null, 2));
+}
+
+async function persistImportedSong(audioFile: ImportAssetLike, manifest: SongImportManifest): Promise<SongLesson> {
+    const chordEvents = normalizeChordEvents(manifest);
+    const tabNotes = normalizeTabNotes(manifest);
+
+    if (chordEvents.length === 0 && tabNotes.length === 0) {
+        throw new Error('The generated song data needs chordEvents or tabNotes.');
+    }
+
+    const baseTitle = (typeof manifest.title === 'string' && manifest.title.trim())
+        ? manifest.title.trim()
+        : stripExtension(audioFile.name);
+    const id = manifest.id?.trim() || `${slugify(baseTitle)}-${Date.now()}`;
+    const extension = getExtension(audioFile.name);
+    const targetAudioUri = `${SONG_LIBRARY_DIR}/${id}.${extension}`;
+
+    await FileSystem.copyAsync({
+        from: audioFile.uri,
+        to: targetAudioUri,
+    });
+
+    const storedSong: StoredSongLesson = {
+        id,
+        title: baseTitle,
+        artist: (typeof manifest.artist === 'string' && manifest.artist.trim()) ? manifest.artist.trim() : 'Imported Track',
+        difficulty: manifest.difficulty === 'Easy' || manifest.difficulty === 'Hard' || manifest.difficulty === 'Medium'
+            ? manifest.difficulty
+            : 'Medium',
+        backingTrackUri: targetAudioUri,
+        durationSec: buildDuration(manifest.durationSec, chordEvents, tabNotes),
+        chordEvents,
+        tabNotes,
+        isImported: true,
+    };
+
+    const currentLibrary = await readStoredLibrary();
+    const nextLibrary = [storedSong, ...currentLibrary.filter((song) => song.id !== storedSong.id)];
+    await writeStoredLibrary(nextLibrary);
+
+    return toRuntimeSong(storedSong);
 }
 
 function normalizeChordEvents(manifest: SongImportManifest): SongChordEvent[] {
@@ -190,43 +231,13 @@ export async function importSongFromFiles(audioFile: ImportAssetLike, manifestFi
 
     const rawManifest = await FileSystem.readAsStringAsync(manifestFile.uri);
     const manifest = JSON.parse(rawManifest) as SongImportManifest;
-    const chordEvents = normalizeChordEvents(manifest);
-    const tabNotes = normalizeTabNotes(manifest);
+    return persistImportedSong(audioFile, manifest);
+}
 
-    if (chordEvents.length === 0 && tabNotes.length === 0) {
-        throw new Error('The JSON file needs chordEvents or tabNotes.');
-    }
-
-    const baseTitle = (typeof manifest.title === 'string' && manifest.title.trim())
-        ? manifest.title.trim()
-        : stripExtension(audioFile.name);
-    const id = manifest.id?.trim() || `${slugify(baseTitle)}-${Date.now()}`;
-    const extension = getExtension(audioFile.name);
-    const targetAudioUri = `${SONG_LIBRARY_DIR}/${id}.${extension}`;
-
-    // Keep imported tracks inside the app so they still exist after reload.
-    await FileSystem.copyAsync({
-        from: audioFile.uri,
-        to: targetAudioUri,
-    });
-
-    const storedSong: StoredSongLesson = {
-        id,
-        title: baseTitle,
-        artist: (typeof manifest.artist === 'string' && manifest.artist.trim()) ? manifest.artist.trim() : 'Imported Track',
-        difficulty: manifest.difficulty === 'Easy' || manifest.difficulty === 'Hard' || manifest.difficulty === 'Medium'
-            ? manifest.difficulty
-            : 'Medium',
-        backingTrackUri: targetAudioUri,
-        durationSec: buildDuration(manifest.durationSec, chordEvents, tabNotes),
-        chordEvents,
-        tabNotes,
-        isImported: true,
-    };
-
-    const currentLibrary = await readStoredLibrary();
-    const nextLibrary = [storedSong, ...currentLibrary.filter((song) => song.id !== storedSong.id)];
-    await writeStoredLibrary(nextLibrary);
-
-    return toRuntimeSong(storedSong);
+export async function importSongFromGeneratedManifest(
+    audioFile: ImportAssetLike,
+    manifest: SongImportManifest,
+): Promise<SongLesson> {
+    await ensureLibraryDir();
+    return persistImportedSong(audioFile, manifest);
 }
