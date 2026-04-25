@@ -57,7 +57,7 @@ The most important developer-facing flow is the Studio Grid analysis loop, which
 | Layer | What it owns | Key files |
 |---|---|---|
 | **Expo app** | auth/session UX, screen rendering, audio picking, task polling, local settings/import persistence | `MusicAIApp/App.tsx`, `MusicAIApp/src/services/api.ts`, `MusicAIApp/src/services/supabaseClient.ts` |
-| **FastAPI backend** | async upload handling, worker-thread analysis, health checks, pitch fallback, persistence APIs | `backend/main.py`, `backend/models.py`, `backend/requirements.txt` |
+| **FastAPI backend** | async upload handling, worker-thread analysis, health checks, pitch fallback, persistence APIs | `backend/main.py`, `backend/models.py`, `backend/requirements.txt`, `backend/tests/test_api.py` |
 | **Persistence layer** | Supabase Auth, Postgres tables, and Storage bucket for tracks, jobs, markers, imports, and leaderboards | Supabase project config plus `SUPABASE_URL`, `SUPABASE_KEY`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` |
 
 This split is intentional: the app owns responsiveness and session UX, the backend owns heavier analysis work, and Supabase acts as the shared system of record for auth, uploads, jobs, and synced progress.
@@ -293,15 +293,16 @@ flowchart TD
 - `GET /healthz` performs a live Supabase table check and returns `503` with a degraded payload if connectivity is broken.
 - `POST /upload-audio` persists a track row, stores audio in Supabase Storage, creates an `ai_analysis_jobs` row, and schedules a worker thread.
 - `POST /analyze-audio` uses the same async job model, but produces an AI-generated song manifest for Song Flow imports.
-- The frontend API base URL comes from `EXPO_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000` when unset.
+- `GET /task-status/{task_id}` can return `processing`, `completed`, `failed`, or `timed_out`, and the frontend handles all four states.
+- The frontend API base URL comes from `EXPO_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000` when unset. The client also sanitizes quoted or markdown-wrapped URLs before using them.
 - The frontend Supabase client requires `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
 - The backend requires `SUPABASE_URL` and `SUPABASE_KEY`; optional knobs include `SUPABASE_AUDIO_BUCKET`, `SUPABASE_AUDIO_PREFIX`, `CORS_ALLOW_ORIGINS`, and `LOG_LEVEL`.
 - `POST /analyze-full` still exists as a synchronous fallback path for older deployments or troubleshooting.
 
 ### Persistence model
-- **On-device:** app settings, imported songs, and gamification cache stay inside the mobile app for a fast, resilient UX.
+- **On-device:** app settings and imported songs live in `expo-file-system`, while smaller progress/session helpers use `AsyncStorage` where appropriate.
 - **Supabase-backed:** auth sessions, uploaded audio, tracks, markers, AI jobs, generated song lessons, and leaderboard data live in Supabase.
-- **Recovery mode:** incomplete analysis jobs can resume on backend startup because audio URLs and job metadata are persisted in Supabase before worker threads begin.
+- **Recovery mode:** incomplete analysis jobs can resume on backend startup because audio URLs and job metadata are persisted in Supabase before worker threads begin. The frontend also migrates some older local progress data forward from legacy file-backed storage.
 
 ---
 
@@ -314,6 +315,7 @@ The mobile app lives in [`./MusicAIApp`](./MusicAIApp).
 - **React Native 0.81**
 - **TypeScript**
 - **Supabase JS**
+- **AsyncStorage**
 - **React Navigation**
 - **React Native Reanimated**
 - **Gesture Handler**
@@ -323,7 +325,7 @@ The mobile app lives in [`./MusicAIApp`](./MusicAIApp).
 - **Expo File System**
 - **Expo Haptics**
 - **Lottie React Native**
-- **WatermelonDB**
+- **Jest + React Native Testing Library**
 
 ### Frontend responsibilities
 - handle auth state and authenticated identity
@@ -351,6 +353,7 @@ The backend lives in [`./backend`](./backend).
 - **Supabase Python client**
 - **Supabase Storage + Postgres**
 - **SoundFile**
+- **pytest + Ruff + Black**
 
 ### Backend responsibilities
 - BPM analysis
@@ -450,7 +453,7 @@ sequenceDiagram
     B-->>A: Return task_id
     loop While app is active
         A->>B: GET /task-status/{task_id}
-        B-->>A: processing / completed
+        B-->>A: processing / completed / failed / timed_out
     end
     alt App goes inactive or background
         A->>A: Pause polling
@@ -539,6 +542,7 @@ sequenceDiagram
 - uploads the file to an async backend scan endpoint
 - receives a `task_id` immediately and polls for progress/result updates
 - pauses polling while the app is backgrounded and resumes when the app returns active
+- handles explicit task timeout states from the API without leaving the UI in a stuck loading state
 - applies BPM + section markers to the waveform strip when the job completes
 - saves analysis data for later review through Supabase-backed track and marker rows
 
@@ -606,22 +610,29 @@ TuneUp/
 │   │   ├── audio/
 │   │   └── readme/
 │   ├── src/
+│   │   ├── __tests__/
 │   │   ├── animations/
 │   │   ├── components/
 │   │   ├── data/
 │   │   │   ├── lessonPacks/
 │   │   │   └── *.ts
-│   │   ├── database/
 │   │   ├── hooks/
+│   │   ├── navigation/
 │   │   ├── screens/
 │   │   ├── services/
 │   │   └── utils/
 │   ├── App.tsx
 │   ├── app.json
+│   ├── eslint.config.js
+│   ├── jest.config.js
 │   └── package.json
 ├── backend/
 │   ├── main.py
-│   └── models.py
+│   ├── models.py
+│   ├── pyproject.toml
+│   ├── requirements.txt
+│   ├── requirements-dev.txt
+│   └── tests/
 ├── .gitignore
 └── README.md
 ```
@@ -631,12 +642,15 @@ TuneUp/
 - `src/components/` → reusable UI building blocks
 - `src/data/` → built-in lesson, quiz, song, and study content
 - `src/services/` → API, gamification, settings, and song import logic
-- `src/database/` → WatermelonDB persistence helpers
+- `src/__tests__/` and `src/screens/__tests__/` → app and screen-level tests
+- `src/navigation/` → navigation flows and stacks
 - `src/utils/` → pitch and tuning helpers
 
 ### Important backend files
 - `backend/main.py` → FastAPI app, async analysis routes, health checks, leaderboard routes, traffic persistence
 - `backend/models.py` → Pydantic models for structured backend data
+- `backend/tests/test_api.py` → API-level regression tests for health, pitch, traffic, and task-status behavior
+- `backend/pyproject.toml` → formatting, linting, and pytest configuration
 
 ---
 
@@ -651,12 +665,12 @@ TuneUp/
 | `POST` | `/detect-pitch` | backend pitch detection fallback |
 | `POST` | `/upload-audio` | upload a track and create an async Studio Grid analysis job |
 | `POST` | `/analyze-audio` | upload a track and create an async AI song-import job |
-| `GET` | `/task-status/{task_id}` | fetch progress or completed results for either async job type |
+| `GET` | `/task-status/{task_id}` | fetch `processing`, `completed`, `failed`, or `timed_out` results for either async job type |
 | `POST` | `/save-traffic` | persist a saved traffic study into Supabase-backed track data |
 | `GET` | `/get-traffic` | fetch saved traffic analyses from Supabase |
 | `POST` | `/sync-leaderboard` | sync profile progress into Supabase-backed user/progress tables |
 | `GET` | `/leaderboard` | fetch top leaderboard entries from Supabase |
-| `POST` | `/analyze-full` | legacy synchronous BPM + structure analysis fallback |
+| `POST` | `/analyze-full` | legacy synchronous BPM + structure analysis fallback, including explicit timeout handling |
 
 ---
 
@@ -719,6 +733,7 @@ If transcription confidence is too low, the backend can still return a safe star
 - Python 3.11+ recommended
 - virtual environment support
 - Supabase project URL + server-side key with storage and database access
+- optional dev tooling install if you want backend linting/tests locally
 
 No `.env.example` files are currently checked in, so create local `.env` files for the frontend and backend using the snippets below.
 
@@ -742,6 +757,12 @@ cd backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+```
+
+If you want the backend test/lint toolchain too:
+
+```bash
+pip install -r requirements-dev.txt
 ```
 
 ### Backend environment setup
@@ -875,6 +896,8 @@ Recommended checks before every push:
 cd MusicAIApp
 npx tsc --noEmit
 npm test
+npm run lint
+npm run format:check
 npx expo-doctor
 ```
 
@@ -883,6 +906,9 @@ Backend sanity check:
 ```bash
 cd backend
 python3 -m py_compile main.py
+pytest
+ruff check .
+black --check .
 ```
 
 API smoke checks:
@@ -895,6 +921,7 @@ curl http://127.0.0.1:8000/healthz
 Manual async smoke checks:
 - run one Studio Grid scan through `POST /upload-audio`
 - run one Song Flow AI import through `POST /analyze-audio`
+- force-check one timeout/error path by polling an invalid or expired task ID and confirming the client surfaces the failure cleanly
 
 ---
 
