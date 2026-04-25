@@ -3,8 +3,7 @@ module.exports = function (api) {
     return {
         presets: ['babel-preset-expo'],
         plugins: [
-            ["@babel/plugin-proposal-decorators", { "legacy": true }], // <-- BU YENİ
-            'react-native-reanimated/plugin', // Bu hep en sonda kalmalı
+            'react-native-reanimated/plugin',
         ],
     };
 };

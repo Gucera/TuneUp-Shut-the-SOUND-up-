@@ -1,12 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, FlatList, Alert, ScrollView } from 'react-native';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, FlatList, ScrollView } from 'react-native';
 import { Canvas, Path, Skia, Rect } from '@shopify/react-native-skia';
 import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as DocumentPicker from 'expo-document-picker';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useFocusEffect } from '@react-navigation/native';
-import { saveTrafficData } from '../services/api';
+import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import type { NavigatorScreenParams, RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { saveTrafficData, TrafficMarkerPayload } from '../services/api';
 import { AppSettings, getAppSettings } from '../services/appSettings';
 import PageTransitionView from '../components/PageTransitionView';
 import PremiumBackdrop from '../components/PremiumBackdrop';
@@ -14,6 +17,7 @@ import PremiumCelebrationOverlay from '../components/PremiumCelebrationOverlay';
 import PremiumHeroStrip from '../components/PremiumHeroStrip';
 import ScreenSettingsButton from '../components/ScreenSettingsButton';
 import SkeletonBlock from '../components/SkeletonBlock';
+import { useAppToast } from '../components/AppToastProvider';
 import { COLORS, SHADOWS } from '../theme';
 import { TRAFFIC_ANALYSIS_LIBRARY, TrafficAnalysisPreset } from '../data/trafficAnalysisLibrary';
 import { getGamificationSnapshot } from '../services/gamification';
@@ -37,8 +41,33 @@ interface MarkerItem {
     x: number;
 }
 
+interface TrafficRouteParams {
+    savedAnalysis?: {
+        songName: string;
+        duration: number;
+        markers: TrafficMarkerPayload[];
+        createdAt?: string | null;
+    };
+}
+
+type MainTabsParamList = {
+    Lessons: undefined;
+    Tuner: undefined;
+    Home: undefined;
+    Songs: undefined;
+    Profile: { focusSettings?: boolean } | undefined;
+};
+
+type RootStackParamList = {
+    MainTabs: NavigatorScreenParams<MainTabsParamList> | undefined;
+    Studio: TrafficRouteParams | undefined;
+};
+
 export default function TrafficScreen() {
-    const tabBarHeight = useBottomTabBarHeight();
+    const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'Studio'>>();
+    const route = useRoute<RouteProp<RootStackParamList, 'Studio'>>();
+    const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+    const { showToast } = useAppToast();
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [songName, setSongName] = useState<string | null>(null);
@@ -70,6 +99,24 @@ export default function TrafficScreen() {
     const flatListRef = useRef<FlatList<number[]>>(null);
     const scrollX = useRef(0);
     const isUserScrolling = useRef(false);
+    const restoredAnalysisKeyRef = useRef<string | null>(null);
+    const contentBottomPadding = (tabBarHeight || 0) + 28;
+
+    const handleBackPress = useCallback(() => {
+        if (typeof navigation.canGoBack === 'function' && navigation.canGoBack() && typeof navigation.goBack === 'function') {
+            navigation.goBack();
+            return;
+        }
+
+        navigation.navigate('MainTabs', { screen: 'Home' });
+    }, [navigation]);
+
+    const handleOpenSettings = useCallback(() => {
+        navigation.navigate('MainTabs', {
+            screen: 'Profile',
+            params: { focusSettings: true },
+        });
+    }, [navigation]);
 
     const loadSettings = useCallback(async () => {
         const [settings, snapshot] = await Promise.all([
@@ -80,14 +127,11 @@ export default function TrafficScreen() {
         setCurrentUserId(snapshot.userId);
     }, []);
 
-    useEffect(() => {
-        void loadSettings();
-        return () => {
-            if (sound) {
-                void sound.unloadAsync();
-            }
-        };
-    }, [loadSettings, sound]);
+    useEffect(() => () => {
+        if (sound) {
+            void sound.unloadAsync();
+        }
+    }, [sound]);
 
     useFocusEffect(
         useCallback(() => {
@@ -109,23 +153,72 @@ export default function TrafficScreen() {
         }));
         setMarkers(nextMarkers);
 
-        Alert.alert('Analysis Complete', analysisResult.message);
+        showToast({
+            title: 'Analysis complete',
+            message: analysisResult.message,
+            variant: 'success',
+        });
         showCelebration({
             title: 'Analysis ready',
             subtitle: analysisResult.message,
             variant: 'success',
         });
         clearResult();
-    }, [analysisResult, clearResult, showCelebration]);
+    }, [analysisResult, clearResult, showCelebration, showToast]);
 
     useEffect(() => {
         if (!analysisError) {
             return;
         }
 
-        Alert.alert('Error', `Analysis failed: ${analysisError}`);
+        showToast({
+            title: 'Analysis failed',
+            message: analysisError,
+            variant: 'error',
+        });
         clearError();
-    }, [analysisError, clearError]);
+    }, [analysisError, clearError, showToast]);
+
+    useEffect(() => {
+        const params = (route.params ?? {}) as TrafficRouteParams;
+        const savedAnalysis = params.savedAnalysis;
+        if (!savedAnalysis) {
+            return;
+        }
+
+        const routeKey = `${savedAnalysis.songName}-${savedAnalysis.createdAt ?? 'saved'}`;
+        if (restoredAnalysisKeyRef.current === routeKey) {
+            return;
+        }
+
+        restoredAnalysisKeyRef.current = routeKey;
+        resetJob();
+        setSongName(savedAnalysis.songName);
+        setDuration(savedAnalysis.duration);
+        setBpm(null);
+        setFileUri(null);
+        setIsPlaying(false);
+        setActivePresetId(null);
+        setPresetFocus('Loaded from your saved Studio shelf.');
+        setPresetNote('You can edit, replay, and save this structure again from here.');
+        setMarkers(savedAnalysis.markers.map((marker, index) => ({
+            id: marker.id || (index + 1),
+            label: marker.label,
+            color: marker.color,
+            x: marker.x,
+        })));
+        generateWaveformData(savedAnalysis.duration);
+        showToast({
+            title: 'Studio save opened',
+            message: `${savedAnalysis.songName} is loaded back into Studio.`,
+            variant: 'info',
+        });
+
+        if (sound) {
+            void sound.unloadAsync();
+            setSound(null);
+        }
+    }, [resetJob, route.params, showToast, sound]);
 
     const totalWaveWidth = useMemo(() => chunks.length * CHUNK_WIDTH, [chunks.length]);
 
@@ -165,8 +258,12 @@ export default function TrafficScreen() {
                 setDuration(nextDuration);
                 generateWaveformData(nextDuration);
             }
-        } catch (error) {
-            Alert.alert('Error', 'Failed to load file.');
+        } catch {
+            showToast({
+                title: 'Load failed',
+                message: 'Failed to load that audio file.',
+                variant: 'error',
+            });
         }
     };
 
@@ -191,7 +288,7 @@ export default function TrafficScreen() {
         chunkMarkers,
     }: {
         points: number[];
-        chunkMarkers: Array<MarkerItem & { localX: number }>;
+        chunkMarkers: (MarkerItem & { localX: number })[];
     }) => {
         const path = useMemo(() => {
             const p = Skia.Path.Make();
@@ -220,6 +317,7 @@ export default function TrafficScreen() {
             </View>
         );
     });
+    WaveChunk.displayName = 'WaveChunk';
 
     useEffect(() => {
         if (!sound) {
@@ -250,7 +348,11 @@ export default function TrafficScreen() {
     const togglePlay = async () => {
         if (!sound) {
             if (activePresetId) {
-                Alert.alert('Analysis Only', 'This built-in map is for structure study. Load an audio file if you want playback too.');
+                showToast({
+                    title: 'Study map only',
+                    message: 'This built-in map is for structure study. Load an audio file if you want playback too.',
+                    variant: 'info',
+                });
             }
             return;
         }
@@ -297,7 +399,11 @@ export default function TrafficScreen() {
 
     const handleAnalyze = async () => {
         if (!fileUri || !songName) {
-            Alert.alert('Error', 'Please load a song first.');
+            showToast({
+                title: 'Track needed',
+                message: 'Load a song before starting a scan.',
+                variant: 'warning',
+            });
             return;
         }
 
@@ -312,7 +418,11 @@ export default function TrafficScreen() {
 
     const handleSave = async () => {
         if (!songName) {
-            Alert.alert('Error', 'Please load a song first.');
+            showToast({
+                title: 'Track needed',
+                message: 'Load a song before saving a Studio map.',
+                variant: 'warning',
+            });
             return;
         }
 
@@ -321,7 +431,11 @@ export default function TrafficScreen() {
         setIsSaving(false);
 
         if (result && result.status === 'success') {
-            Alert.alert('Saved', result.message);
+            showToast({
+                title: 'Saved',
+                message: result.message,
+                variant: 'success',
+            });
             showCelebration({
                 title: 'Studio save complete',
                 subtitle: songName ? `${songName} was added to your Studio shelf.` : 'Your arrangement was saved.',
@@ -331,7 +445,11 @@ export default function TrafficScreen() {
             const message = result && typeof result.message === 'string'
                 ? result.message
                 : 'Something went wrong while saving.';
-            Alert.alert('Error', message);
+            showToast({
+                title: 'Save failed',
+                message,
+                variant: 'error',
+            });
         }
     };
 
@@ -345,18 +463,26 @@ export default function TrafficScreen() {
             <PremiumBackdrop variant="studio" />
             <PageTransitionView style={styles.container}>
             <ScrollView
-                contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 28 }]}
+                contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
                 showsVerticalScrollIndicator={false}
             >
                 <View style={styles.glowA} />
                 <View style={styles.glowB} />
 
                 <View style={styles.headerRow}>
+                    <TouchableOpacity
+                        accessibilityLabel="Back"
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        onPress={handleBackPress}
+                        style={styles.backButton}
+                    >
+                        <Ionicons name="arrow-back" size={18} color={COLORS.textStrong} />
+                    </TouchableOpacity>
                     <View style={styles.headerTextWrap}>
                         <Text style={styles.header}>Studio Grid</Text>
                         <Text style={styles.subHeader}>Map sections, inspect motion, and save your arrangement data</Text>
                     </View>
-                    <ScreenSettingsButton />
+                    <ScreenSettingsButton onPress={handleOpenSettings} />
                 </View>
 
                 <PremiumHeroStrip
@@ -535,6 +661,17 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
         justifyContent: 'space-between',
         gap: 12,
+    },
+    backButton: {
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+        borderWidth: 1,
+        borderColor: COLORS.pixelLine,
+        backgroundColor: COLORS.panel,
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...SHADOWS.soft,
     },
     headerTextWrap: {
         flex: 1,

@@ -1,0 +1,1314 @@
+%PDF-1.4
+%“Œ‹ž ReportLab Generated PDF document (opensource)
+1 0 obj
+<<
+/F1 2 0 R /F2 3 0 R /F3 4 0 R /F4 9 0 R /F5 11 0 R
+>>
+endobj
+2 0 obj
+<<
+/BaseFont /Helvetica /Encoding /WinAnsiEncoding /Name /F1 /Subtype /Type1 /Type /Font
+>>
+endobj
+3 0 obj
+<<
+/BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding /Name /F2 /Subtype /Type1 /Type /Font
+>>
+endobj
+4 0 obj
+<<
+/BaseFont /Courier /Encoding /WinAnsiEncoding /Name /F3 /Subtype /Type1 /Type /Font
+>>
+endobj
+5 0 obj
+<<
+/Contents 18 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 17 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+6 0 obj
+<<
+/Contents 19 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 17 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+7 0 obj
+<<
+/Contents 20 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 17 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+8 0 obj
+<<
+/Contents 21 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 17 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+9 0 obj
+<<
+/BaseFont /Symbol /Name /F4 /Subtype /Type1 /Type /Font
+>>
+endobj
+10 0 obj
+<<
+/Contents 22 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 17 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+11 0 obj
+<<
+/BaseFont /ZapfDingbats /Name /F5 /Subtype /Type1 /Type /Font
+>>
+endobj
+12 0 obj
+<<
+/Contents 23 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 17 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+13 0 obj
+<<
+/Contents 24 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 17 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+14 0 obj
+<<
+/Contents 25 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 17 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+15 0 obj
+<<
+/PageMode /UseNone /Pages 17 0 R /Type /Catalog
+>>
+endobj
+16 0 obj
+<<
+/Author (anonymous) /CreationDate (D:20260402164010+01'00') /Creator (anonymous) /Keywords () /ModDate (D:20260402164010+01'00') /Producer (ReportLab PDF Library - \(opensource\)) 
+  /Subject (unspecified) /Title (untitled) /Trapped /False
+>>
+endobj
+17 0 obj
+<<
+/Count 8 /Kids [ 5 0 R 6 0 R 7 0 R 8 0 R 10 0 R 12 0 R 13 0 R 14 0 R ] /Type /Pages
+>>
+endobj
+18 0 obj
+<<
+/Length 6598
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+.819608 .835294 .858824 RG
+n 56.69291 802.2047 m 538.5827 802.2047 l S
+n 56.69291 39.68504 m 538.5827 39.68504 l S
+BT /F2 11 Tf 13.2 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 812.126 Tm (TuneUp Final Production Hardening Report) Tj T* ET
+BT /F1 8 Tf 9.6 TL ET
+.419608 .447059 .501961 rg
+BT 1 0 0 1 513.2307 28.34646 Tm (Page 1) Tj T* ET
+BT /F2 18 Tf 21.6 TL ET
+.058824 .090196 .164706 rg
+BT 1 0 0 1 56.69291 775.5276 Tm (TuneUp Final Production Hardening Report) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 743.5276 Tm (Generated: 2026-04-01) Tj T* ET
+BT /F2 14 Tf 16.8 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 721.5276 Tm (1. Executive Summary) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 695.5276 Tm (TuneUp is now materially closer to a production-ready state across the real project) Tj T* ET
+BT 1 0 0 1 56.69291 681.5276 Tm (structure:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 661.5276 Tm (\177 Frontend: MusicAIApp \(Expo / React Native\)) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 647.5276 Tm (\177 Backend: backend \(FastAPI / Uvicorn\)) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 633.5276 Tm (\177 Database / Cloud: Supabase) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 613.5276 Tm (This pass completed the major hardening work that was still missing:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 593.5276 Tm (\177 removed confirmed-dead code and duplicate legacy assets) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 579.5276 Tm (\177 removed the WatermelonDB persistence layer and replaced it with a lightweight local) Tj T* ET
+BT 1 0 0 1 56.69291 565.5276 Tm (  progress store) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 551.5276 Tm (\177 stabilized the native tuner path on both iOS and Android through a checked-in) Tj T* ET
+BT 1 0 0 1 56.69291 537.5276 Tm (  patch-package patch) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 523.5276 Tm (\177 standardized backend error payloads and timeout handling) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 509.5276 Tm (\177 restored Studio as a production route through Home while preserving the 5-tab shell) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 495.5276 Tm (\177 added global frontend crash handling and centralized toast notifications) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 481.5276 Tm (\177 added automated frontend smoke coverage and backend API tests) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 467.5276 Tm (\177 added environment examples, Supabase migration/RLS policy setup, and backend tooling) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 447.5276 Tm (Current release-gate status:) Tj T* ET
+BT /F3 8.5 Tf 10.2 TL ET
+.215686 .254902 .317647 rg
+BT 1 0 0 1 56.69291 427.5276 Tm (| Gate | Result |) Tj T* ET
+BT /F3 8.5 Tf 10.2 TL ET
+.215686 .254902 .317647 rg
+BT 1 0 0 1 56.69291 416.5276 Tm (| --- | --- |) Tj T* ET
+BT /F3 8.5 Tf 10.2 TL ET
+.215686 .254902 .317647 rg
+BT 1 0 0 1 56.69291 405.5276 Tm (| Frontend TypeScript | Pass |) Tj T* ET
+BT /F3 8.5 Tf 10.2 TL ET
+.215686 .254902 .317647 rg
+BT 1 0 0 1 56.69291 394.5276 Tm (| Frontend Jest | Pass |) Tj T* ET
+BT /F3 8.5 Tf 10.2 TL ET
+.215686 .254902 .317647 rg
+BT 1 0 0 1 56.69291 383.5276 Tm (| Frontend ESLint | Pass |) Tj T* ET
+BT /F3 8.5 Tf 10.2 TL ET
+.215686 .254902 .317647 rg
+BT 1 0 0 1 56.69291 372.5276 Tm (| Expo Doctor | Pass |) Tj T* ET
+BT /F3 8.5 Tf 10.2 TL ET
+.215686 .254902 .317647 rg
+BT 1 0 0 1 56.69291 361.5276 Tm (| Backend Python compile | Pass |) Tj T* ET
+BT /F3 8.5 Tf 10.2 TL ET
+.215686 .254902 .317647 rg
+BT 1 0 0 1 56.69291 350.5276 Tm (| Backend Pytest | Pass |) Tj T* ET
+BT /F3 8.5 Tf 10.2 TL ET
+.215686 .254902 .317647 rg
+BT 1 0 0 1 56.69291 339.5276 Tm (| Backend Ruff | Pass |) Tj T* ET
+BT /F3 8.5 Tf 10.2 TL ET
+.215686 .254902 .317647 rg
+BT 1 0 0 1 56.69291 328.5276 Tm (| Backend Black check | Pass |) Tj T* ET
+BT /F2 14 Tf 16.8 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 309.5276 Tm (2. Work Completed By Phase) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 283.5276 Tm (Phase 1: Aggressive Pruning & Refactoring) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 262.5276 Tm (\177 Deleted confirmed-orphaned repo files and duplicate top-level assets.) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 248.5276 Tm (\177 Removed the frontend WatermelonDB layer:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 234.5276 Tm (\177 deleted MusicAIApp/src/database/) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 220.5276 Tm (\177 migrated progress/XP/streak persistence to MusicAIApp/src/services/progressStore.ts) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 206.5276 Tm (\177 Removed unused direct packages from MusicAIApp/package.json:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 192.5276 Tm (\177 @nozbe/watermelondb) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 178.5276 Tm (\177 nativewind) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 164.5276 Tm (\177 tailwindcss) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 150.5276 Tm (\177 @babel/plugin-proposal-decorators) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 136.5276 Tm (\177 Added production tooling:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 122.5276 Tm (\177 frontend: ESLint + Prettier + Jest setup) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 108.5276 Tm (\177 backend: Ruff + Black + Pytest) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 94.52756 Tm (\177 Added safe env templates:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 80.52756 Tm (\177 MusicAIApp/.env.example) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 66.52756 Tm (\177 backend/.env.example) Tj T* ET
+ 
+endstream
+endobj
+19 0 obj
+<<
+/Length 6422
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+.819608 .835294 .858824 RG
+n 56.69291 802.2047 m 538.5827 802.2047 l S
+n 56.69291 39.68504 m 538.5827 39.68504 l S
+BT /F2 11 Tf 13.2 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 812.126 Tm (TuneUp Final Production Hardening Report) Tj T* ET
+BT /F1 8 Tf 9.6 TL ET
+.419608 .447059 .501961 rg
+BT 1 0 0 1 513.2307 28.34646 Tm (Page 2) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 779.5276 Tm (Phase 2: Tuner Stabilization & Native Audio Hardening) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 758.5276 Tm (\177 Hardened the existing react-native-pitchy native module instead of replacing it.) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 744.5276 Tm (\177 Captured the native changes in source control:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 730.5276 Tm (\177 MusicAIApp/patches/react-native-pitchy+1.2.0.patch) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 716.5276 Tm (\177 Applied the stabilization logic on both platforms:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 702.5276 Tm (\177 iOS: Pitchy.mm) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 688.5276 Tm (\177 Android: PitchyModuleImpl.kt) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 674.5276 Tm (\177 Updated the JS tuner hook to consume stabilized native output and expose diagnostics:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 660.5276 Tm (\177 gateState) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 646.5276 Tm (\177 analysisDurationMs) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 632.5276 Tm (\177 stableMidi) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 618.5276 Tm (\177 stabilizedPitch) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 598.5276 Tm (Phase 3: Frontend & Backend Resilience) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 577.5276 Tm (\177 Added a global app error boundary:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 563.5276 Tm (\177 MusicAIApp/src/components/AppErrorBoundary.tsx) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 549.5276 Tm (\177 Added central toast delivery for recoverable failures:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 535.5276 Tm (\177 MusicAIApp/src/components/AppToastProvider.tsx) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 521.5276 Tm (\177 Hardened session bootstrap and refresh behavior:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 507.5276 Tm (\177 MusicAIApp/src/services/supabaseClient.ts) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 493.5276 Tm (\177 Standardized backend error envelopes to:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 473.5276 Tm ({) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 459.5276 Tm ("error": {) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 445.5276 Tm ("code": "string",) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 431.5276 Tm ("message": "human-readable",) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 417.5276 Tm ("details": {}) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 403.5276 Tm (}) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 389.5276 Tm (}) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 369.5276 Tm (\177 Added explicit timeout handling and terminal job states:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 355.5276 Tm (\177 completed) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 341.5276 Tm (\177 failed) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 327.5276 Tm (\177 timed_out) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 313.5276 Tm (\177 Restored Studio as a production screen through Home and deep-link access from Profile.) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 293.5276 Tm (Phase 4: QA, Automation, and Release Gates) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 272.5276 Tm (\177 Added frontend smoke coverage for:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 258.5276 Tm (\177 app bootstrap) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 244.5276 Tm (\177 error boundary) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 230.5276 Tm (\177 Home) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 216.5276 Tm (\177 Tuner) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 202.5276 Tm (\177 Songs) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 188.5276 Tm (\177 Studio) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 174.5276 Tm (\177 Profile) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 160.5276 Tm (\177 Added backend API tests for:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 146.5276 Tm (\177 health) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 132.5276 Tm (\177 recommendation not found path) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 118.5276 Tm (\177 pitch detect success/failure) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 104.5276 Tm (\177 traffic save) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 90.52756 Tm (\177 traffic invalid-user error) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 76.52756 Tm (\177 task timed-out payload) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+ 
+endstream
+endobj
+20 0 obj
+<<
+/Length 5625
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+.819608 .835294 .858824 RG
+n 56.69291 802.2047 m 538.5827 802.2047 l S
+n 56.69291 39.68504 m 538.5827 39.68504 l S
+BT /F2 11 Tf 13.2 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 812.126 Tm (TuneUp Final Production Hardening Report) Tj T* ET
+BT /F1 8 Tf 9.6 TL ET
+.419608 .447059 .501961 rg
+BT 1 0 0 1 513.2307 28.34646 Tm (Page 3) Tj T* ET
+BT 1 0 0 1 56.69291 779.5276 Tm (\177 synchronous analysis timeout) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 759.5276 Tm (Phase 5: Final Delivery) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 738.5276 Tm (\177 Generated this report at repo root:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 724.5276 Tm (\177 TUNEUP_FINAL_REPORT.md) Tj T* ET
+BT /F2 14 Tf 16.8 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 702.5276 Tm (3. Purge Metrics) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 676.5276 Tm (These metrics are based on the actual git diff, not estimates.) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 656.5276 Tm (Exact Diff Metrics) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 635.5276 Tm (\177 Deleted files: 16) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 621.5276 Tm (\177 Overall diff: +6007 insertions / -2983 deletions) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 607.5276 Tm (\177 Removed direct npm packages: 4) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 593.5276 Tm (\177 Added dev-tooling packages: 5) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 573.5276 Tm (What Was Removed) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 552.5276 Tm (\177 Duplicate/orphaned top-level media assets deleted: 8) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 538.5276 Tm (\177 Dead code / metadata files deleted: 8) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 524.5276 Tm (\177 Deleted obsolete frontend DB files: 4) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 510.5276 Tm (\177 Deleted dead backend model file: 1) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 490.5276 Tm (Removed Direct Dependencies) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 469.5276 Tm (\177 @babel/plugin-proposal-decorators) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 455.5276 Tm (\177 @nozbe/watermelondb) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 441.5276 Tm (\177 nativewind) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 427.5276 Tm (\177 tailwindcss) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 407.5276 Tm (Added Tooling Dependencies) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 386.5276 Tm (\177 @testing-library/react-native) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 372.5276 Tm (\177 eslint) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 358.5276 Tm (\177 eslint-config-expo) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 344.5276 Tm (\177 prettier) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 330.5276 Tm (\177 react-test-renderer) Tj T* ET
+BT /F2 14 Tf 16.8 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 308.5276 Tm (4. Tuner Optimization Log) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 282.5276 Tm (The tuner hardening was implemented inside the native react-native-pitchy patch and then) Tj T* ET
+BT 1 0 0 1 56.69291 268.5276 Tm (surfaced through the JS hook.) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 248.5276 Tm (Native Filters Added) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 227.5276 Tm (\177 RMS / decibel gate:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 213.5276 Tm (\177 native noise floor: -55 dB) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 199.5276 Tm (\177 effective floor: max\(JS minVolume, -55 dB\)) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 185.5276 Tm (\177 confidence gate:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 171.5276 Tm (\177 minimum confidence: 0.80) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 157.5276 Tm (\177 smoothing:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 143.5276 Tm (\177 rolling median window: 5 valid pitch samples) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 129.5276 Tm (\177 exponential moving average: alpha = 0.30) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 115.5276 Tm (\177 note hysteresis:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 101.5276 Tm (\177 note-class change only commits after the candidate remains beyond the boundary by 6 cents) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 87.52756 Tm (\177 required confirmation window: 2 consecutive valid frames) Tj T* ET
+ 
+endstream
+endobj
+21 0 obj
+<<
+/Length 5921
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+.819608 .835294 .858824 RG
+n 56.69291 802.2047 m 538.5827 802.2047 l S
+n 56.69291 39.68504 m 538.5827 39.68504 l S
+BT /F2 11 Tf 13.2 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 812.126 Tm (TuneUp Final Production Hardening Report) Tj T* ET
+BT /F1 8 Tf 9.6 TL ET
+.419608 .447059 .501961 rg
+BT 1 0 0 1 513.2307 28.34646 Tm (Page 4) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 779.5276 Tm (Event Contract Added) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 758.5276 Tm (The native module now emits richer tuner events:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 738.5276 Tm (\177 gateState) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 724.5276 Tm (\177 analysisDurationMs) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 710.5276 Tm (\177 stableMidi) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 696.5276 Tm (\177 stabilizedPitch) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 676.5276 Tm (Native Behavior Improvements) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 655.5276 Tm (\177 ignores room noise under the native gate instead of trying to classify it) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 641.5276 Tm (\177 ignores unstable low-confidence frames) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 627.5276 Tm (\177 emits more stable note-class transitions near note boundaries) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 613.5276 Tm (\177 reuses rolling buffers instead of treating each read like a brand-new isolated frame) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 599.5276 Tm (\177 avoids leaving duplicate recorder/listener state alive after stop/restart) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 585.5276 Tm (\177 Android recorder lifecycle was hardened so restart after stop is reliable) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 565.5276 Tm (Frontend Hook Consumption) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 544.5276 Tm (MusicAIApp/src/hooks/useTuner.ts now:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 524.5276 Tm (\177 prefers stabilized native pitch over raw readings) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 510.5276 Tm (\177 derives note display from stableMidi) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 496.5276 Tm (\177 exposes diagnostics for dev profiling) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 482.5276 Tm (\177 retains JS/UI-side smoothing only as a presentation layer) Tj T* ET
+BT /F2 14 Tf 16.8 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 460.5276 Tm (5. Automated Verification Results) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 434.5276 Tm (Frontend) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 413.5276 Tm (\177 npx tsc --noEmit: Pass) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 399.5276 Tm (\177 npm test -- --runInBand: Pass) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 385.5276 Tm (\177 9 suites) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 371.5276 Tm (\177 23 tests) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 357.5276 Tm (\177 npm run lint: Pass) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 343.5276 Tm (\177 npx expo-doctor: Pass \(17/17\)) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 323.5276 Tm (Backend) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 302.5276 Tm (\177 python3 -m py_compile main.py: Pass) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 288.5276 Tm (\177 venv/bin/pytest: Pass) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 274.5276 Tm (\177 8 tests) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 260.5276 Tm (\177 venv/bin/ruff check .: Pass) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 246.5276 Tm (\177 venv/bin/black --check .: Pass) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 226.5276 Tm (Dependency / Security Snapshot) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 205.5276 Tm (npm audit current totals:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 185.5276 Tm (\177 production vulnerabilities: 5) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 171.5276 Tm (\177 high: 3) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 157.5276 Tm (\177 moderate: 2) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 143.5276 Tm (\177 full tree vulnerabilities: 10) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 129.5276 Tm (\177 high: 3) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 115.5276 Tm (\177 moderate: 2) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 101.5276 Tm (\177 low: 5) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 81.52756 Tm (Notable remaining transitive issues are in the Expo / tooling chain, including:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+ 
+endstream
+endobj
+22 0 obj
+<<
+/Length 6247
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+.819608 .835294 .858824 RG
+n 56.69291 802.2047 m 538.5827 802.2047 l S
+n 56.69291 39.68504 m 538.5827 39.68504 l S
+BT /F2 11 Tf 13.2 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 812.126 Tm (TuneUp Final Production Hardening Report) Tj T* ET
+BT /F1 8 Tf 9.6 TL ET
+.419608 .447059 .501961 rg
+BT 1 0 0 1 513.2307 28.34646 Tm (Page 5) Tj T* ET
+BT 1 0 0 1 56.69291 779.5276 Tm (\177 @xmldom/xmldom) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 765.5276 Tm (\177 node-forge) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 751.5276 Tm (\177 picomatch) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 737.5276 Tm (\177 brace-expansion) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 723.5276 Tm (\177 yaml) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 703.5276 Tm (These are not direct application packages. Fixing them cleanly requires upstream Expo /) Tj T* ET
+BT 1 0 0 1 56.69291 689.5276 Tm (test-stack upgrades and is not safe to force in this production pass without broader) Tj T* ET
+BT 1 0 0 1 56.69291 675.5276 Tm (dependency movement.) Tj T* ET
+BT /F2 14 Tf 16.8 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 653.5276 Tm (6. Manual QA Checklist) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 627.5276 Tm (These checks still need to be run on physical devices before release:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 607.5276 Tm (\177 iOS mic permission accepted) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 593.5276 Tm (\177 iOS mic permission denied) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 579.5276 Tm (\177 Android mic permission accepted) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 565.5276 Tm (\177 Android mic permission denied) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 551.5276 Tm (\177 cold start with valid Supabase session) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 537.5276 Tm (\177 cold start with expired Supabase session) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 523.5276 Tm (\177 offline startup behavior) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 509.5276 Tm (\177 backend unavailable during song import) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 495.5276 Tm (\177 Studio save from Home ) Tj /F4 10 Tf 12 TL (\256) Tj /F1 10 Tf 12 TL ( Profile deep-link reopen) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 481.5276 Tm (\177 imported song reopen from Profile) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 467.5276 Tm (\177 5-minute continuous tuner session on a real guitar/bass input) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 453.5276 Tm (\177 background ) Tj /F4 10 Tf 12 TL (\256) Tj /F1 10 Tf 12 TL ( foreground recovery during tuning) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 439.5276 Tm (\177 background ) Tj /F4 10 Tf 12 TL (\256) Tj /F1 10 Tf 12 TL ( foreground recovery during song playback) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 419.5276 Tm (Target Latency Acceptance Criteria) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 398.5276 Tm (These criteria are now defined in code/docs, but still require device-side measurement by a) Tj T* ET
+BT 1 0 0 1 56.69291 384.5276 Tm (human:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 364.5276 Tm (\177 stable note lock for a sustained tone within <= 200 ms) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 350.5276 Tm (\177 input-to-visual update p50 <= 60 ms) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 336.5276 Tm (\177 input-to-visual update p95 <= 100 ms) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 322.5276 Tm (\177 no stable false-positive note during idle room noise) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 308.5276 Tm (\177 no visible memory growth during a 5-minute continuous tuning session) Tj T* ET
+BT /F2 14 Tf 16.8 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 286.5276 Tm (7. Identified Technical Debt / Risks) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 260.5276 Tm (1. Native audio path is hardened, but still not a bespoke JSI DSP engine) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 239.5276 Tm (The shipped solution now uses a hardened native react-native-pitchy path with a checked-in) Tj T* ET
+BT 1 0 0 1 56.69291 225.5276 Tm (patch. It is materially more production-ready than before, but it is still not a custom) Tj T* ET
+BT 1 0 0 1 56.69291 211.5276 Tm (zero-latency C++/JSI DSP engine built fully in-house.) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 191.5276 Tm (2. Real device latency profiling has not been captured in this workspace) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 170.5276 Tm (The code now exposes diagnostics for profiling, but true end-to-end latency numbers still) Tj T* ET
+BT 1 0 0 1 56.69291 156.5276 Tm (need to be validated on physical iOS and Android hardware with real instrument input.) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 136.5276 Tm (3. FastAPI startup uses deprecated @app.on_event\("startup"\)) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 115.5276 Tm (It works correctly today and all backend tests pass, but FastAPI now prefers lifespan) Tj T* ET
+BT 1 0 0 1 56.69291 101.5276 Tm (handlers. This is not a launch blocker, but it should be migrated in a future backend) Tj T* ET
+BT 1 0 0 1 56.69291 87.52756 Tm (cleanup pass.) Tj T* ET
+ 
+endstream
+endobj
+23 0 obj
+<<
+/Length 6227
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+.819608 .835294 .858824 RG
+n 56.69291 802.2047 m 538.5827 802.2047 l S
+n 56.69291 39.68504 m 538.5827 39.68504 l S
+BT /F2 11 Tf 13.2 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 812.126 Tm (TuneUp Final Production Hardening Report) Tj T* ET
+BT /F1 8 Tf 9.6 TL ET
+.419608 .447059 .501961 rg
+BT 1 0 0 1 513.2307 28.34646 Tm (Page 6) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 779.5276 Tm (4. Remaining npm audit findings are transitive) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 758.5276 Tm (The remaining vulnerabilities are in the Expo / Jest / dependency toolchain tree rather than) Tj T* ET
+BT 1 0 0 1 56.69291 744.5276 Tm (in app-owned code. They need monitored upstream upgrades instead of ad hoc forced updates.) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 724.5276 Tm (5. Expo config still contains placeholder identity values) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 703.5276 Tm (MusicAIApp/app.json still uses placeholder identity settings such as:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 683.5276 Tm (\177 app name: MusicAIApp) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 669.5276 Tm (\177 iOS bundle identifier: com.anonymous.MusicAIApp) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 655.5276 Tm (\177 Android package: com.anonymous.MusicAIApp) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 635.5276 Tm (These must be replaced before store submission.) Tj T* ET
+BT /F2 14 Tf 16.8 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 613.5276 Tm (8. ) Tj /F5 14 Tf 16.8 TL (n) Tj /F2 14 Tf 16.8 TL ( ACTION REQUIRED BY HUMAN DEVELOPER \(CRITICAL\) ) Tj /F5 14 Tf 16.8 TL (n) Tj /F2 14 Tf 16.8 TL T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 587.5276 Tm (Complete every item below before a production launch.) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 567.5276 Tm (Environment Variables) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 546.5276 Tm (\177 Frontend \(MusicAIApp/.env\):) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 532.5276 Tm (\177 EXPO_PUBLIC_API_BASE_URL) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 518.5276 Tm (\177 EXPO_PUBLIC_SUPABASE_URL) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 504.5276 Tm (\177 EXPO_PUBLIC_SUPABASE_ANON_KEY) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 490.5276 Tm (\177 Backend \(backend/.env\):) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 476.5276 Tm (\177 SUPABASE_URL) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 462.5276 Tm (\177 SUPABASE_KEY) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 448.5276 Tm (\177 SUPABASE_AUDIO_BUCKET) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 434.5276 Tm (\177 SUPABASE_AUDIO_PREFIX) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 420.5276 Tm (\177 CORS_ALLOW_ORIGINS) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 406.5276 Tm (\177 LOG_LEVEL) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 386.5276 Tm (Supabase Setup) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 365.5276 Tm (\177 Apply the migration:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 351.5276 Tm (\177 supabase/migrations/20260401120000_rls_and_job_timeout.sql) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 337.5276 Tm (\177 Confirm earlier schema migrations are already applied before this one.) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 323.5276 Tm (\177 Verify Row Level Security is enabled for:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 309.5276 Tm (\177 users) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 295.5276 Tm (\177 achievements) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 281.5276 Tm (\177 courses) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 267.5276 Tm (\177 lessons) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 253.5276 Tm (\177 song_lessons) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 239.5276 Tm (\177 theory_activities) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 225.5276 Tm (\177 user_achievements) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 211.5276 Tm (\177 user_lesson_progress) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 197.5276 Tm (\177 user_song_progress) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 183.5276 Tm (\177 user_theory_activity_progress) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 169.5276 Tm (\177 practice_sessions) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 155.5276 Tm (\177 tracks) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 141.5276 Tm (\177 track_markers) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 127.5276 Tm (\177 ai_analysis_jobs) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 113.5276 Tm (\177 Verify the owner-access policies in the migration are present and active.) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 93.52756 Tm (Supabase Storage) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 72.52756 Tm (\177 Verify the audio bucket exists:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+ 
+endstream
+endobj
+24 0 obj
+<<
+/Length 6634
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+.819608 .835294 .858824 RG
+n 56.69291 802.2047 m 538.5827 802.2047 l S
+n 56.69291 39.68504 m 538.5827 39.68504 l S
+BT /F2 11 Tf 13.2 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 812.126 Tm (TuneUp Final Production Hardening Report) Tj T* ET
+BT /F1 8 Tf 9.6 TL ET
+.419608 .447059 .501961 rg
+BT 1 0 0 1 513.2307 28.34646 Tm (Page 7) Tj T* ET
+BT 1 0 0 1 56.69291 779.5276 Tm (\177 default bucket name: audio-uploads) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 765.5276 Tm (\177 Confirm the backend service role key has permission to:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 751.5276 Tm (\177 create the bucket if missing) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 737.5276 Tm (\177 upload imported audio) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 723.5276 Tm (\177 remove temporary stored audio when cleanup runs) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 709.5276 Tm (\177 Verify the public/signed URL strategy matches your release security model.) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 695.5276 Tm (\177 Current backend behavior expects a public URL flow for analysis jobs.) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 675.5276 Tm (Mobile Identity & Permissions) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 654.5276 Tm (\177 Replace placeholder Expo identity values in MusicAIApp/app.json:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 640.5276 Tm (\177 app display name) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 626.5276 Tm (\177 slug) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 612.5276 Tm (\177 iOS bundle identifier) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 598.5276 Tm (\177 Android package name) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 584.5276 Tm (\177 Review and localize microphone permission strings:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 570.5276 Tm (\177 NSMicrophoneUsageDescription) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 556.5276 Tm (\177 Expo expo-av microphone permission message) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 542.5276 Tm (\177 Keep Android audio permissions enabled:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 528.5276 Tm (\177 RECORD_AUDIO) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 514.5276 Tm (\177 App Tracking Transparency:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 500.5276 Tm (\177 only add NSUserTrackingUsageDescription and ATT request flow if you introduce) Tj T* ET
+BT 1 0 0 1 56.69291 486.5276 Tm (  tracking/ads SDKs that actually require cross-app tracking) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 472.5276 Tm (\177 do not add ATT unnecessarily, because it creates App Review scope and user-consent) Tj T* ET
+BT 1 0 0 1 56.69291 458.5276 Tm (  complexity) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 438.5276 Tm (Native Rebuild Required) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 417.5276 Tm (\177 Rebuild the custom dev client / native apps after this patch:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 403.5276 Tm (\177 MusicAIApp/patches/react-native-pitchy+1.2.0.patch) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 389.5276 Tm (\177 Required commands:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 375.5276 Tm (\177 npm install) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 361.5276 Tm (\177 npx expo prebuild if native projects are regenerated) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 347.5276 Tm (\177 npx expo run:ios) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 333.5276 Tm (\177 npx expo run:android) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 319.5276 Tm (\177 or your equivalent EAS build pipeline) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 299.5276 Tm (Secrets & Repository Safety) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 278.5276 Tm (\177 Ensure these are not committed:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 264.5276 Tm (\177 .env) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 250.5276 Tm (\177 backend/serviceAccountKey.json) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 236.5276 Tm (\177 Supabase service-role keys) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 222.5276 Tm (\177 If any secret was ever pushed before this hardening pass:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 208.5276 Tm (\177 rotate it immediately) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 194.5276 Tm (\177 remove it from git history before making the repo public) Tj T* ET
+BT /F2 11 Tf 13.2 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 174.5276 Tm (Final Human Release Validation) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 153.5276 Tm (\177 Run the manual QA checklist on at least:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 139.5276 Tm (\177 1 physical iPhone) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 125.5276 Tm (\177 1 physical Android device) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 111.5276 Tm (\177 Specifically validate:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 97.52756 Tm (\177 tuner stability in a noisy room) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 83.52756 Tm (\177 song import end-to-end) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 69.52756 Tm (\177 Studio save/reopen flow) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+ 
+endstream
+endobj
+25 0 obj
+<<
+/Length 4149
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+.819608 .835294 .858824 RG
+n 56.69291 802.2047 m 538.5827 802.2047 l S
+n 56.69291 39.68504 m 538.5827 39.68504 l S
+BT /F2 11 Tf 13.2 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 812.126 Tm (TuneUp Final Production Hardening Report) Tj T* ET
+BT /F1 8 Tf 9.6 TL ET
+.419608 .447059 .501961 rg
+BT 1 0 0 1 513.2307 28.34646 Tm (Page 8) Tj T* ET
+BT 1 0 0 1 56.69291 779.5276 Tm (\177 expired-session behavior) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 765.5276 Tm (\177 offline/network-loss behavior) Tj T* ET
+BT /F2 14 Tf 16.8 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 743.5276 Tm (9. File Highlights) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 717.5276 Tm (Key files added or materially changed in this pass:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 697.5276 Tm (\177 MusicAIApp/src/services/progressStore.ts) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 683.5276 Tm (\177 MusicAIApp/src/components/AppErrorBoundary.tsx) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 669.5276 Tm (\177 MusicAIApp/src/components/AppToastProvider.tsx) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 655.5276 Tm (\177 MusicAIApp/src/hooks/useTuner.ts) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 641.5276 Tm (\177 MusicAIApp/App.tsx) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 627.5276 Tm (\177 MusicAIApp/src/screens/HomeScreen.tsx) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 613.5276 Tm (\177 MusicAIApp/src/screens/TrafficScreen.tsx) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 599.5276 Tm (\177 MusicAIApp/src/screens/ProfileScreen.tsx) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 585.5276 Tm (\177 MusicAIApp/src/screens/SongScreen.tsx) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 571.5276 Tm (\177 MusicAIApp/src/services/api.ts) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 557.5276 Tm (\177 MusicAIApp/src/services/supabaseClient.ts) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 543.5276 Tm (\177 MusicAIApp/patches/react-native-pitchy+1.2.0.patch) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 529.5276 Tm (\177 backend/main.py) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 515.5276 Tm (\177 backend/tests/test_api.py) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 501.5276 Tm (\177 supabase/migrations/20260401120000_rls_and_job_timeout.sql) Tj T* ET
+BT /F2 14 Tf 16.8 TL ET
+.066667 .094118 .152941 rg
+BT 1 0 0 1 56.69291 479.5276 Tm (10. Final Status) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 453.5276 Tm (The codebase is significantly cleaner, the tuner is materially more stable, the backend) Tj T* ET
+BT 1 0 0 1 56.69291 439.5276 Tm (failure contract is standardized, Studio is restored properly, and the release gates now run) Tj T* ET
+BT 1 0 0 1 56.69291 425.5276 Tm (and pass locally.) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 405.5276 Tm (The remaining launch blockers are operational, not structural:) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 385.5276 Tm (\177 real Supabase credentials) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 371.5276 Tm (\177 applied RLS/storage setup) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 357.5276 Tm (\177 real mobile identity values) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 343.5276 Tm (\177 real-device latency validation) Tj T* ET
+BT /F1 10 Tf 12 TL ET
+.121569 .160784 .215686 rg
+BT 1 0 0 1 56.69291 329.5276 Tm (\177 native rebuilds after the pitch patch) Tj T* ET
+ 
+endstream
+endobj
+xref
+0 26
+0000000000 65535 f 
+0000000061 00000 n 
+0000000133 00000 n 
+0000000240 00000 n 
+0000000352 00000 n 
+0000000457 00000 n 
+0000000662 00000 n 
+0000000867 00000 n 
+0000001072 00000 n 
+0000001277 00000 n 
+0000001354 00000 n 
+0000001560 00000 n 
+0000001644 00000 n 
+0000001850 00000 n 
+0000002056 00000 n 
+0000002262 00000 n 
+0000002332 00000 n 
+0000002594 00000 n 
+0000002700 00000 n 
+0000009350 00000 n 
+0000015824 00000 n 
+0000021501 00000 n 
+0000027474 00000 n 
+0000033773 00000 n 
+0000040052 00000 n 
+0000046738 00000 n 
+trailer
+<<
+/ID 
+[<9d6e7467ef314aef0f25a38417c4bdab><9d6e7467ef314aef0f25a38417c4bdab>]
+% ReportLab generated PDF document -- digest (opensource)
+
+/Info 16 0 R
+/Root 15 0 R
+/Size 26
+>>
+startxref
+50939
+%%EOF

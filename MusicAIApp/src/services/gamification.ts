@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { LESSON_PACK_COUNTS, LessonInstrument } from '../data/lessonLibrary';
-import { addXp, getProgressSnapshot, ProgressSnapshot, setStreakDays } from '../database/services';
+import { addXp, getProgressSnapshot, ProgressSnapshot, setStreakDays } from './progressStore';
 import { getAppSettings } from './appSettings';
 import { fetchLeaderboard, LeaderboardEntry, syncLeaderboardProfile } from './api';
 import { getAuthenticatedIdentity, supabase } from './supabaseClient';
@@ -347,7 +347,7 @@ async function syncStateToBackend(state: StoredGamificationState, progress: Prog
             completedSongIds: state.completedSongIds,
             completedQuizIds: state.completedQuizIds,
         });
-    } catch (error) {
+    } catch {
         // Leaderboard sync is best-effort so practice flow never gets blocked.
     }
 }
@@ -440,7 +440,7 @@ export async function getLeaderboard(limit = 8): Promise<LeaderboardEntry[]> {
         }
 
         return await fetchLeaderboard(limit);
-    } catch (error) {
+    } catch {
         return [];
     }
 }

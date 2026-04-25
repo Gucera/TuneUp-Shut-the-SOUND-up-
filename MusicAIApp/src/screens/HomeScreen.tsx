@@ -17,9 +17,10 @@ import { SONG_LESSONS, SongLesson } from '../data/songLessons';
 import { LESSON_PACKS } from '../data/lessonLibrary';
 import PageTransitionView from '../components/PageTransitionView';
 import PremiumBackdrop from '../components/PremiumBackdrop';
+import { useAppToast } from '../components/AppToastProvider';
 import { BADGE_DEFINITIONS, GamificationSnapshot, getGamificationSnapshot } from '../services/gamification';
 import { loadImportedSongs } from '../services/songLibrary';
-import { COLORS, PREMIUM_GRADIENT, SHADOWS } from '../theme';
+import { PREMIUM_GRADIENT, SHADOWS } from '../theme';
 
 type ResumeItem =
     | {
@@ -66,6 +67,7 @@ function getInitials(displayName: string) {
 
 export default function HomeScreen() {
     const navigation = useNavigation<any>();
+    const { showToast } = useAppToast();
     const tabBarHeight = useBottomTabBarHeight();
     const [snapshot, setSnapshot] = useState<GamificationSnapshot | null>(null);
     const [importedSongs, setImportedSongs] = useState<SongLesson[]>([]);
@@ -89,6 +91,11 @@ export default function HomeScreen() {
                 setSnapshot(nextSnapshot);
                 setImportedSongs(nextImportedSongs);
             } catch (error) {
+                showToast({
+                    title: 'Dashboard unavailable',
+                    message: 'The home summary could not refresh right now. Pull back in a moment.',
+                    variant: 'warning',
+                });
                 console.error('Failed to load Home dashboard:', error);
             } finally {
                 if (isMounted) {
@@ -102,7 +109,7 @@ export default function HomeScreen() {
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [showToast]);
 
     useFocusEffect(refreshHome);
 
@@ -187,6 +194,11 @@ export default function HomeScreen() {
     const handleQuickJump = async (routeName: 'Lessons' | 'Tuner' | 'Songs') => {
         await Haptics.selectionAsync().catch(() => undefined);
         navigation.navigate(routeName);
+    };
+
+    const openStudio = async () => {
+        await Haptics.selectionAsync().catch(() => undefined);
+        navigation.getParent()?.navigate('Studio');
     };
 
     return (
@@ -391,6 +403,18 @@ export default function HomeScreen() {
                                         <Text style={styles.quickActionText}>{item.label}</Text>
                                     </Pressable>
                                 ))}
+                                <Pressable
+                                    onPress={() => void openStudio()}
+                                    style={({ pressed }) => [
+                                        styles.quickActionButton,
+                                        pressed && styles.scalePressed,
+                                    ]}
+                                >
+                                    <View style={styles.quickActionOrb}>
+                                        <Ionicons name="pulse-outline" size={18} color="#80ffdb" />
+                                    </View>
+                                    <Text style={styles.quickActionText}>Studio</Text>
+                                </Pressable>
                             </View>
 
                             <View style={styles.todayStrip}>
@@ -625,10 +649,12 @@ const styles = StyleSheet.create({
     },
     quickActionRow: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: 10,
     },
     quickActionButton: {
-        flex: 1,
+        flexBasis: '48%',
+        flexGrow: 1,
         borderRadius: 20,
         paddingHorizontal: 12,
         paddingVertical: 14,

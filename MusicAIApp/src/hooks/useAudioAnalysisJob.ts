@@ -103,7 +103,7 @@ export function useAudioAnalysisJob({
             return;
         }
 
-        if (status.status === 'failed' || status.status === 'error') {
+        if (status.status === 'failed' || status.status === 'timed_out' || status.status === 'error') {
             failScan(status.message, getOptionalProgressText(status, 'Analysis failed.'));
             return;
         }

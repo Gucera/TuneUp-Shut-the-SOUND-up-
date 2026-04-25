@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SHADOWS } from '../theme';
+import { SHADOWS } from '../theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -19,20 +19,6 @@ interface PremiumHeroStripProps {
     metrics: MetricItem[];
     dark?: boolean;
     colors?: readonly [string, string, ...string[]];
-}
-
-function withOpacity(hex: string, opacity: number) {
-    const safeOpacity = Math.max(0, Math.min(1, opacity));
-    const sanitized = hex.replace('#', '');
-    const fullHex = sanitized.length === 3
-        ? sanitized.split('').map((char) => `${char}${char}`).join('')
-        : sanitized;
-
-    const value = parseInt(fullHex, 16);
-    const r = (value >> 16) & 255;
-    const g = (value >> 8) & 255;
-    const b = value & 255;
-    return `rgba(${r}, ${g}, ${b}, ${safeOpacity})`;
 }
 
 export default function PremiumHeroStrip({

@@ -46,7 +46,15 @@ const TUNER_CONFIDENCE_FADE_MS = 48;
 const TUNER_STABILITY_FADE_MS = 90;
 const TUNER_NEEDLE_SMOOTHING_FACTOR = 0.38;
 const TUNER_NEEDLE_CENTER_SNAP_CENTS = 0.45;
-const TUNER_MEDIAN_PITCH_WINDOW = 3;
+const TUNER_MEDIAN_PITCH_WINDOW = 5;
+
+export type NativeGateState =
+    | 'buffering'
+    | 'active'
+    | 'blocked-volume'
+    | 'blocked-confidence'
+    | 'blocked-pitch'
+    | 'holding';
 
 export type TunerInstrument = Exclude<InstrumentType, 'Drums'> | 'Chromatic';
 export type TunerStatus = 'idle' | 'starting' | 'listening' | 'holding' | 'no-signal' | 'permission-denied' | 'error';
@@ -76,6 +84,9 @@ interface PitchFrame {
     volume: number;
     updatedAt: number;
     hasSignal: boolean;
+    gateState: NativeGateState;
+    analysisDurationMs: number | null;
+    stableMidi: number | null;
 }
 
 export interface TunerTarget {
@@ -116,6 +127,11 @@ export interface UseTunerResult {
     targetCents: number;
     isInTune: boolean;
     displayStatus: string;
+    diagnostics: {
+        gateState: NativeGateState;
+        analysisDurationMs: number | null;
+        stableMidi: number | null;
+    };
     needleCents: SharedValue<number>;
     confidenceValue: SharedValue<number>;
     stabilityValue: SharedValue<number>;
@@ -144,7 +160,17 @@ const EMPTY_FRAME: PitchFrame = {
     volume: -120,
     updatedAt: 0,
     hasSignal: false,
+    gateState: 'buffering',
+    analysisDurationMs: null,
+    stableMidi: null,
 };
+
+interface NativePitchyEvent extends PitchyEvent {
+    gateState?: NativeGateState;
+    analysisDurationMs?: number;
+    stableMidi?: number;
+    stabilizedPitch?: number;
+}
 
 interface NativePitchyModule {
     init: (config?: {
@@ -171,6 +197,8 @@ function getPitchyModule(): NativePitchyModule | null {
     }
 
     try {
+        // The native module is only safe to require once we know the TurboModule is registered.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const loadedModule = require('react-native-pitchy') as { default?: NativePitchyModule };
         cachedPitchyModule = loadedModule.default ?? null;
     } catch {
@@ -416,6 +444,7 @@ export function useTuner({
     }, [needleCents]);
 
     const applyFrame = useCallback((event: PitchyEvent) => {
+        const nativeEvent = event as NativePitchyEvent;
         const {
             calibrationHz: liveCalibrationHz,
             confidenceThreshold: liveConfidenceThreshold,
@@ -427,8 +456,24 @@ export function useTuner({
         const now = Date.now();
         const volume = Number.isFinite(event.volume) ? event.volume : -120;
         const confidence = Number.isFinite(event.confidence) ? event.confidence : 0;
-        const validPitch = Number.isFinite(event.pitch) && event.pitch > 0;
+        const sourcePitch = Number.isFinite(nativeEvent.stabilizedPitch) && (nativeEvent.stabilizedPitch ?? 0) > 0
+            ? nativeEvent.stabilizedPitch ?? 0
+            : event.pitch;
+        const validPitch = Number.isFinite(sourcePitch) && sourcePitch > 0;
         const hasConfidentSignal = validPitch && confidence >= liveConfidenceThreshold && volume >= liveMinVolume;
+        const gateState = nativeEvent.gateState ?? (
+            !validPitch
+                ? 'blocked-pitch'
+                : volume < liveMinVolume
+                    ? 'blocked-volume'
+                    : confidence < liveConfidenceThreshold
+                        ? 'blocked-confidence'
+                        : 'active'
+        );
+        const analysisDurationMs = Number.isFinite(nativeEvent.analysisDurationMs)
+            ? nativeEvent.analysisDurationMs ?? null
+            : null;
+        const nativeStableMidi = Number.isFinite(nativeEvent.stableMidi) ? Math.round(nativeEvent.stableMidi ?? 0) : null;
 
         confidenceValue.value = withTiming(hasConfidentSignal ? confidence : 0, { duration: TUNER_CONFIDENCE_FADE_MS });
         stabilityValue.value = withTiming(hasConfidentSignal ? 1 : 0, { duration: TUNER_STABILITY_FADE_MS });
@@ -437,9 +482,19 @@ export function useTuner({
         let nextStatus: TunerStatus = 'no-signal';
 
         if (hasConfidentSignal) {
-            pitchHistoryRef.current = [...pitchHistoryRef.current, event.pitch].slice(-TUNER_MEDIAN_PITCH_WINDOW);
-            const stabilizedFrequency = median(pitchHistoryRef.current);
+            pitchHistoryRef.current = [...pitchHistoryRef.current, sourcePitch].slice(-TUNER_MEDIAN_PITCH_WINDOW);
+            const stabilizedFrequency = nativeEvent.stabilizedPitch ?? median(pitchHistoryRef.current);
             const detected = frequencyToNote(stabilizedFrequency, liveCalibrationHz);
+            const stableLookup = nativeStableMidi !== null
+                ? MIDI_NOTE_LOOKUP[clamp(nativeStableMidi, 0, MIDI_NOTE_LOOKUP.length - 1)]
+                : null;
+            const detectedMidi = stableLookup?.midi ?? detected.midi;
+            const detectedNoteName = stableLookup?.noteName ?? detected.noteName;
+            const detectedNoteClass = stableLookup?.noteClass ?? detected.noteClass;
+            const detectedReferenceFrequency = stableLookup
+                ? midiToFrequency(stableLookup.midi, liveCalibrationHz)
+                : midiToFrequency(detected.midi, liveCalibrationHz);
+            const centsFromStableNote = 1200 * Math.log2(detected.frequency / detectedReferenceFrequency);
             const target = resolveTunerTarget(
                 detected.frequency,
                 liveInstrument,
@@ -453,14 +508,17 @@ export function useTuner({
 
             nextFrame = {
                 frequency: detected.frequency,
-                midi: detected.midi,
-                noteName: detected.noteName,
-                noteClass: detected.noteClass,
-                centsFromNote: detected.centsFromNote,
+                midi: detectedMidi,
+                noteName: detectedNoteName,
+                noteClass: detectedNoteClass,
+                centsFromNote: centsFromStableNote,
                 confidence,
                 volume,
                 updatedAt: now,
                 hasSignal: true,
+                gateState,
+                analysisDurationMs,
+                stableMidi: nativeStableMidi,
             };
             latestAcceptedFrameRef.current = nextFrame;
             nextStatus = 'listening';
@@ -476,6 +534,8 @@ export function useTuner({
                     confidence,
                     volume,
                     hasSignal: false,
+                    gateState: 'holding',
+                    analysisDurationMs,
                 };
                 nextStatus = 'holding';
             } else {
@@ -486,6 +546,8 @@ export function useTuner({
                     confidence,
                     volume,
                     updatedAt: now,
+                    gateState,
+                    analysisDurationMs,
                 };
                 nextStatus = 'no-signal';
                 centerNeedle();
@@ -666,6 +728,14 @@ export function useTuner({
                 return `Holding ${latestAcceptedFrameRef.current.noteName}`;
             }
 
+            if (frame.gateState === 'blocked-volume') {
+                return 'Listening, but the signal is still under the noise gate.';
+            }
+
+            if (frame.gateState === 'blocked-confidence') {
+                return 'Listening, but the note is not stable enough yet.';
+            }
+
             return 'Listening for a confident note...';
         }
 
@@ -676,7 +746,7 @@ export function useTuner({
         return targetCents > 0
             ? `Sharp by ${Math.round(Math.abs(targetCents))} cents`
             : `Flat by ${Math.round(Math.abs(targetCents))} cents`;
-    }, [error, frame.frequency, frame.hasSignal, permissionResponse?.canAskAgain, status, target, targetCents]);
+    }, [error, frame.frequency, frame.gateState, frame.hasSignal, frame.noteName, permissionResponse?.canAskAgain, status, target, targetCents]);
 
     return {
         status,
@@ -698,6 +768,11 @@ export function useTuner({
         targetCents,
         isInTune: Math.abs(targetCents) <= TUNER_IN_TUNE_CENTS && !!frame.frequency,
         displayStatus,
+        diagnostics: {
+            gateState: frame.gateState,
+            analysisDurationMs: frame.analysisDurationMs,
+            stableMidi: frame.stableMidi,
+        },
         needleCents,
         confidenceValue,
         stabilityValue,

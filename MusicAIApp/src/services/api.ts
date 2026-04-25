@@ -1,4 +1,31 @@
-const BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL?.trim() || 'http://localhost:8000').replace(/\/$/, '');
+const FALLBACK_BASE_URL = 'http://localhost:8000';
+const URL_PROTOCOL_PATTERN = /^https?:\/\//i;
+
+function sanitizeBaseUrl(rawValue?: string) {
+    if (!rawValue) {
+        return FALLBACK_BASE_URL;
+    }
+
+    const trimmed = rawValue.trim();
+    const markdownLinkMatch = trimmed.match(/^\[[^\]]+\]\((https?:\/\/[^)]+)\)$/i);
+    const directUrlMatch = trimmed.match(/https?:\/\/[^\s\])>]+/i);
+    const candidate = (markdownLinkMatch?.[1] ?? directUrlMatch?.[0] ?? trimmed)
+        .trim()
+        .replace(/^['"<]+/, '')
+        .replace(/[>'"]+$/, '');
+
+    if (!URL_PROTOCOL_PATTERN.test(candidate)) {
+        return FALLBACK_BASE_URL;
+    }
+
+    try {
+        return new URL(candidate).toString().replace(/\/$/, '');
+    } catch {
+        return FALLBACK_BASE_URL;
+    }
+}
+
+const BASE_URL = sanitizeBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
 const WARMUP_WINDOW_MS = 45_000;
 
 let lastWarmupAt = 0;
@@ -7,7 +34,7 @@ let pendingWarmup: Promise<void> | null = null;
 type ApiPayload = Record<string, any>;
 
 export interface ApiErrorResponse {
-    status: 'error' | 'failed';
+    status: 'error' | 'failed' | 'timed_out';
     message: string;
     statusCode?: number;
 }
@@ -148,10 +175,19 @@ export interface AnalysisTaskFailedResponse {
     message: string;
 }
 
+export interface AnalysisTaskTimedOutResponse {
+    status: 'timed_out';
+    taskId: string;
+    progressText: string;
+    updatedAt: string | null;
+    message: string;
+}
+
 export type AnalysisTaskStatusResponse =
     | AnalysisTaskProcessingResponse
     | AnalysisTaskCompletedResponse
     | AnalysisTaskFailedResponse
+    | AnalysisTaskTimedOutResponse
     | ApiErrorResponse;
 
 export interface SongImportTaskProcessingResponse {
@@ -177,10 +213,19 @@ export interface SongImportTaskFailedResponse {
     message: string;
 }
 
+export interface SongImportTaskTimedOutResponse {
+    status: 'timed_out';
+    taskId: string;
+    progressText: string;
+    updatedAt: string | null;
+    message: string;
+}
+
 export type SongImportTaskStatusResponse =
     | SongImportTaskProcessingResponse
     | SongImportTaskCompletedResponse
     | SongImportTaskFailedResponse
+    | SongImportTaskTimedOutResponse
     | ApiErrorResponse;
 
 function inferAudioMimeType(fileName: string, fileUri: string) {
@@ -223,10 +268,22 @@ function getNullableString(payload: ApiPayload, key: string) {
     return typeof payload[key] === 'string' ? payload[key] : null;
 }
 
+function getErrorMessage(payload: ApiPayload, fallback: string) {
+    const nestedError = payload.error;
+    if (nestedError && typeof nestedError === 'object') {
+        const typedError = nestedError as Record<string, unknown>;
+        if (typeof typedError.message === 'string') {
+            return typedError.message;
+        }
+    }
+
+    return getString(payload, 'detail', getString(payload, 'message', fallback));
+}
+
 function buildApiError(response: Response | null, payload: ApiPayload, fallback: string): ApiErrorResponse {
     return {
         status: 'error',
-        message: getString(payload, 'detail', getString(payload, 'message', fallback)),
+        message: getErrorMessage(payload, fallback),
         ...(response ? { statusCode: response.status } : {}),
     };
 }
@@ -416,10 +473,14 @@ export const recommendSong = async (mood: string) => {
 
 export const analyzeBpm = async (fileUri: string, fileName: string) => {
     try {
-        const { payload } = await requestJson('/analyze-bpm', {
+        const { response, payload } = await requestJson('/analyze-bpm', {
             method: 'POST',
             body: createAudioFormData(fileUri, fileName, 'audio.mp3'),
         });
+
+        if (!response.ok) {
+            return buildApiError(response, payload, 'Could not analyze BPM.');
+        }
 
         return payload;
     } catch {
@@ -434,7 +495,7 @@ export const saveTrafficData = async (
     userId?: string,
 ) => {
     try {
-        const { payload } = await requestJson('/save-traffic', {
+        const { response, payload } = await requestJson('/save-traffic', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -444,6 +505,10 @@ export const saveTrafficData = async (
                 user_id: userId ?? null,
             }),
         });
+
+        if (!response.ok) {
+            return buildApiError(response, payload, 'Could not save the Studio analysis.');
+        }
 
         return payload;
     } catch {
@@ -546,7 +611,17 @@ export const fetchAnalysisTaskStatus = async (taskId: string): Promise<AnalysisT
                 taskId: getString(payload, 'task_id', taskId),
                 progressText: getString(payload, 'progress_text', 'Analysis failed.'),
                 updatedAt: getNullableString(payload, 'updated_at'),
-                message: getString(payload, 'message', 'Analysis failed.'),
+                message: getErrorMessage(payload, 'Analysis failed.'),
+            };
+        }
+
+        if (payload.status === 'timed_out') {
+            return {
+                status: 'timed_out',
+                taskId: getString(payload, 'task_id', taskId),
+                progressText: getString(payload, 'progress_text', 'Analysis timed out.'),
+                updatedAt: getNullableString(payload, 'updated_at'),
+                message: getErrorMessage(payload, 'Analysis timed out.'),
             };
         }
 
@@ -587,7 +662,17 @@ export const fetchSongImportTaskStatus = async (taskId: string): Promise<SongImp
                 taskId: getString(payload, 'task_id', taskId),
                 progressText: getString(payload, 'progress_text', 'AI transcription failed.'),
                 updatedAt: getNullableString(payload, 'updated_at'),
-                message: getString(payload, 'message', 'AI transcription failed.'),
+                message: getErrorMessage(payload, 'AI transcription failed.'),
+            };
+        }
+
+        if (payload.status === 'timed_out') {
+            return {
+                status: 'timed_out',
+                taskId: getString(payload, 'task_id', taskId),
+                progressText: getString(payload, 'progress_text', 'AI transcription timed out.'),
+                updatedAt: getNullableString(payload, 'updated_at'),
+                message: getErrorMessage(payload, 'AI transcription timed out.'),
             };
         }
 

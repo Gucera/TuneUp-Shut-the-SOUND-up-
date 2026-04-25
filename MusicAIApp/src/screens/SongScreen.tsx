@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
     Animated,
     Dimensions,
     Easing,
@@ -27,6 +26,7 @@ import PremiumHeroStrip from '../components/PremiumHeroStrip';
 import PracticeFlowShell from '../components/PracticeFlowShell';
 import ScreenSettingsButton from '../components/ScreenSettingsButton';
 import SkeletonBlock from '../components/SkeletonBlock';
+import { useAppToast } from '../components/AppToastProvider';
 import { useCelebration } from '../hooks/useCelebration';
 import {
     buildTabTarget,
@@ -287,6 +287,7 @@ export default function SongScreen({
 }: {
     route?: { params?: { focusSongId?: string } };
 }) {
+    const { showToast } = useAppToast();
     const tabBarHeight = useBottomTabBarHeight();
     const [librarySongs, setLibrarySongs] = useState<SongLesson[]>([]);
     const [selectedSong, setSelectedSong] = useState<SongLesson>(SONG_LESSONS[0]);
@@ -298,7 +299,7 @@ export default function SongScreen({
     const [playbackSec, setPlaybackSec] = useState(0);
     const [perfectCount, setPerfectCount] = useState(0);
     const [goodCount, setGoodCount] = useState(0);
-    const [missedCount, setMissedCount] = useState(0);
+    const [, setMissedCount] = useState(0);
     const [combo, setCombo] = useState(0);
     const [bestCombo, setBestCombo] = useState(0);
     const [score, setScore] = useState<SongScore | null>(null);
@@ -837,7 +838,7 @@ export default function SongScreen({
             } else {
                 setMicStatus(getIdleSongStatus(activePanel));
             }
-        } catch (error) {
+        } catch {
             setMicStatus('Seek missed');
         }
     };
@@ -882,7 +883,7 @@ export default function SongScreen({
                     break;
                 }
 
-                if (status.status === 'failed' || status.status === 'error') {
+                if (status.status === 'failed' || status.status === 'timed_out' || status.status === 'error') {
                     throw new Error(status.message);
                 }
 
@@ -912,7 +913,11 @@ export default function SongScreen({
             }, 2200);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Could not import that song package.';
-            Alert.alert('Import failed', message);
+            showToast({
+                title: 'Import failed',
+                message,
+                variant: 'error',
+            });
         } finally {
             setIsImporting(false);
             setImportProgressValue(0);
@@ -970,7 +975,7 @@ export default function SongScreen({
                     variant: nextScore && nextScore.accuracy >= 80 ? 'confetti' : 'success',
                 }, 2000);
             }
-        } catch (error) {
+        } catch {
             setMicStatus('Session complete');
         }
     };
@@ -1055,7 +1060,7 @@ export default function SongScreen({
             } else {
                 await resumeSong();
             }
-        } catch (error) {
+        } catch {
             setMicStatus('Session could not start');
         }
     };
@@ -1063,7 +1068,7 @@ export default function SongScreen({
     const restartSong = async () => {
         try {
             await startFromTop();
-        } catch (error) {
+        } catch {
             setMicStatus('Restart missed');
         }
     };

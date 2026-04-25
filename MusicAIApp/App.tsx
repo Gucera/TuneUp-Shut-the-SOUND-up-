@@ -1,5 +1,5 @@
 import 'expo-dev-client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -13,16 +13,20 @@ import { Session } from '@supabase/supabase-js';
 import HomeScreen from './src/screens/HomeScreen';
 import TheoryScreen from './src/screens/TheoryScreen';
 import LessonDetailScreen from './src/screens/LessonDetailScreen';
-import PracticalScreen from './src/screens/PracticalScreen';
+import TunerScreen from './src/screens/TunerScreen';
 import SongScreen from './src/screens/SongScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import TrafficScreen from './src/screens/TrafficScreen';
 import AuthScreen from './src/screens/AuthScreen';
+import AppErrorBoundary from './src/components/AppErrorBoundary';
+import { AppToastProvider, useAppToast } from './src/components/AppToastProvider';
 import { COLORS, SHADOWS } from './src/theme';
 import type { LessonsStackParamList } from './src/navigation/lessonStack';
-import { supabase } from './src/services/supabaseClient';
+import { restoreSupabaseSession, supabase } from './src/services/supabaseClient';
 
 const Tab = createBottomTabNavigator();
 const LessonsStack = createNativeStackNavigator<LessonsStackParamList>();
+const RootStack = createNativeStackNavigator();
 
 const navTheme = {
     ...DefaultTheme,
@@ -89,56 +93,54 @@ function LessonsNavigator() {
     );
 }
 
-function AuthenticatedTabs() {
+function MainTabsNavigator() {
     return (
-        <NavigationContainer theme={navTheme}>
-            <Tab.Navigator
-                initialRouteName="Home"
-                backBehavior="history"
-                screenOptions={({ route }) => ({
-                    headerShown: false,
-                    animation: 'fade',
-                    tabBarActiveTintColor: COLORS.mint,
-                    tabBarInactiveTintColor: 'rgba(223,237,255,0.62)',
-                    tabBarShowLabel: true,
-                    tabBarLabelStyle: {
-                        fontSize: 10,
-                        fontWeight: '900',
-                        letterSpacing: 0.7,
-                        textTransform: 'uppercase',
-                        marginBottom: 6,
-                    },
-                    tabBarStyle: styles.tabBar,
-                    tabBarItemStyle: styles.tabItem,
-                    tabBarIcon: ({ focused, color, size }) => (
-                        <PixelIcon routeName={route.name} focused={focused} color={color} size={size} />
-                    ),
-                    tabBarBackground: () => (
-                        <LinearGradient
-                            colors={['rgba(116,0,184,0.96)', 'rgba(105,48,195,0.94)', 'rgba(94,96,206,0.92)']}
-                            end={{ x: 1, y: 1 }}
-                            start={{ x: 0, y: 0 }}
-                            style={styles.tabBarBackground}
-                        >
-                            <View style={styles.tabBarGlow} />
-                        </LinearGradient>
-                    ),
-                })}
-            >
-                <Tab.Screen
-                    name="Lessons"
-                    component={LessonsNavigator}
-                    options={{
-                        popToTopOnBlur: true,
-                        freezeOnBlur: false,
-                    }}
-                />
-                <Tab.Screen name="Tuner" component={PracticalScreen} />
-                <Tab.Screen name="Home" component={HomeScreen} />
-                <Tab.Screen name="Songs" component={SongScreen} />
-                <Tab.Screen name="Profile" component={ProfileScreen} />
-            </Tab.Navigator>
-        </NavigationContainer>
+        <Tab.Navigator
+            initialRouteName="Home"
+            backBehavior="history"
+            screenOptions={({ route }) => ({
+                headerShown: false,
+                animation: 'fade',
+                tabBarActiveTintColor: COLORS.mint,
+                tabBarInactiveTintColor: 'rgba(223,237,255,0.62)',
+                tabBarShowLabel: true,
+                tabBarLabelStyle: {
+                    fontSize: 10,
+                    fontWeight: '900',
+                    letterSpacing: 0.7,
+                    textTransform: 'uppercase',
+                    marginBottom: 6,
+                },
+                tabBarStyle: styles.tabBar,
+                tabBarItemStyle: styles.tabItem,
+                tabBarIcon: ({ focused, color, size }) => (
+                    <PixelIcon routeName={route.name} focused={focused} color={color} size={size} />
+                ),
+                tabBarBackground: () => (
+                    <LinearGradient
+                        colors={['rgba(116,0,184,0.96)', 'rgba(105,48,195,0.94)', 'rgba(94,96,206,0.92)']}
+                        end={{ x: 1, y: 1 }}
+                        start={{ x: 0, y: 0 }}
+                        style={styles.tabBarBackground}
+                    >
+                        <View style={styles.tabBarGlow} />
+                    </LinearGradient>
+                ),
+            })}
+        >
+            <Tab.Screen
+                name="Lessons"
+                component={LessonsNavigator}
+                options={{
+                    popToTopOnBlur: true,
+                    freezeOnBlur: false,
+                }}
+            />
+            <Tab.Screen name="Tuner" component={TunerScreen} />
+            <Tab.Screen name="Home" component={HomeScreen} />
+            <Tab.Screen name="Songs" component={SongScreen} />
+            <Tab.Screen name="Profile" component={ProfileScreen} />
+        </Tab.Navigator>
     );
 }
 
@@ -165,33 +167,62 @@ function LoadingScreen() {
     );
 }
 
-export default function App() {
+function AppShell() {
+    const { showToast } = useAppToast();
     const [session, setSession] = useState<Session | null>(null);
     const [isBooting, setIsBooting] = useState(true);
+    const previousSessionRef = useRef<Session | null>(null);
 
     useEffect(() => {
         let isMounted = true;
 
-        void supabase.auth.getSession().then(({ data, error }) => {
-            if (!isMounted) {
-                return;
-            }
+        void restoreSupabaseSession()
+            .then((nextSession) => {
+                if (!isMounted) {
+                    return;
+                }
 
-            if (error) {
-                console.error('Failed to restore session:', error.message);
-            }
+                previousSessionRef.current = nextSession;
+                setSession(nextSession);
+                setIsBooting(false);
+            })
+            .catch((error) => {
+                if (!isMounted) {
+                    return;
+                }
 
-            setSession(data.session);
-            setIsBooting(false);
-        });
+                showToast({
+                    title: 'Session expired',
+                    message: 'Your saved login could not be restored cleanly. Please sign in again.',
+                    variant: 'warning',
+                });
+                previousSessionRef.current = null;
+                setSession(null);
+                setIsBooting(false);
+                void supabase.auth.signOut().catch(() => undefined);
+                console.error('Failed to restore session:', error);
+            });
 
         const {
             data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+        } = supabase.auth.onAuthStateChange((event, nextSession) => {
             if (!isMounted) {
                 return;
             }
 
+            if (event === 'SIGNED_OUT' && previousSessionRef.current) {
+                showToast({
+                    title: 'Signed out',
+                    message: 'Your session ended safely. Sign back in whenever you are ready.',
+                    variant: 'info',
+                });
+            }
+
+            if (event === 'TOKEN_REFRESHED' && nextSession) {
+                console.info('Supabase session refreshed successfully.');
+            }
+
+            previousSessionRef.current = nextSession;
             setSession(nextSession);
             setIsBooting(false);
         });
@@ -200,12 +231,52 @@ export default function App() {
             isMounted = false;
             subscription.unsubscribe();
         };
-    }, []);
+    }, [showToast]);
+
+    if (isBooting) {
+        return <LoadingScreen />;
+    }
+
+    if (!session) {
+        return <AuthScreen />;
+    }
+
+    return (
+        <NavigationContainer theme={navTheme}>
+            <RootStack.Navigator
+                initialRouteName="MainTabs"
+                screenOptions={{
+                    headerShown: false,
+                    animation: 'fade',
+                    contentStyle: { backgroundColor: COLORS.deepBackground },
+                }}
+            >
+                <RootStack.Screen name="MainTabs" component={MainTabsNavigator} />
+                <RootStack.Screen
+                    name="Studio"
+                    component={TrafficScreen}
+                    options={{
+                        animation: 'slide_from_right',
+                    }}
+                />
+            </RootStack.Navigator>
+        </NavigationContainer>
+    );
+}
+
+export default function App() {
+    const [resetKey, setResetKey] = useState(0);
 
     return (
         <GestureHandlerRootView style={styles.root}>
             <StatusBar style="light" />
-            {isBooting ? <LoadingScreen /> : session ? <AuthenticatedTabs /> : <AuthScreen />}
+            <AppErrorBoundary onReset={() => setResetKey((value) => value + 1)}>
+                <AppToastProvider>
+                    <View key={resetKey} style={styles.root}>
+                        <AppShell />
+                    </View>
+                </AppToastProvider>
+            </AppErrorBoundary>
         </GestureHandlerRootView>
     );
 }

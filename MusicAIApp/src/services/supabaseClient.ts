@@ -1,7 +1,7 @@
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient, processLock, User } from '@supabase/supabase-js';
+import { createClient, processLock, Session, User } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -19,6 +19,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         lock: processLock,
     },
 });
+
+const SESSION_REFRESH_THRESHOLD_MS = 60_000;
 
 function readMetadataString(user: User, key: string) {
     const value = user.user_metadata?.[key];
@@ -58,6 +60,33 @@ export async function getAuthenticatedIdentity() {
     } catch {
         return null;
     }
+}
+
+export async function restoreSupabaseSession(): Promise<Session | null> {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+        throw error;
+    }
+
+    const session = data.session;
+    if (!session) {
+        return null;
+    }
+
+    const expiresAtMs = typeof session.expires_at === 'number' ? session.expires_at * 1000 : 0;
+    const isExpiringSoon = expiresAtMs > 0 && (expiresAtMs - Date.now()) <= SESSION_REFRESH_THRESHOLD_MS;
+
+    if (!isExpiringSoon) {
+        return session;
+    }
+
+    const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+        await supabase.auth.signOut();
+        throw refreshError;
+    }
+
+    return refreshedData.session ?? null;
 }
 
 type TuneUpGlobal = typeof globalThis & {

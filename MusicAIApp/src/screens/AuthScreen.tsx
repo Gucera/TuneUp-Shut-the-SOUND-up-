@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -27,8 +26,9 @@ import Animated, {
     withSequence,
     withTiming,
 } from 'react-native-reanimated';
+import { useAppToast } from '../components/AppToastProvider';
 import PremiumBackdrop from '../components/PremiumBackdrop';
-import { COLORS, SHADOWS } from '../theme';
+import { SHADOWS } from '../theme';
 import { supabase } from '../services/supabaseClient';
 
 const DISPLAY_FONT = Platform.select({
@@ -250,6 +250,7 @@ function RecordHero() {
 }
 
 export default function AuthScreen() {
+    const { showToast } = useAppToast();
     const [mode, setMode] = useState<AuthMode>('sign-in');
     const [displayName, setDisplayName] = useState('');
     const [email, setEmail] = useState('');
@@ -307,7 +308,11 @@ export default function AuthScreen() {
                     setMode('sign-in');
                     setPassword('');
                     setStatusMessage('Account created. Check your email to verify the address, then sign in.');
-                    Alert.alert('Verify email', 'Your account was created. Check your inbox and verify the email address before signing in.');
+                    showToast({
+                        title: 'Verify email',
+                        message: 'Your account was created. Check your inbox and verify the email address before signing in.',
+                        variant: 'info',
+                    });
                     return;
                 }
             }
@@ -316,7 +321,11 @@ export default function AuthScreen() {
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Authentication failed.';
             setStatusMessage(message);
-            Alert.alert(mode === 'sign-in' ? 'Sign in failed' : 'Sign up failed', message);
+            showToast({
+                title: mode === 'sign-in' ? 'Sign in failed' : 'Sign up failed',
+                message,
+                variant: 'error',
+            });
         } finally {
             setIsSubmitting(false);
         }

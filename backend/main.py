@@ -1,23 +1,27 @@
-from datetime import datetime, timezone
-from mimetypes import guess_type
-from pathlib import Path
-from threading import Lock, Thread
-from typing import Any, Callable, Dict, List, Optional, Tuple
-from urllib.request import urlopen
-from uuid import UUID, uuid4
 import logging
 import os
 import random
 import shutil
+import socket
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
+from datetime import datetime, timezone
+from mimetypes import guess_type
+from pathlib import Path
+from threading import Lock, Thread
+from typing import Callable, Dict, List, Optional, Tuple
+from urllib.error import URLError
+from urllib.request import urlopen
+from uuid import UUID, uuid4
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import librosa
 import numpy as np
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from supabase import Client, create_client
-
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
 logger = logging.getLogger("tuneup.backend")
@@ -28,6 +32,10 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI()
+
+REMOTE_AUDIO_TIMEOUT_SECONDS = 20
+SYNC_ANALYSIS_TIMEOUT_SECONDS = 45
+BACKGROUND_ANALYSIS_TIMEOUT_SECONDS = 120
 
 
 SECTION_COLORS = {
@@ -128,6 +136,22 @@ class LeaderboardProfile(BaseModel):
     completed_quiz_ids: List[str] = []
 
 
+def error_payload(code: str, message: str, details: Optional[dict] = None) -> dict:
+    return {
+        "error": {
+            "code": code,
+            "message": message,
+            "details": details or {},
+        }
+    }
+
+
+def api_exception(
+    status_code: int, code: str, message: str, details: Optional[dict] = None
+) -> HTTPException:
+    return HTTPException(status_code=status_code, detail=error_payload(code, message, details))
+
+
 def parse_allowed_origins() -> List[str]:
     raw = os.getenv("CORS_ALLOW_ORIGINS", "*")
     parts = [origin.strip() for origin in raw.split(",") if origin.strip()]
@@ -143,15 +167,74 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_: Request, exc: HTTPException):
+    detail = exc.detail
+
+    if isinstance(detail, dict) and "error" in detail:
+        content = detail
+    elif isinstance(detail, dict) and "code" in detail and "message" in detail:
+        content = {"error": detail}
+    else:
+        content = error_payload("http_error", str(detail))
+
+    return JSONResponse(status_code=exc.status_code, content=content)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content=error_payload(
+            "validation_error",
+            "The request payload is invalid.",
+            {"issues": exc.errors()},
+        ),
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(_: Request, exc: Exception):
+    logger.exception("Unhandled backend error.")
+    return JSONResponse(
+        status_code=500,
+        content=error_payload(
+            "internal_server_error",
+            "TuneUp backend hit an unexpected error.",
+            {"type": exc.__class__.__name__},
+        ),
+    )
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def run_with_timeout(
+    operation: Callable[[], dict],
+    *,
+    timeout_seconds: int,
+    timeout_message: str,
+) -> dict:
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(operation)
+
+    try:
+        return future.result(timeout=timeout_seconds)
+    except FuturesTimeoutError as exc:
+        future.cancel()
+        raise TimeoutError(timeout_message) from exc
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def init_supabase_client() -> Client:
     url = os.getenv("SUPABASE_URL")
     key = os.getenv("SUPABASE_KEY")
 
-    missing = [name for name, value in {"SUPABASE_URL": url, "SUPABASE_KEY": key}.items() if not value]
+    missing = [
+        name for name, value in {"SUPABASE_URL": url, "SUPABASE_KEY": key}.items() if not value
+    ]
     if missing:
         raise RuntimeError(
             "Missing required Supabase environment variables: "
@@ -174,7 +257,7 @@ def parse_uuid(value: str, field_name: str) -> str:
     try:
         return str(UUID(value))
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"{field_name} must be a valid UUID.") from exc
+        raise api_exception(400, "invalid_uuid", f"{field_name} must be a valid UUID.") from exc
 
 
 def coerce_optional_uuid(value: Optional[str]) -> Optional[str]:
@@ -228,7 +311,9 @@ def ensure_audio_bucket() -> None:
     try:
         supabase.storage.get_bucket(ANALYSIS_AUDIO_BUCKET)
     except Exception:
-        logger.info("Creating Supabase storage bucket '%s' for analysis audio.", ANALYSIS_AUDIO_BUCKET)
+        logger.info(
+            "Creating Supabase storage bucket '%s' for analysis audio.", ANALYSIS_AUDIO_BUCKET
+        )
         supabase.storage.create_bucket(
             ANALYSIS_AUDIO_BUCKET,
             options={
@@ -286,15 +371,26 @@ def remove_storage_object(storage_path: Optional[str]) -> None:
 def download_audio_for_analysis(audio_url: str, file_name: str) -> Path:
     target_path = build_upload_path(file_name or "analysis.bin")
 
-    with urlopen(audio_url) as response, target_path.open("wb") as buffer:
-        shutil.copyfileobj(response, buffer)
+    try:
+        with (
+            urlopen(audio_url, timeout=REMOTE_AUDIO_TIMEOUT_SECONDS) as response,
+            target_path.open("wb") as buffer,
+        ):
+            shutil.copyfileobj(response, buffer)
+    except (TimeoutError, URLError, socket.timeout) as exc:
+        remove_file(target_path)
+        raise TimeoutError("Timed out while downloading audio for analysis.") from exc
 
     return target_path
 
 
 def build_section_marker(marker_time: float, label: str, marker_id: Optional[int] = None) -> dict:
     return {
-        "id": marker_id if marker_id is not None else int(marker_time * 10000) + random.randint(0, 999),
+        "id": (
+            marker_id
+            if marker_id is not None
+            else int(marker_time * 10000) + random.randint(0, 999)
+        ),
         "label": label,
         "color": SECTION_COLORS.get(label, "#56cfe1"),
         "x": 0,
@@ -310,7 +406,7 @@ def build_fallback_markers(duration_seconds: float) -> List[dict]:
     anchors = [0.2, 0.4, 0.65, 0.85]
     markers: List[dict] = []
 
-    for index, (ratio, label) in enumerate(zip(anchors, labels), start=1):
+    for index, (ratio, label) in enumerate(zip(anchors, labels, strict=False), start=1):
         marker_time = round(max(5.0, duration_seconds * ratio), 2)
         if marker_time >= duration_seconds:
             continue
@@ -331,7 +427,9 @@ def lane_row_for_chord(chord: str) -> int:
         "Gb": "F#",
         "Ab": "G#",
     }.get(root, root)
-    root_index = CHROMA_NOTE_NAMES.index(normalized_root) if normalized_root in CHROMA_NOTE_NAMES else 0
+    root_index = (
+        CHROMA_NOTE_NAMES.index(normalized_root) if normalized_root in CHROMA_NOTE_NAMES else 0
+    )
     return root_index % 4
 
 
@@ -365,7 +463,9 @@ def classify_chord_vector(chroma_vector: np.ndarray) -> Tuple[str, float]:
             elif score > second_score:
                 second_score = score
 
-    confidence = max(0.0, min(1.0, (best_score + max(0.0, best_score - max(second_score, 0.0))) / 2.0))
+    confidence = max(
+        0.0, min(1.0, (best_score + max(0.0, best_score - max(second_score, 0.0))) / 2.0)
+    )
     return best_label, confidence
 
 
@@ -380,7 +480,10 @@ def build_beat_grid(duration_seconds: float, beat_times: np.ndarray, bpm: float)
 
     if not grid:
         beat_duration = 60.0 / max(72.0, min(160.0, bpm or 96.0))
-        grid = [round(float(step), 3) for step in np.arange(0.0, duration_seconds + beat_duration, beat_duration)]
+        grid = [
+            round(float(step), 3)
+            for step in np.arange(0.0, duration_seconds + beat_duration, beat_duration)
+        ]
     elif grid[0] > 0.22:
         grid.insert(0, 0.0)
 
@@ -470,7 +573,11 @@ def build_generic_tab_notes(
         active_chord = active_chord_at(float(time_sec), chord_events)
         shape = CHORD_TAB_SHAPES.get(active_chord, DEFAULT_TAB_SHAPE)
         string_index, fret = shape[beat_index % len(shape)]
-        next_time = beat_grid[beat_index + 1] if beat_index + 1 < len(beat_grid) else min(duration_seconds, float(time_sec) + 0.6)
+        next_time = (
+            beat_grid[beat_index + 1]
+            if beat_index + 1 < len(beat_grid)
+            else min(duration_seconds, float(time_sec) + 0.6)
+        )
         duration = max(0.18, min(0.72, (float(next_time) - float(time_sec)) * 0.82))
         notes.append(
             {
@@ -549,7 +656,9 @@ def build_song_manifest(
         logger.exception("Chord detection failed, falling back to generic progression.")
 
     chord_events = merge_chord_events(chord_candidates)
-    confidence_values = [event["confidence"] for event in chord_events if event.get("confidence") is not None]
+    confidence_values = [
+        event["confidence"] for event in chord_events if event.get("confidence") is not None
+    ]
     average_confidence = float(np.mean(confidence_values)) if confidence_values else 0.0
     fallback_used = average_confidence < 0.55 or len(chord_events) < 4
 
@@ -627,7 +736,9 @@ def build_analysis_result(
 
         for timestamp in bound_times:
             if 5.0 < timestamp < max_marker_time and (timestamp - last_time > 15.0):
-                label_name = section_names[name_index] if name_index < len(section_names) else "SECTION"
+                label_name = (
+                    section_names[name_index] if name_index < len(section_names) else "SECTION"
+                )
                 ai_markers.append(build_section_marker(timestamp, label_name))
                 last_time = timestamp
                 name_index += 1
@@ -676,13 +787,7 @@ def insert_song_lesson(payload: dict) -> dict:
 
 
 def fetch_analysis_job(job_id: str) -> Optional[dict]:
-    response = (
-        supabase.table("ai_analysis_jobs")
-        .select("*")
-        .eq("id", job_id)
-        .limit(1)
-        .execute()
-    )
+    response = supabase.table("ai_analysis_jobs").select("*").eq("id", job_id).limit(1).execute()
     rows = response.data or []
     return rows[0] if rows else None
 
@@ -693,6 +798,26 @@ def update_analysis_job(job_id: str, payload: dict) -> None:
 
 def update_track(track_id: str, payload: dict) -> None:
     supabase.table("tracks").update(payload).eq("id", track_id).execute()
+
+
+def finalize_analysis_job_failure(
+    *,
+    job_id: str,
+    status: str,
+    progress_text: str,
+    error_message: str,
+    result_payload: Optional[dict] = None,
+) -> None:
+    update_analysis_job(
+        job_id,
+        {
+            "status": status,
+            "progress_text": progress_text,
+            "result_payload": result_payload,
+            "error_message": error_message,
+            "completed_at": now_iso(),
+        },
+    )
 
 
 def replace_track_markers(track_id: str, markers: List[dict]) -> None:
@@ -716,15 +841,14 @@ def replace_track_markers(track_id: str, markers: List[dict]) -> None:
 
 
 def sync_user_achievements(user_id: str, badge_ids: List[str]) -> None:
-    normalized_badge_ids = sorted({badge_id.strip() for badge_id in badge_ids if badge_id and badge_id.strip()})
+    normalized_badge_ids = sorted(
+        {badge_id.strip() for badge_id in badge_ids if badge_id and badge_id.strip()}
+    )
     if not normalized_badge_ids:
         return
 
     valid_badges_response = (
-        supabase.table("achievements")
-        .select("id")
-        .in_("id", normalized_badge_ids)
-        .execute()
+        supabase.table("achievements").select("id").in_("id", normalized_badge_ids).execute()
     )
     valid_badge_ids = [row["id"] for row in (valid_badges_response.data or [])]
     if not valid_badge_ids:
@@ -751,15 +875,14 @@ def sync_completed_progress_rows(
     user_id: str,
     content_ids: List[str],
 ) -> None:
-    normalized_ids = sorted({content_id.strip() for content_id in content_ids if content_id and content_id.strip()})
+    normalized_ids = sorted(
+        {content_id.strip() for content_id in content_ids if content_id and content_id.strip()}
+    )
     if not normalized_ids:
         return
 
     valid_catalog_response = (
-        supabase.table(catalog_table)
-        .select("id")
-        .in_("id", normalized_ids)
-        .execute()
+        supabase.table(catalog_table).select("id").in_("id", normalized_ids).execute()
     )
     valid_ids = [row["id"] for row in (valid_catalog_response.data or [])]
     if not valid_ids:
@@ -786,7 +909,11 @@ def map_saved_traffic_entry(track_row: dict) -> dict:
     )
     markers = [
         {
-            "id": marker.get("source_marker_id") if marker.get("source_marker_id") is not None else index + 1,
+            "id": (
+                marker.get("source_marker_id")
+                if marker.get("source_marker_id") is not None
+                else index + 1
+            ),
             "label": marker["label"],
             "color": marker["color_hex"],
             "x": marker.get("position_x") or 0,
@@ -804,7 +931,9 @@ def map_saved_traffic_entry(track_row: dict) -> dict:
     }
 
 
-def fetch_saved_traffic_records(user_id: Optional[str] = None, legacy_user_id: Optional[str] = None) -> List[dict]:
+def fetch_saved_traffic_records(
+    user_id: Optional[str] = None, legacy_user_id: Optional[str] = None
+) -> List[dict]:
     query = (
         supabase.table("tracks")
         .select(
@@ -857,16 +986,20 @@ def analyze_audio_task(job_id: str, track_id: str, audio_url: str, file_name: st
         )
 
         file_path = download_audio_for_analysis(audio_url, file_name)
-        result = build_analysis_result(
-            file_path,
-            progress_callback=lambda message: update_analysis_job(
-                job_id,
-                {
-                    "status": "processing",
-                    "progress_text": message,
-                    "completed_at": None,
-                },
+        result = run_with_timeout(
+            lambda: build_analysis_result(
+                file_path,
+                progress_callback=lambda message: update_analysis_job(
+                    job_id,
+                    {
+                        "status": "processing",
+                        "progress_text": message,
+                        "completed_at": None,
+                    },
+                ),
             ),
+            timeout_seconds=BACKGROUND_ANALYSIS_TIMEOUT_SECONDS,
+            timeout_message="Background analysis timed out before the track scan finished.",
         )
 
         update_track(
@@ -891,19 +1024,28 @@ def analyze_audio_task(job_id: str, track_id: str, audio_url: str, file_name: st
                 "completed_at": now_iso(),
             },
         )
+    except TimeoutError as exc:
+        logger.exception("Background analysis timed out for %s.", job_id)
+        finalize_analysis_job_failure(
+            job_id=job_id,
+            status="timed_out",
+            progress_text="Analysis timed out.",
+            error_message=str(exc),
+            result_payload={
+                "audio_url": audio_url,
+                "job_kind": "track_analysis",
+            },
+        )
     except Exception as exc:
         logger.exception("Background analysis failed for %s.", job_id)
-        update_analysis_job(
-            job_id,
-            {
-                "status": "failed",
-                "progress_text": "Analysis failed.",
-                "result_payload": {
-                    "audio_url": audio_url,
-                    "job_kind": "track_analysis",
-                },
-                "error_message": str(exc),
-                "completed_at": now_iso(),
+        finalize_analysis_job_failure(
+            job_id=job_id,
+            status="failed",
+            progress_text="Analysis failed.",
+            error_message=str(exc),
+            result_payload={
+                "audio_url": audio_url,
+                "job_kind": "track_analysis",
             },
         )
     finally:
@@ -947,18 +1089,22 @@ def analyze_song_import_task(
 
         file_path = download_audio_for_analysis(audio_url, file_name)
         title = Path(file_name).stem.replace("_", " ").strip() or "Imported Song"
-        result = build_song_manifest(
-            file_path,
-            title=title,
-            artist="AI Transcription",
-            progress_callback=lambda message: update_analysis_job(
-                job_id,
-                {
-                    "status": "processing",
-                    "progress_text": message,
-                    "completed_at": None,
-                },
+        result = run_with_timeout(
+            lambda: build_song_manifest(
+                file_path,
+                title=title,
+                artist="AI Transcription",
+                progress_callback=lambda message: update_analysis_job(
+                    job_id,
+                    {
+                        "status": "processing",
+                        "progress_text": message,
+                        "completed_at": None,
+                    },
+                ),
             ),
+            timeout_seconds=BACKGROUND_ANALYSIS_TIMEOUT_SECONDS,
+            timeout_message="AI transcription timed out before the import finished.",
         )
 
         update_track(
@@ -1000,20 +1146,30 @@ def analyze_song_import_task(
                 "completed_at": now_iso(),
             },
         )
+    except TimeoutError as exc:
+        logger.exception("Song import analysis timed out for %s.", job_id)
+        finalize_analysis_job_failure(
+            job_id=job_id,
+            status="timed_out",
+            progress_text="AI transcription timed out.",
+            error_message=str(exc),
+            result_payload={
+                "audio_url": audio_url,
+                "job_kind": "song_import",
+                "owner_user_id": owner_user_id,
+            },
+        )
     except Exception as exc:
         logger.exception("Song import analysis failed for %s.", job_id)
-        update_analysis_job(
-            job_id,
-            {
-                "status": "failed",
-                "progress_text": "AI transcription failed.",
-                "result_payload": {
-                    "audio_url": audio_url,
-                    "job_kind": "song_import",
-                    "owner_user_id": owner_user_id,
-                },
-                "error_message": str(exc),
-                "completed_at": now_iso(),
+        finalize_analysis_job_failure(
+            job_id=job_id,
+            status="failed",
+            progress_text="AI transcription failed.",
+            error_message=str(exc),
+            result_payload={
+                "audio_url": audio_url,
+                "job_kind": "song_import",
+                "owner_user_id": owner_user_id,
             },
         )
     finally:
@@ -1075,7 +1231,9 @@ def resume_incomplete_analysis_jobs() -> None:
 
         logger.info("Resuming Supabase-backed analysis job %s from storage.", job["id"])
         if job_kind == "song_import":
-            schedule_song_import_job(job["id"], job["track_id"], audio_url, file_name, owner_user_id)
+            schedule_song_import_job(
+                job["id"], job["track_id"], audio_url, file_name, owner_user_id
+            )
         else:
             schedule_analysis_job(job["id"], job["track_id"], audio_url, file_name)
 
@@ -1117,7 +1275,11 @@ def healthz():
                 "storage": "supabase",
                 "supabase_configured": True,
                 "supabase_connected": False,
-                "supabase_error": str(exc),
+                **error_payload(
+                    "supabase_unavailable",
+                    "Supabase is unreachable from the backend health check.",
+                    {"type": exc.__class__.__name__},
+                ),
             },
         )
 
@@ -1126,7 +1288,7 @@ def healthz():
 def recommend_song(data: MoodRequest):
     songs = SONG_DATABASE.get(data.mood, [])
     if not songs:
-        return {"status": "error", "message": "No songs found for that mood."}
+        raise api_exception(404, "recommendation_not_found", "No songs found for that mood.")
     return {"status": "success", "recommendation": random.choice(songs)}
 
 
@@ -1141,7 +1303,10 @@ async def analyze_bpm(file: UploadFile = File(...)):
 
         return {"status": "success", "bpm": round(bpm, 1), "message": f"{round(bpm)} BPM"}
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.exception("BPM analysis failed.")
+        raise api_exception(
+            500, "bpm_analysis_failed", "Could not analyze BPM.", {"type": exc.__class__.__name__}
+        ) from exc
     finally:
         remove_file(file_path)
 
@@ -1154,7 +1319,9 @@ async def detect_pitch(file: UploadFile = File(...), instrument: str = Form("Gui
         y, _ = librosa.effects.trim(y, top_db=28)
 
         if y.size < 2048:
-            return {"status": "error", "message": "Signal too short"}
+            raise api_exception(
+                422, "signal_too_short", "Signal too short for reliable pitch detection."
+            )
 
         fmin, fmax = PITCH_RANGES.get(instrument, PITCH_RANGES["Guitar"])
         pitches = librosa.yin(
@@ -1168,7 +1335,9 @@ async def detect_pitch(file: UploadFile = File(...), instrument: str = Form("Gui
 
         valid = pitches[np.isfinite(pitches)]
         if valid.size == 0:
-            return {"status": "error", "message": "No stable pitch found"}
+            raise api_exception(
+                422, "pitch_not_found", "No stable pitch was found in the recording."
+            )
 
         median_pitch = float(np.median(valid))
         stable = valid[np.abs(valid - median_pitch) < max(4.0, median_pitch * 0.08)]
@@ -1179,7 +1348,15 @@ async def detect_pitch(file: UploadFile = File(...), instrument: str = Form("Gui
             "frequency": round(detected_pitch, 2),
         }
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        if isinstance(exc, HTTPException):
+            raise
+        logger.exception("Pitch detection failed.")
+        raise api_exception(
+            500,
+            "pitch_detection_failed",
+            "Pitch detection failed.",
+            {"type": exc.__class__.__name__},
+        ) from exc
     finally:
         remove_file(file_path)
 
@@ -1227,8 +1404,15 @@ def save_traffic(data: TrafficData):
             try:
                 supabase.table("tracks").delete().eq("id", track["id"]).execute()
             except Exception:
-                logger.exception("Failed to roll back orphaned saved-traffic track %s.", track["id"])
-        return {"status": "error", "message": str(exc)}
+                logger.exception(
+                    "Failed to roll back orphaned saved-traffic track %s.", track["id"]
+                )
+        raise api_exception(
+            500,
+            "traffic_save_failed",
+            "Could not save the Studio analysis.",
+            {"type": exc.__class__.__name__},
+        ) from exc
 
 
 @app.get("/get-traffic")
@@ -1237,18 +1421,29 @@ def get_traffic(user_id: Optional[str] = None):
         normalized_user_id = coerce_optional_uuid(user_id)
         legacy_user_id = None if normalized_user_id else normalize_legacy_user_id(user_id)
         if user_id is not None and normalized_user_id is None and legacy_user_id is None:
-            return []
+            raise api_exception(
+                400, "invalid_user_id", "user_id must be a valid UUID or legacy player id."
+            )
         return fetch_saved_traffic_records(normalized_user_id, legacy_user_id)
-    except Exception:
+    except HTTPException:
+        raise
+    except Exception as exc:
         logger.exception("Failed to fetch traffic records.")
-        return []
+        raise api_exception(
+            500,
+            "traffic_fetch_failed",
+            "Could not load Studio saves.",
+            {"type": exc.__class__.__name__},
+        ) from exc
 
 
 @app.post("/sync-leaderboard")
 def sync_leaderboard(profile: LeaderboardProfile):
     normalized_user_id = coerce_optional_uuid(profile.user_id)
     if normalized_user_id is None:
-        logger.warning("Skipping Supabase leaderboard sync for legacy player id '%s'.", profile.user_id)
+        logger.warning(
+            "Skipping Supabase leaderboard sync for legacy player id '%s'.", profile.user_id
+        )
         return {
             "status": "accepted",
             "storage": "supabase",
@@ -1288,7 +1483,12 @@ def sync_leaderboard(profile: LeaderboardProfile):
         return {"status": "success", "storage": "supabase"}
     except Exception as exc:
         logger.exception("Failed to sync leaderboard profile.")
-        return {"status": "error", "message": str(exc)}
+        raise api_exception(
+            500,
+            "leaderboard_sync_failed",
+            "Could not sync leaderboard profile.",
+            {"type": exc.__class__.__name__},
+        ) from exc
 
 
 @app.get("/leaderboard")
@@ -1327,10 +1527,14 @@ def get_leaderboard(limit: int = 8):
                     )
                 ],
                 "completed_lessons": sum(
-                    1 for item in (row.get("user_lesson_progress") or []) if item.get("status") == "completed"
+                    1
+                    for item in (row.get("user_lesson_progress") or [])
+                    if item.get("status") == "completed"
                 ),
                 "completed_songs": sum(
-                    1 for item in (row.get("user_song_progress") or []) if item.get("status") == "completed"
+                    1
+                    for item in (row.get("user_song_progress") or [])
+                    if item.get("status") == "completed"
                 ),
                 "completed_quizzes": sum(
                     1
@@ -1345,7 +1549,12 @@ def get_leaderboard(limit: int = 8):
         return {"status": "success", "leaderboard": leaderboard, "storage": "supabase"}
     except Exception as exc:
         logger.exception("Failed to fetch leaderboard.")
-        return {"status": "error", "leaderboard": [], "message": str(exc)}
+        raise api_exception(
+            500,
+            "leaderboard_fetch_failed",
+            "Could not fetch the leaderboard.",
+            {"type": exc.__class__.__name__},
+        ) from exc
 
 
 @app.post("/upload-audio")
@@ -1395,7 +1604,9 @@ async def upload_audio(
                 logger.exception("Failed to clean up orphaned track %s.", track["id"])
         remove_storage_object(storage_path)
         remove_file(file_path)
-        raise HTTPException(status_code=500, detail="Could not start the background scan.") from exc
+        raise api_exception(
+            500, "background_scan_start_failed", "Could not start the background scan."
+        ) from exc
     finally:
         remove_file(file_path)
 
@@ -1458,11 +1669,15 @@ async def analyze_audio(
                 logger.exception("Failed to clean up orphaned song import track %s.", track["id"])
         remove_storage_object(storage_path)
         remove_file(file_path)
-        raise HTTPException(status_code=500, detail="Could not start AI transcription.") from exc
+        raise api_exception(
+            500, "song_import_start_failed", "Could not start AI transcription."
+        ) from exc
     finally:
         remove_file(file_path)
 
-    schedule_song_import_job(job["id"], track["id"], track["audio_url"], file_name, normalized_user_id)
+    schedule_song_import_job(
+        job["id"], track["id"], track["audio_url"], file_name, normalized_user_id
+    )
 
     return {
         "status": "accepted",
@@ -1479,7 +1694,7 @@ def task_status(task_id: str):
     payload = fetch_analysis_job(normalized_task_id)
 
     if not payload:
-        raise HTTPException(status_code=404, detail="Task not found.")
+        raise api_exception(404, "task_not_found", "Task not found.")
 
     if payload["status"] == "completed":
         return {
@@ -1499,6 +1714,15 @@ def task_status(task_id: str):
             "updated_at": payload.get("updated_at"),
         }
 
+    if payload["status"] == "timed_out":
+        return {
+            "status": "timed_out",
+            "task_id": normalized_task_id,
+            "progress_text": payload.get("progress_text") or "Analysis timed out.",
+            "message": payload.get("error_message") or "The scan timed out.",
+            "updated_at": payload.get("updated_at"),
+        }
+
     return {
         "status": "processing",
         "task_id": normalized_task_id,
@@ -1513,10 +1737,22 @@ async def analyze_full(file: UploadFile = File(...)):
     logger.info("Synchronous analysis started for %s.", file.filename)
 
     try:
-        result = build_analysis_result(file_path)
+        result = run_with_timeout(
+            lambda: build_analysis_result(file_path),
+            timeout_seconds=SYNC_ANALYSIS_TIMEOUT_SECONDS,
+            timeout_message="The analysis job exceeded the synchronous time limit.",
+        )
         return {"status": "success", **result}
+    except TimeoutError as exc:
+        logger.exception("Synchronous analysis timed out.")
+        raise api_exception(504, "analysis_timed_out", str(exc)) from exc
     except Exception as exc:
         logger.exception("Synchronous analysis failed.")
-        return {"status": "error", "message": str(exc)}
+        raise api_exception(
+            500,
+            "analysis_failed",
+            "Could not analyze the uploaded track.",
+            {"type": exc.__class__.__name__},
+        ) from exc
     finally:
         remove_file(file_path)

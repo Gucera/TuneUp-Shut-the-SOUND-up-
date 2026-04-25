@@ -76,7 +76,7 @@ async function readStoredLibrary(): Promise<StoredSongLesson[]> {
             return [];
         }
         return parsed.filter((item) => item && typeof item === 'object') as StoredSongLesson[];
-    } catch (error) {
+    } catch {
         return [];
     }
 }

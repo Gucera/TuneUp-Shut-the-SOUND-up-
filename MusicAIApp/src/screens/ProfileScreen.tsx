@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
     ScrollView,
     StyleSheet,
     Switch,
@@ -20,6 +19,7 @@ import PremiumCelebrationOverlay from '../components/PremiumCelebrationOverlay';
 import PremiumHeroStrip from '../components/PremiumHeroStrip';
 import ScreenSettingsButton from '../components/ScreenSettingsButton';
 import SkeletonBlock from '../components/SkeletonBlock';
+import { useAppToast } from '../components/AppToastProvider';
 import { LESSON_PACKS, LessonPackage } from '../data/lessonLibrary';
 import { SongLesson, SONG_LESSONS } from '../data/songLessons';
 import { COLORS, SHADOWS } from '../theme';
@@ -156,6 +156,7 @@ export default function ProfileScreen() {
     const tabBarHeight = useBottomTabBarHeight();
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const { showToast } = useAppToast();
     const scrollRef = useRef<ScrollView | null>(null);
     const [snapshot, setSnapshot] = useState<GamificationSnapshot | null>(null);
     const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -200,19 +201,20 @@ export default function ProfileScreen() {
             setLeaderboard(nextBoard);
             setStudioSaves(nextStudioSaves);
         } catch (error) {
+            showToast({
+                title: 'Profile unavailable',
+                message: 'We could not refresh your player hub right now.',
+                variant: 'warning',
+            });
             console.error('Failed to load profile:', error);
         } finally {
             setIsRefreshing(false);
         }
-    }, []);
+    }, [showToast]);
 
     const scrollToSettings = useCallback(() => {
         scrollRef.current?.scrollTo({ y: Math.max(settingsOffsetY - 16, 0), animated: true });
     }, [settingsOffsetY]);
-
-    useEffect(() => {
-        void loadProfile();
-    }, [loadProfile]);
 
     useFocusEffect(
         useCallback(() => {
@@ -231,7 +233,11 @@ export default function ProfileScreen() {
 
     const handleSaveName = async () => {
         if (!nameDraft.trim()) {
-            Alert.alert('Name needed', 'Please enter a name before saving.');
+            showToast({
+                title: 'Name needed',
+                message: 'Please enter a player name before saving.',
+                variant: 'warning',
+            });
             return;
         }
 
@@ -247,8 +253,12 @@ export default function ProfileScreen() {
                 subtitle: 'Your player card is using the new name now.',
                 variant: 'success',
             });
-        } catch (error) {
-            Alert.alert('Save failed', 'Could not update the profile name right now.');
+        } catch {
+            showToast({
+                title: 'Save failed',
+                message: 'Could not update the profile name right now.',
+                variant: 'error',
+            });
         } finally {
             setIsSavingName(false);
         }
@@ -258,7 +268,11 @@ export default function ProfileScreen() {
         const { error } = await supabase.auth.signOut();
 
         if (error) {
-            Alert.alert('Sign out failed', error.message);
+            showToast({
+                title: 'Sign out failed',
+                message: error.message,
+                variant: 'error',
+            });
         }
     };
 
@@ -270,10 +284,38 @@ export default function ProfileScreen() {
             if (key === 'leaderboardSyncEnabled') {
                 await loadProfile();
             }
-        } catch (error) {
-            Alert.alert('Setting failed', 'That setting could not be saved.');
+        } catch {
+            showToast({
+                title: 'Setting failed',
+                message: 'That setting could not be saved.',
+                variant: 'error',
+            });
         }
     };
+
+    const openLessonFromProfile = useCallback((lessonId: string) => {
+        navigation.navigate('Lessons', {
+            screen: 'LessonDetail',
+            params: { lessonId },
+        });
+    }, [navigation]);
+
+    const openSongFromProfile = useCallback((songId: string) => {
+        navigation.navigate('Songs', {
+            focusSongId: songId,
+        });
+    }, [navigation]);
+
+    const openStudioSave = useCallback((song: StudioSaveWithKey) => {
+        navigation.getParent()?.navigate('Studio', {
+            savedAnalysis: {
+                songName: song.songName,
+                duration: song.duration,
+                markers: song.markers,
+                createdAt: song.createdAt,
+            },
+        });
+    }, [navigation]);
 
     const userRank = useMemo(() => {
         if (!snapshot) {
@@ -442,6 +484,11 @@ export default function ProfileScreen() {
                     </View>
                 ))}
             </View>
+
+            <TouchableOpacity style={styles.detailActionButton} onPress={() => openLessonFromProfile(lesson.id)}>
+                <Ionicons name="arrow-forward-outline" size={16} color={COLORS.panelAlt} />
+                <Text style={styles.detailActionButtonText}>Open lesson</Text>
+            </TouchableOpacity>
         </View>
     );
 
@@ -493,6 +540,11 @@ export default function ProfileScreen() {
                         ? 'Completed in your profile. You can jump back in anytime from the Songs tab.'
                         : 'Saved in the Songs tab, but not completed yet.'}
                 </Text>
+
+                <TouchableOpacity style={styles.detailActionButton} onPress={() => openSongFromProfile(song.id)}>
+                    <Ionicons name="play-outline" size={16} color={COLORS.panelAlt} />
+                    <Text style={styles.detailActionButtonText}>Open in Song Flow</Text>
+                </TouchableOpacity>
             </View>
         );
     };
@@ -536,6 +588,11 @@ export default function ProfileScreen() {
                 ))}
             </View>
             {song.markers.length > 8 ? <Text style={styles.detailHint}>Showing the first 8 saved section markers.</Text> : null}
+
+            <TouchableOpacity style={styles.detailActionButton} onPress={() => openStudioSave(song)}>
+                <Ionicons name="pulse-outline" size={16} color={COLORS.panelAlt} />
+                <Text style={styles.detailActionButtonText}>Open in Studio</Text>
+            </TouchableOpacity>
         </View>
     );
 
@@ -1496,6 +1553,22 @@ const styles = StyleSheet.create({
         color: COLORS.textDim,
         fontSize: 11,
         marginTop: 8,
+    },
+    detailActionButton: {
+        marginTop: 14,
+        borderRadius: 16,
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    detailActionButtonText: {
+        color: COLORS.panelAlt,
+        fontSize: 13,
+        fontWeight: '900',
     },
     songModeRow: {
         flexDirection: 'row',

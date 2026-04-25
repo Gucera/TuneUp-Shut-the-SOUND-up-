@@ -95,7 +95,7 @@ export async function getAppSettings(): Promise<AppSettings> {
                 ? parsed.practiceGoalMinutes
                 : DEFAULT_SETTINGS.practiceGoalMinutes,
         };
-    } catch (error) {
+    } catch {
         await FileSystem.writeAsStringAsync(SETTINGS_FILE, JSON.stringify(DEFAULT_SETTINGS, null, 2));
         return DEFAULT_SETTINGS;
     }

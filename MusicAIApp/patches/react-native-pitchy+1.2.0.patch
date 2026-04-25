@@ -1,12 +1,444 @@
+diff --git a/node_modules/react-native-pitchy/android/src/main/java/com/pitchy/PitchyModuleImpl.kt b/node_modules/react-native-pitchy/android/src/main/java/com/pitchy/PitchyModuleImpl.kt
+index bd8817c..c433aa6 100644
+--- a/node_modules/react-native-pitchy/android/src/main/java/com/pitchy/PitchyModuleImpl.kt
++++ b/node_modules/react-native-pitchy/android/src/main/java/com/pitchy/PitchyModuleImpl.kt
+@@ -1,17 +1,24 @@
+ package com.pitchy
+ 
+-import com.facebook.react.bridge.ReactApplicationContext
++import android.media.AudioFormat
++import android.media.AudioRecord
++import android.media.MediaRecorder
++import android.os.SystemClock
++import com.facebook.react.bridge.Arguments
+ import com.facebook.react.bridge.Promise
++import com.facebook.react.bridge.ReactApplicationContext
+ import com.facebook.react.bridge.ReadableMap
+-import com.facebook.react.bridge.Arguments
+ import com.facebook.react.bridge.WritableMap
+ import com.facebook.react.modules.core.DeviceEventManagerModule
+-
+-import android.media.AudioRecord
+-import android.media.AudioFormat
+-import android.media.MediaRecorder
+-
+ import kotlin.concurrent.thread
++import kotlin.math.abs
++import kotlin.math.log10
++import kotlin.math.log2
++import kotlin.math.max
++import kotlin.math.min
++import kotlin.math.pow
++import kotlin.math.roundToInt
++import kotlin.math.sqrt
+ 
+ class PitchyModuleImpl(private val reactContext: ReactApplicationContext) {
+ 
+@@ -22,23 +29,32 @@ class PitchyModuleImpl(private val reactContext: ReactApplicationContext) {
+   private var recordingThread: Thread? = null
+ 
+   private var sampleRate: Int = 44100
+-
+   private var minVolume: Double = 0.0
+   private var bufferSize: Int = 0
++  private var readFrameSize: Int = 0
+   private var algorithm: String = "ACF2+"
+ 
++  private val rollingSamples = ArrayDeque<Short>()
++  private val recentValidPitches = ArrayDeque<Double>()
++  private var analysisBuffer = ShortArray(0)
++  private var smoothedPitch: Double? = null
++  private var stableMidi: Int? = null
++  private var pendingMidi: Int? = null
++  private var pendingMidiFrames = 0
++
+   fun configure(config: ReadableMap) {
+     minVolume = config.getDouble("minVolume")
+-    bufferSize = config.getInt("bufferSize")
++    bufferSize = max(1024, config.getInt("bufferSize"))
++    readFrameSize = max(256, bufferSize / 4)
+ 
+     if (config.hasKey("algorithm")) {
+       algorithm = config.getString("algorithm") ?: "ACF2+"
+     }
+ 
+     nativeConfigurePitchDetector(algorithm, "")
+-
+-    audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
+-
++    analysisBuffer = ShortArray(bufferSize)
++    ensureAudioRecord()
++    resetPitchState()
+     isInitialized = true
+   }
+ 
+@@ -57,8 +73,12 @@ class PitchyModuleImpl(private val reactContext: ReactApplicationContext) {
+       return
+     }
+ 
+-    startRecording()
+-    promise.resolve(true)
++    try {
++      startRecording()
++      promise.resolve(true)
++    } catch (error: Throwable) {
++      promise.reject("E_START_RECORDING", error.message, error)
++    }
+   }
+ 
+   fun stop(promise: Promise) {
+@@ -71,16 +91,54 @@ class PitchyModuleImpl(private val reactContext: ReactApplicationContext) {
+     promise.resolve(true)
+   }
+ 
++  private fun ensureAudioRecord() {
++    if (audioRecord != null) {
++      return
++    }
++
++    val minBufferBytes = AudioRecord.getMinBufferSize(
++      sampleRate,
++      AudioFormat.CHANNEL_IN_MONO,
++      AudioFormat.ENCODING_PCM_16BIT,
++    )
++    val recordBufferBytes = max(minBufferBytes, bufferSize * 2)
++
++    audioRecord = AudioRecord(
++      MediaRecorder.AudioSource.MIC,
++      sampleRate,
++      AudioFormat.CHANNEL_IN_MONO,
++      AudioFormat.ENCODING_PCM_16BIT,
++      recordBufferBytes,
++    )
++  }
++
++  private fun resetPitchState() {
++    rollingSamples.clear()
++    recentValidPitches.clear()
++    smoothedPitch = null
++    stableMidi = null
++    pendingMidi = null
++    pendingMidiFrames = 0
++  }
++
+   private fun startRecording() {
+-    audioRecord?.startRecording()
++    resetPitchState()
++    ensureAudioRecord()
++
++    val recorder = audioRecord ?: throw IllegalStateException("Audio recorder is unavailable.")
++    if (recorder.state != AudioRecord.STATE_INITIALIZED) {
++      throw IllegalStateException("Audio recorder could not be initialized.")
++    }
++
++    recorder.startRecording()
+     isRecording = true
+ 
+-    recordingThread = thread(start = true) {
+-      val buffer = ShortArray(bufferSize)
+-      while (isRecording) {
+-        val read = audioRecord?.read(buffer, 0, bufferSize)
+-        if (read != null && read > 0) {
+-          detectPitch(buffer)
++    recordingThread = thread(start = true, name = "PitchyRecorder") {
++      val readBuffer = ShortArray(readFrameSize)
++      while (isRecording && !Thread.currentThread().isInterrupted) {
++        val read = recorder.read(readBuffer, 0, readBuffer.size)
++        if (read > 0) {
++          detectPitch(readBuffer, read)
+         }
+       }
+     }
+@@ -88,12 +146,20 @@ class PitchyModuleImpl(private val reactContext: ReactApplicationContext) {
+ 
+   private fun stopRecording() {
+     isRecording = false
+-    audioRecord?.stop()
+-    audioRecord?.release()
+-    audioRecord = null
++
++    try {
++      audioRecord?.stop()
++    } catch (_: IllegalStateException) {
++      // The recorder may already be stopped if the screen closed quickly.
++    }
++
+     recordingThread?.interrupt()
++    recordingThread?.join(120)
+     recordingThread = null
+-    nativeReleasePitchDetector()
++
++    audioRecord?.release()
++    audioRecord = null
++    resetPitchState()
+   }
+ 
+   private external fun nativeAutoCorrelate(buffer: ShortArray, sampleRate: Int, minVolume: Double): Double
+@@ -102,28 +168,195 @@ class PitchyModuleImpl(private val reactContext: ReactApplicationContext) {
+   private external fun nativeDetectPitchWithConfidence(buffer: ShortArray, sampleRate: Int, minVolume: Double): DoubleArray
+   private external fun nativeReleasePitchDetector()
+ 
+-  private fun detectPitch(buffer: ShortArray) {
+-    // Calculate volume (RMS → dB)
++  private fun detectPitch(buffer: ShortArray, read: Int) {
++    val startedAt = SystemClock.elapsedRealtimeNanos()
++
++    for (index in 0 until read) {
++      rollingSamples.addLast(buffer[index])
++    }
++
++    while (rollingSamples.size > bufferSize) {
++      rollingSamples.removeFirst()
++    }
++
++    if (rollingSamples.size < bufferSize) {
++      return
++    }
++
+     var rms = 0.0
+-    for (sample in buffer) {
+-      val normalized = sample.toDouble() / Short.MAX_VALUE
++    var writeIndex = 0
++    for (sample in rollingSamples) {
++      analysisBuffer[writeIndex] = sample
++      val normalized = sample.toDouble() / Short.MAX_VALUE.toDouble()
+       rms += normalized * normalized
++      writeIndex += 1
++    }
++
++    rms = sqrt(rms / rollingSamples.size)
++    val volume = 20.0 * log10(rms + 1e-10)
++    val gateFloor = max(minVolume, NATIVE_NOISE_FLOOR_DB)
++
++    if (volume < gateFloor) {
++      recentValidPitches.clear()
++      pendingMidi = null
++      pendingMidiFrames = 0
++      emitPitchEvent(
++        pitch = -1.0,
++        confidence = 0.0,
++        volume = volume,
++        gateState = "blocked-volume",
++        analysisDurationMs = elapsedMsSince(startedAt),
++      )
++      return
++    }
++
++    val pitchResult = nativeDetectPitchWithConfidence(analysisBuffer, sampleRate, gateFloor)
++    val pitch = pitchResult.getOrNull(0) ?: -1.0
++    val confidence = pitchResult.getOrNull(1) ?: 0.0
++
++    if (pitch <= 0.0) {
++      emitPitchEvent(
++        pitch = -1.0,
++        confidence = confidence,
++        volume = volume,
++        gateState = "blocked-pitch",
++        analysisDurationMs = elapsedMsSince(startedAt),
++      )
++      return
++    }
++
++    if (confidence < CONFIDENCE_THRESHOLD) {
++      emitPitchEvent(
++        pitch = pitch,
++        confidence = confidence,
++        volume = volume,
++        gateState = "blocked-confidence",
++        analysisDurationMs = elapsedMsSince(startedAt),
++      )
++      return
++    }
++
++    recentValidPitches.addLast(pitch)
++    while (recentValidPitches.size > PITCH_WINDOW_SIZE) {
++      recentValidPitches.removeFirst()
++    }
++
++    val medianPitch = medianOf(recentValidPitches)
++    val stabilizedPitch = smoothedPitch?.let { current ->
++      current + ((medianPitch - current) * EMA_ALPHA)
++    } ?: medianPitch
++    smoothedPitch = stabilizedPitch
++
++    val candidateMidi = midiFromFrequency(stabilizedPitch)
++    applyMidiHysteresis(candidateMidi, stabilizedPitch)
++
++    emitPitchEvent(
++      pitch = stabilizedPitch,
++      confidence = confidence,
++      volume = volume,
++      gateState = "active",
++      analysisDurationMs = elapsedMsSince(startedAt),
++      stableMidi = stableMidi,
++      stabilizedPitch = stabilizedPitch,
++    )
++  }
++
++  private fun applyMidiHysteresis(candidateMidi: Int, pitch: Double) {
++    val currentStableMidi = stableMidi
++    if (currentStableMidi == null) {
++      stableMidi = candidateMidi
++      pendingMidi = null
++      pendingMidiFrames = 0
++      return
++    }
++
++    if (candidateMidi == currentStableMidi) {
++      pendingMidi = null
++      pendingMidiFrames = 0
++      return
++    }
++
++    val boundaryCents = abs(centsFromBoundary(pitch, currentStableMidi, candidateMidi))
++    if (boundaryCents < BOUNDARY_MARGIN_CENTS) {
++      pendingMidi = null
++      pendingMidiFrames = 0
++      return
+     }
+-    rms = Math.sqrt(rms / buffer.size)
+-    val volume = 20.0 * Math.log10(rms + 1e-10)
+ 
+-    val pitchResult = nativeDetectPitchWithConfidence(buffer, sampleRate, minVolume)
+-    val pitch = pitchResult[0]
+-    val confidence = pitchResult[1]
++    if (pendingMidi == candidateMidi) {
++      pendingMidiFrames += 1
++    } else {
++      pendingMidi = candidateMidi
++      pendingMidiFrames = 1
++    }
++
++    if (pendingMidiFrames >= HYSTERESIS_FRAMES) {
++      stableMidi = candidateMidi
++      pendingMidi = null
++      pendingMidiFrames = 0
++    }
++  }
++
++  private fun emitPitchEvent(
++    pitch: Double,
++    confidence: Double,
++    volume: Double,
++    gateState: String,
++    analysisDurationMs: Double,
++    stableMidi: Int? = null,
++    stabilizedPitch: Double? = null,
++  ) {
+     val params: WritableMap = Arguments.createMap()
+     params.putDouble("pitch", pitch)
+     params.putDouble("confidence", confidence)
+     params.putDouble("volume", volume)
+-    reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java).emit("onPitchDetected", params)
++    params.putString("gateState", gateState)
++    params.putDouble("analysisDurationMs", analysisDurationMs)
++    stableMidi?.let { params.putInt("stableMidi", it) }
++    stabilizedPitch?.let { params.putDouble("stabilizedPitch", it) }
++    reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
++      .emit("onPitchDetected", params)
++  }
++
++  private fun elapsedMsSince(startedAt: Long): Double {
++    return (SystemClock.elapsedRealtimeNanos() - startedAt) / 1_000_000.0
++  }
++
++  private fun medianOf(values: ArrayDeque<Double>): Double {
++    val sorted = values.toMutableList().sorted()
++    val middle = sorted.size / 2
++    return if (sorted.size % 2 == 1) {
++      sorted[middle]
++    } else {
++      (sorted[middle - 1] + sorted[middle]) / 2.0
++    }
++  }
++
++  private fun midiFromFrequency(frequency: Double): Int {
++    return (69.0 + (12.0 * log2(frequency / A4_FREQUENCY))).roundToInt()
++  }
++
++  private fun frequencyFromMidi(midi: Int): Double {
++    return A4_FREQUENCY * 2.0.pow((midi - 69).toDouble() / 12.0)
++  }
++
++  private fun centsFromBoundary(frequency: Double, midiA: Int, midiB: Int): Double {
++    val lower = min(midiA, midiB)
++    val upper = max(midiA, midiB)
++    val midpoint = sqrt(frequencyFromMidi(lower) * frequencyFromMidi(upper))
++    return 1200.0 * log2(frequency / midpoint)
+   }
+ 
+   companion object {
+     const val NAME = "Pitchy"
++    private const val NATIVE_NOISE_FLOOR_DB = -55.0
++    private const val CONFIDENCE_THRESHOLD = 0.80
++    private const val EMA_ALPHA = 0.30
++    private const val PITCH_WINDOW_SIZE = 5
++    private const val HYSTERESIS_FRAMES = 2
++    private const val BOUNDARY_MARGIN_CENTS = 6.0
++    private const val A4_FREQUENCY = 440.0
++
+     init {
+       System.loadLibrary("react-native-pitchy")
+     }
 diff --git a/node_modules/react-native-pitchy/ios/Pitchy.mm b/node_modules/react-native-pitchy/ios/Pitchy.mm
-index f7524d4..5c52a5c 100644
+index f7524d4..7e0de32 100644
 --- a/node_modules/react-native-pitchy/ios/Pitchy.mm
 +++ b/node_modules/react-native-pitchy/ios/Pitchy.mm
-@@ -2,15 +2,19 @@
+@@ -2,15 +2,75 @@
  #import <AVFoundation/AVFoundation.h>
  #import <React/RCTLog.h>
  #import "pitch-detector.h"
++#include <algorithm>
++#include <chrono>
++#include <cmath>
 +#include <deque>
++#include <vector>
++
++namespace {
++constexpr double kNativeNoiseFloorDb = -55.0;
++constexpr double kConfidenceThreshold = 0.80;
++constexpr double kEmaAlpha = 0.30;
++constexpr NSUInteger kPitchWindowSize = 5;
++constexpr NSInteger kNoStableMidi = -1;
++constexpr NSUInteger kHysteresisFrames = 2;
++constexpr double kBoundaryMarginCents = 6.0;
++constexpr double kA4Frequency = 440.0;
++
++static double MedianOf(const std::deque<double> &values) {
++    if (values.empty()) {
++        return 0.0;
++    }
++
++    std::vector<double> sorted(values.begin(), values.end());
++    std::sort(sorted.begin(), sorted.end());
++    const size_t middle = sorted.size() / 2;
++
++    if (sorted.size() % 2 == 1) {
++        return sorted[middle];
++    }
++
++    return (sorted[middle - 1] + sorted[middle]) / 2.0;
++}
++
++static NSInteger MidiFromFrequency(double frequency) {
++    if (frequency <= 0.0) {
++        return kNoStableMidi;
++    }
++
++    return static_cast<NSInteger>(llround(69.0 + (12.0 * log2(frequency / kA4Frequency))));
++}
++
++static double FrequencyFromMidi(NSInteger midi) {
++    return kA4Frequency * pow(2.0, (static_cast<double>(midi) - 69.0) / 12.0);
++}
++
++static double CentsFromBoundary(double frequency, NSInteger midiA, NSInteger midiB) {
++    const double leftFrequency = FrequencyFromMidi(std::min(midiA, midiB));
++    const double rightFrequency = FrequencyFromMidi(std::max(midiA, midiB));
++    const double boundaryFrequency = sqrt(leftFrequency * rightFrequency);
++    return 1200.0 * log2(frequency / boundaryFrequency);
++}
++}
  
  @implementation Pitchy {
      AVAudioEngine *audioEngine;
@@ -19,48 +451,152 @@ index f7524d4..5c52a5c 100644
      BOOL hasListeners;
      pitchy::PitchDetector *pitchDetector;
 +    std::deque<double> rollingSamples;
++    std::deque<double> recentValidPitches;
++    double smoothedPitch;
++    BOOL hasSmoothedPitch;
++    NSInteger stableMidi;
++    NSInteger pendingMidi;
++    NSUInteger pendingMidiFrames;
  }
  
  RCT_EXPORT_MODULE()
-@@ -84,8 +88,11 @@ - (void)stopObserving {
+@@ -19,6 +79,7 @@ - (instancetype)init {
+     self = [super init];
+     if (self) {
+         pitchDetector = new pitchy::PitchDetector();
++        [self resetPitchState];
+     }
+     return self;
+ }
+@@ -31,6 +92,16 @@ - (void)dealloc {
+     }
+ }
+ 
++- (void)resetPitchState {
++    rollingSamples.clear();
++    recentValidPitches.clear();
++    smoothedPitch = 0.0;
++    hasSmoothedPitch = NO;
++    stableMidi = kNoStableMidi;
++    pendingMidi = kNoStableMidi;
++    pendingMidiFrames = 0;
++}
++
+ - (NSArray<NSString *> *)supportedEvents {
+   return @[@"onPitchDetected"];
+ }
+@@ -54,13 +125,11 @@ - (void)stopObserving {
+ RCT_EXPORT_METHOD(configure:(NSDictionary *)config) {
+     if (!isInitialized) {
+         @try {
+-            // Set algorithm
+             NSString *algorithm = config[@"algorithm"];
+             if (algorithm) {
+                 pitchDetector->setAlgorithm(std::string([algorithm UTF8String]));
+             }
+ 
+-            // Configure audio session
+             AVAudioSession *session = [AVAudioSession sharedInstance];
+             NSError *error = nil;
+             [session setCategory:AVAudioSessionCategoryPlayAndRecord
+@@ -80,12 +149,15 @@ - (void)stopObserving {
+ 
+             audioEngine = [[AVAudioEngine alloc] init];
+             AVAudioInputNode *inputNode = [audioEngine inputNode];
+-
              AVAudioFormat *format = [inputNode inputFormatForBus:0];
++
              sampleRate = format.sampleRate;
              minVolume = [config[@"minVolume"] doubleValue];
-+            analysisBufferSize = MAX((NSUInteger)512, [config[@"bufferSize"] unsignedIntValue]);
++            analysisBufferSize = MAX((NSUInteger)1024, [config[@"bufferSize"] unsignedIntValue]);
 +            tapBufferSize = MAX((NSUInteger)256, analysisBufferSize / 4);
-+            rollingSamples.clear();
++            [self resetPitchState];
  
 -            [inputNode installTapOnBus:0 bufferSize:[config[@"bufferSize"] unsignedIntValue] format:format block:^(AVAudioPCMBuffer * _Nonnull buffer, AVAudioTime * _Nonnull when) {
 +            [inputNode installTapOnBus:0 bufferSize:tapBufferSize format:format block:^(AVAudioPCMBuffer * _Nonnull buffer, AVAudioTime * _Nonnull when) {
                  [self detectPitch:buffer];
              }];
  
-@@ -115,6 +122,7 @@ - (void)stopObserving {
+@@ -108,13 +180,14 @@ - (void)stopObserving {
+         return;
+     }
+ 
+-    if(isRecording){
++    if (isRecording) {
+         reject(@"already_recording", @"Already recording", nil);
+         return;
+     }
  
      @try {
          NSError *error = nil;
-+        rollingSamples.clear();
++        [self resetPitchState];
          [audioEngine startAndReturnError:&error];
          if (error) {
              reject(@"start_error", @"Failed to start audio engine", error);
-@@ -137,22 +145,36 @@ - (void)stopObserving {
+@@ -129,7 +202,6 @@ - (void)stopObserving {
+ 
+ RCT_EXPORT_METHOD(stop:(RCTPromiseResolveBlock)resolve
+                   reject:(RCTPromiseRejectBlock)reject) {
+-
+     if (!isRecording) {
+         reject(@"not_recording", @"Not recording", nil);
+         return;
+@@ -137,31 +209,138 @@ - (void)stopObserving {
  
      [audioEngine stop];
      isRecording = NO;
-+    rollingSamples.clear();
++    [self resetPitchState];
      resolve(@(YES));
  }
  
++- (NSMutableDictionary *)buildPayloadWithPitch:(double)pitch
++                                     confidence:(double)confidence
++                                         volume:(double)volume
++                                      gateState:(NSString *)gateState
++                              analysisDurationMs:(double)analysisDurationMs
++                                      stableMidi:(NSNumber * _Nullable)stableMidiNumber
++                                 stabilizedPitch:(NSNumber * _Nullable)stabilizedPitchNumber {
++    NSMutableDictionary *payload = [@{
++        @"pitch": @(pitch),
++        @"confidence": @(confidence),
++        @"volume": @(volume),
++        @"gateState": gateState,
++        @"analysisDurationMs": @(analysisDurationMs)
++    } mutableCopy];
++
++    if (stableMidiNumber) {
++        payload[@"stableMidi"] = stableMidiNumber;
++    }
++
++    if (stabilizedPitchNumber) {
++        payload[@"stabilizedPitch"] = stabilizedPitchNumber;
++    }
++
++    return payload;
++}
++
  - (void)detectPitch:(AVAudioPCMBuffer *)buffer {
 -    if (!hasListeners) return;
-+    if (!hasListeners || !isRecording) return;
++    if (!hasListeners || !isRecording) {
++        return;
++    }
  
++    const auto startedAt = std::chrono::steady_clock::now();
      float *channelData = buffer.floatChannelData[0];
      UInt32 frameLength = buffer.frameLength;
 -    std::vector<double> buf(channelData, channelData + frameLength);
+ 
+-    // Calculate volume (RMS → dB)
+-    double rms = 0;
+-    for (UInt32 i = 0; i < frameLength; i++) {
+-        rms += buf[i] * buf[i];
++    if (!channelData || frameLength == 0) {
++        return;
+     }
+-    rms = sqrt(rms / frameLength);
 +
-+    for (UInt32 i = 0; i < frameLength; i++) {
-+        rollingSamples.push_back(channelData[i]);
++    for (UInt32 index = 0; index < frameLength; index++) {
++        rollingSamples.push_back(channelData[index]);
 +    }
 +
 +    while (rollingSamples.size() > analysisBufferSize) {
@@ -71,20 +607,92 @@ index f7524d4..5c52a5c 100644
 +        return;
 +    }
 +
-+    std::vector<double> buf(rollingSamples.begin(), rollingSamples.end());
- 
-     // Calculate volume (RMS → dB)
-     double rms = 0;
--    for (UInt32 i = 0; i < frameLength; i++) {
--        rms += buf[i] * buf[i];
-+    for (double sample : buf) {
++    std::vector<double> samples(rollingSamples.begin(), rollingSamples.end());
++
++    double rms = 0.0;
++    for (double sample : samples) {
 +        rms += sample * sample;
-     }
--    rms = sqrt(rms / frameLength);
-+    rms = sqrt(rms / buf.size());
++    }
++    rms = sqrt(rms / samples.size());
      double volume = 20.0 * log10(rms + 1e-10);
++    double gateFloor = std::max(minVolume, kNativeNoiseFloorDb);
++
++    auto emitGateEvent = ^(NSString *gateState, double pitch, double confidence, NSNumber *stableMidiNumber, NSNumber *stabilizedPitchNumber) {
++        const auto finishedAt = std::chrono::steady_clock::now();
++        const double analysisDurationMs = std::chrono::duration<double, std::milli>(finishedAt - startedAt).count();
++        [self sendEventWithName:@"onPitchDetected" body:[self buildPayloadWithPitch:pitch confidence:confidence volume:volume gateState:gateState analysisDurationMs:analysisDurationMs stableMidi:stableMidiNumber stabilizedPitch:stabilizedPitchNumber]];
++    };
++
++    if (volume < gateFloor) {
++        recentValidPitches.clear();
++        pendingMidi = kNoStableMidi;
++        pendingMidiFrames = 0;
++        emitGateEvent(@"blocked-volume", -1.0, 0.0, nil, nil);
++        return;
++    }
  
-     pitchy::PitchDetectionResult result = pitchDetector->detect(buf, sampleRate, minVolume);
+-    pitchy::PitchDetectionResult result = pitchDetector->detect(buf, sampleRate, minVolume);
++    pitchy::PitchDetectionResult result = pitchDetector->detect(samples, sampleRate, gateFloor);
++
++    if (!(result.pitch > 0.0)) {
++        emitGateEvent(@"blocked-pitch", -1.0, result.confidence, nil, nil);
++        return;
++    }
++
++    if (result.confidence < kConfidenceThreshold) {
++        emitGateEvent(@"blocked-confidence", result.pitch, result.confidence, nil, nil);
++        return;
++    }
++
++    recentValidPitches.push_back(result.pitch);
++    while (recentValidPitches.size() > kPitchWindowSize) {
++        recentValidPitches.pop_front();
++    }
++
++    double medianPitch = MedianOf(recentValidPitches);
++    if (!hasSmoothedPitch) {
++        smoothedPitch = medianPitch;
++        hasSmoothedPitch = YES;
++    } else {
++        smoothedPitch += (medianPitch - smoothedPitch) * kEmaAlpha;
++    }
++
++    NSInteger candidateMidi = MidiFromFrequency(smoothedPitch);
++    if (stableMidi == kNoStableMidi) {
++        stableMidi = candidateMidi;
++    } else if (candidateMidi != stableMidi) {
++        const double boundaryCents = fabs(CentsFromBoundary(smoothedPitch, stableMidi, candidateMidi));
++        if (boundaryCents >= kBoundaryMarginCents) {
++            if (pendingMidi == candidateMidi) {
++                pendingMidiFrames += 1;
++            } else {
++                pendingMidi = candidateMidi;
++                pendingMidiFrames = 1;
++            }
++
++            if (pendingMidiFrames >= kHysteresisFrames) {
++                stableMidi = candidateMidi;
++                pendingMidi = kNoStableMidi;
++                pendingMidiFrames = 0;
++            }
++        } else {
++            pendingMidi = kNoStableMidi;
++            pendingMidiFrames = 0;
++        }
++    } else {
++        pendingMidi = kNoStableMidi;
++        pendingMidiFrames = 0;
++    }
+ 
+-    [self sendEventWithName:@"onPitchDetected" body:@{
+-        @"pitch": @(result.pitch),
+-        @"confidence": @(result.confidence),
+-        @"volume": @(volume)
+-    }];
++    emitGateEvent(@"active", smoothedPitch, result.confidence, @(stableMidi), @(smoothedPitch));
+ }
+ 
+ #ifdef RCT_NEW_ARCH_ENABLED
 diff --git a/node_modules/react-native-pitchy/react-native-pitchy.podspec b/node_modules/react-native-pitchy/react-native-pitchy.podspec
 index 1d4a18a..f244a38 100644
 --- a/node_modules/react-native-pitchy/react-native-pitchy.podspec
