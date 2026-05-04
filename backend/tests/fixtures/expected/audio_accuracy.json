@@ -1,0 +1,21 @@
+{
+  "click_120_bpm": {
+    "expected": {
+      "bpm": 120,
+      "bpmTolerance": 4
+    }
+  },
+  "sine_a2_110hz": {
+    "expected": {
+      "dominantFrequencyHz": 110,
+      "frequencyToleranceHz": 2
+    }
+  },
+  "c_major_chord": {
+    "expected": {
+      "bpm": 120,
+      "bpmTolerance": 4,
+      "allowedChordLabels": ["C", "C major", "Cmaj"]
+    }
+  }
+}

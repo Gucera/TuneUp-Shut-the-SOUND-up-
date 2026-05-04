@@ -21,6 +21,8 @@ import PageTransitionView from '../components/PageTransitionView';
 import PremiumBackdrop from '../components/PremiumBackdrop';
 import ScreenSettingsButton from '../components/ScreenSettingsButton';
 import {
+    BASS_TUNER_MAX_FREQUENCY_HZ,
+    BASS_TUNER_MIN_FREQUENCY_HZ,
     GUITAR_STANDARD_STRINGS,
     TUNER_A4_HZ,
     TUNER_BUFFER_SIZE,
@@ -30,6 +32,12 @@ import {
     TUNER_VISUAL_REFRESH_MS,
     useTuner,
 } from '../hooks/useTuner';
+import {
+    STANDARD_BASS_STRINGS,
+    GuitarStringTarget,
+    TUNER_MAX_FREQUENCY_HZ,
+    TUNER_MIN_FREQUENCY_HZ,
+} from '../utils/tunerMath';
 
 const { width } = Dimensions.get('window');
 const GAUGE_SIZE = Math.min(width - 48, 330);
@@ -46,8 +54,50 @@ const MODE_OPTIONS = [
     { id: 'guided', label: 'Guided' },
     { id: 'manual', label: 'Manual' },
 ] as const;
+const INSTRUMENT_MODE_OPTIONS = [
+    { id: 'guitar', label: 'Guitar' },
+    { id: 'bass', label: 'Bass' },
+] as const;
 
 type TunerMode = (typeof MODE_OPTIONS)[number]['id'];
+type TunerInstrumentMode = (typeof INSTRUMENT_MODE_OPTIONS)[number]['id'];
+type ListeningUiState = 'idle' | 'checking_permission' | 'starting' | 'listening' | 'error';
+
+function getListeningUiState(tuner: ReturnType<typeof useTuner>): ListeningUiState {
+    if (tuner.status === 'error') {
+        return 'error';
+    }
+
+    if (tuner.status === 'checking_permission') {
+        return 'checking_permission';
+    }
+
+    if (tuner.status === 'starting') {
+        return 'starting';
+    }
+
+    if (tuner.isListening || tuner.status === 'listening' || tuner.status === 'no_signal') {
+        return 'listening';
+    }
+
+    return 'idle';
+}
+
+function getListeningBadgeLabel(state: ListeningUiState) {
+    switch (state) {
+        case 'checking_permission':
+            return 'Checking';
+        case 'starting':
+            return 'Starting';
+        case 'listening':
+            return 'Listening';
+        case 'error':
+            return 'Error';
+        case 'idle':
+        default:
+            return 'Idle';
+    }
+}
 
 const GaugeTick = memo(function GaugeTick({
     angle,
@@ -177,11 +227,13 @@ function formatFrequency(value: number | null) {
     return `${value.toFixed(2)} Hz`;
 }
 
-function getTuningTone(targetCents: number, hasSignal: boolean) {
+function getTuningTone(targetCents: number, hasSignal: boolean, instrumentMode: TunerInstrumentMode) {
     if (!hasSignal) {
         return {
             label: 'Waiting for signal',
-            detail: 'Play a clean single string close to the mic.',
+            detail: instrumentMode === 'bass'
+                ? 'Pluck the selected bass string clearly and let it ring.'
+                : 'Play a clean single string close to the mic.',
             color: 'rgba(255,255,255,0.72)',
         };
     }
@@ -189,7 +241,9 @@ function getTuningTone(targetCents: number, hasSignal: boolean) {
     if (Math.abs(targetCents) <= TUNER_IN_TUNE_CENTS) {
         return {
             label: 'In tune',
-            detail: 'That string is centered and ready.',
+            detail: instrumentMode === 'bass'
+                ? 'That bass string is centered and ready.'
+                : 'That string is centered and ready.',
             color: IN_TUNE_COLOR,
         };
     }
@@ -197,14 +251,18 @@ function getTuningTone(targetCents: number, hasSignal: boolean) {
     if (targetCents < 0) {
         return {
             label: 'Flat',
-            detail: 'Tighten the string slightly.',
+            detail: instrumentMode === 'bass'
+                ? 'Tighten the bass string slightly.'
+                : 'Tighten the string slightly.',
             color: FLAT_COLOR,
         };
     }
 
     return {
         label: 'Sharp',
-        detail: 'Loosen the string slightly.',
+        detail: instrumentMode === 'bass'
+            ? 'Loosen the bass string slightly.'
+            : 'Loosen the string slightly.',
         color: SHARP_COLOR,
     };
 }
@@ -221,43 +279,127 @@ function getActiveString(
     return GUITAR_STANDARD_STRINGS.find((string) => string.id === manualStringId) ?? GUITAR_STANDARD_STRINGS[0];
 }
 
+function getActiveBassString(targetId: string): GuitarStringTarget {
+    return STANDARD_BASS_STRINGS.find((target) => target.id === targetId) ?? STANDARD_BASS_STRINGS[0];
+}
+
 export default function TunerScreen() {
     const tabBarHeight = useBottomTabBarHeight();
     const isFocused = useIsFocused();
+    const [instrumentMode, setInstrumentMode] = useState<TunerInstrumentMode>('guitar');
     const [mode, setMode] = useState<TunerMode>('guided');
     const [manualStringId, setManualStringId] = useState(GUITAR_STANDARD_STRINGS[0].id);
     const [guidedIndex, setGuidedIndex] = useState(0);
-    const [wantsListening, setWantsListening] = useState(true);
+    const [selectedBassId, setSelectedBassId] = useState(STANDARD_BASS_STRINGS[0].id);
+    const [wantsListening, setWantsListening] = useState(false);
 
     useEffect(() => {
-        if (isFocused) {
-            setWantsListening(true);
+        if (!isFocused && wantsListening) {
+            setWantsListening(false);
         }
-    }, [isFocused]);
+    }, [isFocused, wantsListening]);
 
-    const activeString = useMemo(
+    const selectedString = useMemo(
         () => getActiveString(mode, manualStringId, guidedIndex),
         [guidedIndex, manualStringId, mode],
     );
+    const selectedBassString = useMemo(
+        () => getActiveBassString(selectedBassId),
+        [selectedBassId],
+    );
+    const targetFrequency = instrumentMode === 'bass'
+        ? selectedBassString.frequencyHz
+        : mode === 'guided'
+            ? selectedString.frequency
+            : null;
 
     const tuner = useTuner({
-        instrument: 'Chromatic',
-        targetFrequency: activeString.frequency,
+        instrument: instrumentMode === 'guitar' && mode === 'manual' ? 'Guitar' : 'Chromatic',
+        targetFrequency,
         confidenceThreshold: TUNER_CONFIDENCE_THRESHOLD,
+        minFrequencyHz: instrumentMode === 'bass' ? BASS_TUNER_MIN_FREQUENCY_HZ : TUNER_MIN_FREQUENCY_HZ,
+        maxFrequencyHz: instrumentMode === 'bass' ? BASS_TUNER_MAX_FREQUENCY_HZ : TUNER_MAX_FREQUENCY_HZ,
+        frequencySmoothingFactor: instrumentMode === 'bass' ? 0.42 : 0.35,
         uiSnapshotIntervalMs: TUNER_VISUAL_REFRESH_MS,
         enabled: isFocused && wantsListening,
     });
 
-    const isSystemBlocked = !tuner.isNativeModuleAvailable || tuner.status === 'permission-denied';
+    const activeString = useMemo(() => {
+        if (instrumentMode === 'guitar' && mode === 'manual' && tuner.targetFrequency) {
+            return GUITAR_STANDARD_STRINGS.find((stringTarget) => (
+                stringTarget.noteName === tuner.targetNoteName
+                || Math.abs(stringTarget.frequency - (tuner.targetFrequency ?? 0)) < 0.25
+            )) ?? selectedString;
+        }
+
+        return selectedString;
+    }, [instrumentMode, mode, selectedString, tuner.targetFrequency, tuner.targetNoteName]);
+    const activeTargetLabel = instrumentMode === 'bass' ? selectedBassString.noteName : activeString.noteName;
+    const activeTargetFrequency = instrumentMode === 'bass' ? selectedBassString.frequencyHz : activeString.frequency;
+    const activeTargetInstruction = instrumentMode === 'bass'
+        ? `Pluck the ${selectedBassString.noteName} string`
+        : mode === 'guided'
+            ? `Play the ${activeString.instructionLabel} string`
+            : `Tune the ${activeString.noteName} string`;
+    const activeTargetMeta = instrumentMode === 'bass'
+        ? `Bass string ${selectedBassString.stringIndex + 1} of 4`
+        : mode === 'guided'
+            ? `String ${guidedIndex + 1} of 6`
+            : 'Manual selection';
+
+    const isMicBlocked = tuner.microphonePermissionStatus === 'denied'
+        || tuner.microphonePermissionStatus === 'blocked'
+        || tuner.microphonePermissionStatus === 'unavailable'
+        || tuner.microphonePermissionStatus === 'error';
+    const isSystemBlocked = !tuner.isNativeModuleAvailable || isMicBlocked;
     const shouldShowContinue = mode === 'guided' && tuner.hasSignal && Math.abs(tuner.targetCents) <= TUNER_IN_TUNE_CENTS;
-    const tuningTone = getTuningTone(tuner.targetCents, tuner.hasSignal);
+    const tuningTone = getTuningTone(tuner.targetCents, tuner.hasSignal, instrumentMode);
     const centsLabel = tuner.hasSignal ? `${tuner.targetCents > 0 ? '+' : ''}${tuner.targetCents.toFixed(1)} cents` : '-- cents';
     const confidenceLabel = `${Math.round(tuner.confidence * 100)}%`;
     const liveHzLabel = formatFrequency(tuner.frequency);
-    const targetHzLabel = formatFrequency(activeString.frequency);
+    const targetHzLabel = formatFrequency(activeTargetFrequency);
+    const listeningUiState = getListeningUiState(tuner);
+    const liveBadgeLabel = getListeningBadgeLabel(listeningUiState);
+    const isListeningActive = listeningUiState === 'listening';
+    const isCheckingPermission = listeningUiState === 'checking_permission';
+    const isStartingListening = listeningUiState === 'starting';
+    const isListeningError = listeningUiState === 'error';
+    const footerStatusLine = isListeningError
+        ? tuner.error ?? 'Could not start tuner audio input.'
+        : isCheckingPermission
+            ? 'Checking microphone permission...'
+        : isStartingListening
+            ? 'Starting microphone...'
+            : isListeningActive && !tuner.hasSignal
+                ? instrumentMode === 'bass'
+                    ? 'Listening. Pluck the selected bass string clearly.'
+                    : 'Listening. Play a clean single string close to the mic.'
+                : tuner.displayStatus;
+    const listeningActionLabel = isStartingListening
+        ? 'Starting microphone...'
+        : isCheckingPermission
+            ? 'Checking microphone permission...'
+        : isListeningActive
+            ? 'Stop Listening'
+            : isListeningError
+                ? 'Try Again'
+                : 'Start Listening';
+    const listeningActionIcon: React.ComponentProps<typeof Ionicons>['name'] = isStartingListening
+        ? 'hourglass-outline'
+        : isCheckingPermission
+            ? 'shield-checkmark-outline'
+        : isListeningActive
+            ? 'stop-circle-outline'
+            : isListeningError
+                ? 'refresh-outline'
+                : 'mic-outline';
 
     const handleModeChange = (nextMode: TunerMode) => {
         setMode(nextMode);
+    };
+
+    const handleInstrumentModeChange = (nextMode: TunerInstrumentMode) => {
+        setInstrumentMode(nextMode);
     };
 
     const handleContinue = () => {
@@ -269,33 +411,55 @@ export default function TunerScreen() {
     };
 
     const handleListeningAction = async () => {
+        if (isCheckingPermission || isStartingListening) {
+            return;
+        }
+
+        if (isListeningActive) {
+            setWantsListening(false);
+            await tuner.stop();
+            return;
+        }
+
         if (!tuner.isNativeModuleAvailable) {
             return;
         }
 
-        if (tuner.status === 'permission-denied' && !tuner.canAskPermissionAgain) {
+        if (tuner.microphonePermissionStatus === 'blocked' || !tuner.canAskPermissionAgain) {
             await Linking.openSettings();
             return;
         }
 
         setWantsListening(true);
-        await tuner.start();
+        const didStart = await tuner.start();
+
+        if (!didStart) {
+            setWantsListening(false);
+        }
     };
 
     const helpCardTitle = !tuner.isNativeModuleAvailable
         ? 'Native build required'
-        : tuner.status === 'permission-denied'
+        : tuner.microphonePermissionStatus === 'blocked'
+            ? 'Microphone access is off'
+            : tuner.microphonePermissionStatus === 'unavailable'
+                ? 'Microphone unavailable'
+                : tuner.microphonePermissionStatus === 'error'
+                    ? 'Microphone check failed'
+                    : tuner.microphonePermissionStatus === 'denied'
             ? 'Microphone access needed'
             : null;
     const helpCardBody = !tuner.isNativeModuleAvailable
         ? TUNER_NATIVE_MODULE_MESSAGE
-        : tuner.status === 'permission-denied'
-            ? 'Turn on microphone access so the tuner can lock onto a live string.'
+        : tuner.microphonePermissionMessage
+            ? tuner.microphonePermissionMessage
+            : tuner.microphonePermissionStatus === 'denied'
+                ? 'Turn on microphone access so the tuner can lock onto a live string.'
             : null;
     const helpCardButton = !tuner.isNativeModuleAvailable
         ? null
-        : tuner.status === 'permission-denied'
-            ? tuner.canAskPermissionAgain ? 'Allow Microphone' : 'Open Settings'
+        : isMicBlocked
+            ? tuner.microphonePermissionStatus === 'blocked' || !tuner.canAskPermissionAgain ? 'Open Settings' : 'Try Again'
             : null;
 
     return (
@@ -313,13 +477,38 @@ export default function TunerScreen() {
                 >
                     <Animated.View entering={FadeInDown.duration(420)} style={styles.headerRow}>
                         <View style={styles.headerCopy}>
-                            <Text style={styles.eyebrow}>Professional Guitar Tuner</Text>
+                            <Text style={styles.eyebrow}>
+                                {instrumentMode === 'bass' ? 'Professional Bass Tuner' : 'Professional Guitar Tuner'}
+                            </Text>
                             <Text style={styles.header}>Tune by string, not by luck.</Text>
                             <Text style={styles.subHeader}>
-                                Native pitch frames, exact cents math, and a fluid gauge built for real guitar strings.
+                                {instrumentMode === 'bass'
+                                    ? 'Native pitch frames, exact cents math, and a fluid gauge built for sustained bass strings.'
+                                    : 'Native pitch frames, exact cents math, and a fluid gauge built for real guitar strings.'}
                             </Text>
                         </View>
                         <ScreenSettingsButton />
+                    </Animated.View>
+
+                    <Animated.View entering={FadeInDown.delay(45).duration(420)} style={styles.instrumentModeRail}>
+                        {INSTRUMENT_MODE_OPTIONS.map((option) => {
+                            const active = option.id === instrumentMode;
+                            return (
+                                <Pressable
+                                    key={option.id}
+                                    onPress={() => handleInstrumentModeChange(option.id)}
+                                    style={({ pressed }) => [
+                                        styles.instrumentModeButton,
+                                        active && styles.instrumentModeButtonActive,
+                                        pressed && styles.modeButtonPressed,
+                                    ]}
+                                >
+                                    <Text style={[styles.instrumentModeButtonText, active && styles.instrumentModeButtonTextActive]}>
+                                        {option.label}
+                                    </Text>
+                                </Pressable>
+                            );
+                        })}
                     </Animated.View>
 
                     <Animated.View entering={FadeInDown.delay(70).duration(440)} style={styles.heroCard}>
@@ -331,8 +520,16 @@ export default function TunerScreen() {
                         >
                             <View style={styles.heroRow}>
                                 <View style={styles.liveBadge}>
-                                    <View style={[styles.liveDot, tuner.hasSignal && styles.liveDotActive]} />
-                                    <Text style={styles.liveBadgeText}>{tuner.isListening ? 'Listening' : 'Idle'}</Text>
+                                    <View
+                                        style={[
+                                            styles.liveDot,
+                                            isListeningActive && styles.liveDotActive,
+                                            isCheckingPermission && styles.liveDotStarting,
+                                            isStartingListening && styles.liveDotStarting,
+                                            isListeningError && styles.liveDotError,
+                                        ]}
+                                    />
+                                    <Text style={styles.liveBadgeText}>{liveBadgeLabel}</Text>
                                 </View>
                                 <View style={styles.specRow}>
                                     <View style={styles.specChip}>
@@ -350,35 +547,44 @@ export default function TunerScreen() {
                                 </View>
                             </View>
 
-                            <View style={styles.modeRail}>
-                                {MODE_OPTIONS.map((option) => {
-                                    const active = option.id === mode;
-                                    return (
-                                        <Pressable
-                                            key={option.id}
-                                            onPress={() => handleModeChange(option.id)}
-                                            style={({ pressed }) => [
-                                                styles.modeButton,
-                                                active && styles.modeButtonActive,
-                                                pressed && styles.modeButtonPressed,
-                                            ]}
-                                        >
-                                            <Text style={[styles.modeButtonText, active && styles.modeButtonTextActive]}>
-                                                {option.label}
-                                            </Text>
-                                        </Pressable>
-                                    );
-                                })}
-                            </View>
+                            {instrumentMode === 'guitar' ? (
+                                <View style={styles.modeRail}>
+                                    {MODE_OPTIONS.map((option) => {
+                                        const active = option.id === mode;
+                                        return (
+                                            <Pressable
+                                                key={option.id}
+                                                onPress={() => handleModeChange(option.id)}
+                                                style={({ pressed }) => [
+                                                    styles.modeButton,
+                                                    active && styles.modeButtonActive,
+                                                    pressed && styles.modeButtonPressed,
+                                                ]}
+                                            >
+                                                <Text style={[styles.modeButtonText, active && styles.modeButtonTextActive]}>
+                                                    {option.label}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </View>
+                            ) : (
+                                <View style={styles.bassIntroPanel}>
+                                    <Text style={styles.bassIntroTitle}>Tune bass by string.</Text>
+                                    <Text style={styles.bassIntroBody}>
+                                        Select a bass string, tap Start Listening, then pluck the string clearly.
+                                    </Text>
+                                </View>
+                            )}
 
                             <View style={styles.targetRow}>
                                 <View>
                                     <Text style={styles.targetLabel}>Current target</Text>
-                                    <Text style={styles.targetValue}>{activeString.noteName}</Text>
+                                    <Text style={styles.targetValue}>{activeTargetLabel}</Text>
                                 </View>
                                 <View style={styles.targetMeta}>
                                     <Text style={styles.targetMetaText}>{targetHzLabel}</Text>
-                                    <Text style={styles.targetMetaSubText}>{mode === 'guided' ? `String ${guidedIndex + 1} of 6` : 'Manual selection'}</Text>
+                                    <Text style={styles.targetMetaSubText}>{activeTargetMeta}</Text>
                                 </View>
                             </View>
                         </LinearGradient>
@@ -392,9 +598,7 @@ export default function TunerScreen() {
                             style={styles.gaugeCardFill}
                         >
                             <Text style={styles.gaugeInstruction}>
-                                {mode === 'guided'
-                                    ? `Play the ${activeString.instructionLabel} string`
-                                    : `Tune the ${activeString.noteName} string`}
+                                {activeTargetInstruction}
                             </Text>
                             <Text style={[styles.tuningLabel, { color: tuningTone.color }]}>
                                 {tuningTone.label}
@@ -426,7 +630,7 @@ export default function TunerScreen() {
                                 </View>
                                 <View style={styles.secondaryReadout}>
                                     <Text style={styles.secondaryReadoutLabel}>Target</Text>
-                                    <Text style={styles.secondaryReadoutValue}>{activeString.noteName}</Text>
+                                    <Text style={styles.secondaryReadoutValue}>{activeTargetLabel}</Text>
                                 </View>
                                 <View style={styles.secondaryReadout}>
                                     <Text style={styles.secondaryReadoutLabel}>Confidence</Text>
@@ -438,45 +642,81 @@ export default function TunerScreen() {
 
                     <Animated.View entering={FadeInDown.delay(150).duration(480)} style={styles.selectionCard}>
                         <Text style={styles.sectionTitle}>
-                            {mode === 'guided' ? 'Guided sequence' : 'String selector'}
+                            {instrumentMode === 'bass'
+                                ? 'Bass strings'
+                                : mode === 'guided' ? 'Guided sequence' : 'String selector'}
                         </Text>
                         <Text style={styles.sectionBody}>
-                            {mode === 'guided'
-                                ? 'Work through the standard E-A-D-G-B-e order. When a string is centered, continue to the next one.'
-                                : 'Jump straight to the string you want to tune and keep the target locked there.'}
+                            {instrumentMode === 'bass'
+                                ? 'Tune the standard E-A-D-G bass set. Bass notes sustain well, so they fit the live pitch detector.'
+                                : mode === 'guided'
+                                    ? 'Work through the standard E-A-D-G-B-e order. When a string is centered, continue to the next one.'
+                                    : 'Jump straight to the string you want to tune and keep the target locked there.'}
                         </Text>
 
-                        <View style={styles.stringGrid}>
-                            {GUITAR_STANDARD_STRINGS.map((stringTarget) => {
-                                const active = stringTarget.id === activeString.id;
+                        {instrumentMode === 'bass' ? (
+                            <>
+                                <View style={styles.bassGrid}>
+                                    {STANDARD_BASS_STRINGS.map((bassString) => {
+                                        const active = bassString.id === selectedBassString.id;
 
-                                return (
-                                    <Pressable
-                                        key={stringTarget.id}
-                                        disabled={mode === 'guided'}
-                                        onPress={() => setManualStringId(stringTarget.id)}
-                                        style={({ pressed }) => [
-                                            styles.stringButton,
-                                            active && styles.stringButtonActive,
-                                            pressed && mode === 'manual' && styles.stringButtonPressed,
-                                            mode === 'guided' && styles.stringButtonGuided,
-                                        ]}
-                                    >
-                                        <Text style={[styles.stringButtonNote, active && styles.stringButtonNoteActive]}>
-                                            {stringTarget.shortLabel}
-                                        </Text>
-                                        <Text style={[styles.stringButtonName, active && styles.stringButtonNameActive]}>
-                                            {stringTarget.noteName}
-                                        </Text>
-                                        <Text style={[styles.stringButtonFreq, active && styles.stringButtonFreqActive]}>
-                                            {formatFrequency(stringTarget.frequency)}
-                                        </Text>
-                                    </Pressable>
-                                );
-                            })}
-                        </View>
+                                        return (
+                                            <Pressable
+                                                key={bassString.id}
+                                                onPress={() => setSelectedBassId(bassString.id)}
+                                                style={({ pressed }) => [
+                                                    styles.bassButton,
+                                                    active && styles.stringButtonActive,
+                                                    pressed && styles.stringButtonPressed,
+                                                ]}
+                                            >
+                                                <Text style={[styles.stringButtonNote, active && styles.stringButtonNoteActive]}>
+                                                    {bassString.shortLabel}
+                                                </Text>
+                                                <Text style={[styles.stringButtonName, active && styles.stringButtonNameActive]}>
+                                                    {bassString.noteName}
+                                                </Text>
+                                                <Text style={[styles.stringButtonFreq, active && styles.stringButtonFreqActive]}>
+                                                    {formatFrequency(bassString.frequencyHz)}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </View>
+                            </>
+                        ) : (
+                            <View style={styles.stringGrid}>
+                                {GUITAR_STANDARD_STRINGS.map((stringTarget) => {
+                                    const active = stringTarget.id === activeString.id;
 
-                        {mode === 'guided' && shouldShowContinue ? (
+                                    return (
+                                        <Pressable
+                                            key={stringTarget.id}
+                                            disabled={mode === 'guided'}
+                                            onPress={() => setManualStringId(stringTarget.id)}
+                                            style={({ pressed }) => [
+                                                styles.stringButton,
+                                                active && styles.stringButtonActive,
+                                                pressed && mode === 'manual' && styles.stringButtonPressed,
+                                                mode === 'guided' && styles.stringButtonGuided,
+                                            ]}
+                                        >
+                                            <Text style={[styles.stringButtonNote, active && styles.stringButtonNoteActive]}>
+                                                {stringTarget.shortLabel}
+                                            </Text>
+                                            <Text style={[styles.stringButtonName, active && styles.stringButtonNameActive]}>
+                                                {stringTarget.noteName}
+                                            </Text>
+                                            <Text style={[styles.stringButtonFreq, active && styles.stringButtonFreqActive]}>
+                                                {formatFrequency(stringTarget.frequency)}
+                                            </Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+                        )}
+
+                        {instrumentMode === 'guitar' && mode === 'guided' && shouldShowContinue ? (
                             <Animated.View entering={FadeInDown.delay(30).duration(320)}>
                                 <Pressable
                                     onPress={handleContinue}
@@ -526,8 +766,34 @@ export default function TunerScreen() {
                     {!isSystemBlocked ? (
                         <Animated.View entering={FadeInDown.delay(210).duration(420)} style={styles.footerCard}>
                             <Text style={styles.footerLine}>
-                                {tuner.displayStatus}
+                                {footerStatusLine}
                             </Text>
+                            <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel={listeningActionLabel}
+                                disabled={isCheckingPermission || isStartingListening}
+                                onPress={handleListeningAction}
+                                style={({ pressed }) => [
+                                    styles.listeningActionButton,
+                                    isListeningActive && styles.listeningActionButtonStop,
+                                    (isCheckingPermission || isStartingListening) && styles.listeningActionButtonDisabled,
+                                    pressed && !isCheckingPermission && !isStartingListening && styles.listeningActionButtonPressed,
+                                ]}
+                            >
+                                <Ionicons
+                                    name={listeningActionIcon}
+                                    size={18}
+                                    color={isListeningActive ? '#FFE8EA' : '#05110B'}
+                                />
+                                <Text
+                                    style={[
+                                        styles.listeningActionButtonText,
+                                        isListeningActive && styles.listeningActionButtonTextStop,
+                                    ]}
+                                >
+                                    {listeningActionLabel}
+                                </Text>
+                            </Pressable>
                         </Animated.View>
                     ) : null}
                 </ScrollView>
@@ -610,6 +876,12 @@ const styles = StyleSheet.create({
     liveDotActive: {
         backgroundColor: IN_TUNE_COLOR,
     },
+    liveDotStarting: {
+        backgroundColor: '#FFD166',
+    },
+    liveDotError: {
+        backgroundColor: SHARP_COLOR,
+    },
     liveBadgeText: {
         color: '#F3F8FF',
         fontSize: 13,
@@ -642,6 +914,33 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '700',
     },
+    instrumentModeRail: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 18,
+        padding: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.08)',
+        gap: 6,
+    },
+    instrumentModeButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    instrumentModeButtonActive: {
+        backgroundColor: 'rgba(255,255,255,0.13)',
+    },
+    instrumentModeButtonText: {
+        color: 'rgba(196, 206, 224, 0.84)',
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    instrumentModeButtonTextActive: {
+        color: '#FFFFFF',
+    },
     modeRail: {
         flexDirection: 'row',
         backgroundColor: 'rgba(255,255,255,0.05)',
@@ -671,6 +970,25 @@ const styles = StyleSheet.create({
     },
     modeButtonTextActive: {
         color: '#FFFFFF',
+    },
+    bassIntroPanel: {
+        borderRadius: 18,
+        paddingHorizontal: 14,
+        paddingVertical: 13,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.08)',
+        gap: 5,
+    },
+    bassIntroTitle: {
+        color: '#FFFFFF',
+        fontSize: 15,
+        fontWeight: '800',
+    },
+    bassIntroBody: {
+        color: 'rgba(204, 214, 231, 0.8)',
+        fontSize: 13,
+        lineHeight: 19,
     },
     targetRow: {
         flexDirection: 'row',
@@ -899,9 +1217,27 @@ const styles = StyleSheet.create({
         gap: 12,
         marginTop: 10,
     },
+    bassGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginTop: 10,
+    },
     stringButton: {
         width: '31%',
         minWidth: 96,
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 14,
+        backgroundColor: 'rgba(255,255,255,0.04)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.08)',
+        alignItems: 'flex-start',
+        gap: 4,
+    },
+    bassButton: {
+        width: '47%',
+        minWidth: 132,
         borderRadius: 20,
         paddingHorizontal: 12,
         paddingVertical: 14,
@@ -1021,10 +1357,40 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(10, 14, 24, 0.66)',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.05)',
+        gap: 14,
     },
     footerLine: {
         color: 'rgba(205, 214, 229, 0.78)',
         fontSize: 14,
         textAlign: 'center',
+    },
+    listeningActionButton: {
+        minHeight: 52,
+        borderRadius: 18,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        backgroundColor: IN_TUNE_COLOR,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.12)',
+    },
+    listeningActionButtonStop: {
+        backgroundColor: 'rgba(255,92,105,0.18)',
+        borderColor: 'rgba(255,92,105,0.42)',
+    },
+    listeningActionButtonDisabled: {
+        opacity: 0.72,
+    },
+    listeningActionButtonPressed: {
+        transform: [{ scale: 0.985 }],
+    },
+    listeningActionButtonText: {
+        color: '#05110B',
+        fontSize: 16,
+        fontWeight: '800',
+    },
+    listeningActionButtonTextStop: {
+        color: '#FFE8EA',
     },
 });

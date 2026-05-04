@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import SongScreen from '../SongScreen';
 
 let consoleErrorSpy: jest.SpyInstance;
@@ -14,6 +14,7 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 jest.mock('../../hooks/useTuner', () => ({
+    buildMidiTarget: jest.fn((midi: number) => ({ midi, noteName: 'E2', frequency: 82.41 })),
     buildTabTarget: jest.fn((stringIndex: number, fret: number) => ({ midi: 40 + stringIndex + fret, noteName: 'E2', frequency: 82.41 })),
     isPitchMatchForTarget: jest.fn(() => false),
     TUNER_A4_HZ: 440,
@@ -21,6 +22,8 @@ jest.mock('../../hooks/useTuner', () => ({
     useTuner: () => ({
         status: 'idle',
         error: null,
+        microphonePermissionStatus: 'granted',
+        microphonePermissionMessage: null,
         isNativeModuleAvailable: true,
         canAskPermissionAgain: true,
         isListening: false,
@@ -46,6 +49,7 @@ jest.mock('../../hooks/useTuner', () => ({
         inTuneValue: { value: 0 },
         start: jest.fn(),
         stop: jest.fn(),
+        checkMicrophonePermission: jest.fn(),
     }),
 }));
 
@@ -78,11 +82,28 @@ jest.mock('../../services/gamification', () => ({
 }));
 
 jest.mock('../../services/songLibrary', () => ({
+    deleteImportedSong: jest.fn(() => Promise.resolve(true)),
+    importSongFromFiles: jest.fn(),
     importSongFromGeneratedManifest: jest.fn(),
     loadImportedSongs: jest.fn(() => Promise.resolve([])),
+    updateSavedSongFavorite: jest.fn(),
+    updateSavedSongMetadata: jest.fn(),
 }));
 
+const mockedSongLibrary = jest.requireMock('../../services/songLibrary') as {
+    loadImportedSongs: jest.Mock;
+    updateSavedSongFavorite: jest.Mock;
+    updateSavedSongMetadata: jest.Mock;
+};
+
 describe('SongScreen', () => {
+    beforeEach(() => {
+        mockedSongLibrary.loadImportedSongs.mockReset();
+        mockedSongLibrary.loadImportedSongs.mockResolvedValue([]);
+        mockedSongLibrary.updateSavedSongFavorite.mockReset();
+        mockedSongLibrary.updateSavedSongMetadata.mockReset();
+    });
+
     beforeAll(() => {
         consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     });
@@ -91,10 +112,97 @@ describe('SongScreen', () => {
         consoleErrorSpy.mockRestore();
     });
 
-    it('renders the song flow shell', async () => {
+    it('renders Upload and Library sections with Library as the clean default', async () => {
         render(<SongScreen />);
-        await waitFor(() => expect(screen.getByText('Song Flow')).toBeTruthy());
+        await waitFor(() => expect(screen.getAllByText('Songs').length).toBeGreaterThan(0));
+        expect(screen.getByText('Upload')).toBeTruthy();
+        expect(screen.getByText('Library')).toBeTruthy();
+        expect(screen.getByPlaceholderText('Search songs or artists')).toBeTruthy();
+        expect(screen.queryByText('Upload Song')).toBeNull();
         expect(screen.getAllByText('Chords').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Tabs').length).toBeGreaterThan(0);
+        expect(screen.queryByText('Edit')).toBeNull();
+        expect(screen.queryByText('Delete')).toBeNull();
+    });
+
+    it('shows upload actions only in the Upload section', async () => {
+        render(<SongScreen />);
+        await waitFor(() => expect(screen.getByText('Upload')).toBeTruthy());
+
+        fireEvent.press(screen.getByText('Upload'));
+
+        expect(screen.getByText('Create a practice chart')).toBeTruthy();
+        expect(screen.getByText('Upload Song')).toBeTruthy();
+        expect(screen.getByText('Import Manifest')).toBeTruthy();
+        expect(screen.getByText('Demo Song')).toBeTruthy();
+        expect(screen.queryByPlaceholderText('Search songs or artists')).toBeNull();
+    });
+
+    it('hides edit/delete on cards until local song actions are opened', async () => {
+        mockedSongLibrary.loadImportedSongs.mockResolvedValue([
+            {
+                id: 'local-song',
+                title: 'Local Song',
+                artist: 'Player',
+                difficulty: 'Medium',
+                backingTrack: { uri: 'file:///local-song.mp3' },
+                bpm: 118,
+                durationSec: 24,
+                chordEvents: [{ timeSec: 0, chord: 'C', laneRow: 1 }],
+                tabNotes: [],
+                isImported: true,
+            },
+        ]);
+
+        render(<SongScreen />);
+
+        await waitFor(() => expect(screen.getByText('Local Song')).toBeTruthy());
+        expect(screen.queryByText('Edit')).toBeNull();
+        expect(screen.queryByText('Delete')).toBeNull();
+        expect(screen.getAllByText('118 BPM').length).toBeGreaterThan(0);
+
+        fireEvent(screen.getByText('Local Song'), 'longPress');
+
+        expect(screen.getByText('Edit')).toBeTruthy();
+        expect(screen.getByText('Delete')).toBeTruthy();
+        expect(screen.getByText('Favorite')).toBeTruthy();
+    });
+
+    it('toggles favorite from the hidden song action sheet', async () => {
+        mockedSongLibrary.loadImportedSongs.mockResolvedValue([
+            {
+                id: 'local-song',
+                title: 'Local Song',
+                artist: 'Player',
+                difficulty: 'Medium',
+                backingTrack: { uri: 'file:///local-song.mp3' },
+                bpm: 118,
+                durationSec: 24,
+                chordEvents: [{ timeSec: 0, chord: 'C', laneRow: 1 }],
+                tabNotes: [],
+                isImported: true,
+            },
+        ]);
+        mockedSongLibrary.updateSavedSongFavorite.mockResolvedValue({
+            id: 'local-song',
+            title: 'Local Song',
+            artist: 'Player',
+            difficulty: 'Medium',
+            backingTrack: { uri: 'file:///local-song.mp3' },
+            bpm: 118,
+            durationSec: 24,
+            chordEvents: [{ timeSec: 0, chord: 'C', laneRow: 1 }],
+            tabNotes: [],
+            isImported: true,
+            isFavorite: true,
+        });
+
+        render(<SongScreen />);
+
+        await waitFor(() => expect(screen.getByText('Local Song')).toBeTruthy());
+        fireEvent(screen.getByText('Local Song'), 'longPress');
+        fireEvent.press(screen.getByText('Favorite'));
+
+        await waitFor(() => expect(mockedSongLibrary.updateSavedSongFavorite).toHaveBeenCalledWith('local-song', true));
     });
 });

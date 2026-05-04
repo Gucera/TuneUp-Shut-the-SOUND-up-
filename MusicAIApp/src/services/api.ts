@@ -1,3 +1,5 @@
+import { cleanUploadedSongDisplayName } from '../utils/songDisplayNames';
+
 const FALLBACK_BASE_URL = 'http://localhost:8000';
 const URL_PROTOCOL_PATTERN = /^https?:\/\//i;
 
@@ -34,7 +36,7 @@ let pendingWarmup: Promise<void> | null = null;
 type ApiPayload = Record<string, any>;
 
 export interface ApiErrorResponse {
-    status: 'error' | 'failed' | 'timed_out';
+    status: 'error' | 'failed' | 'timed_out' | 'cancelled' | 'expired';
     message: string;
     statusCode?: number;
 }
@@ -114,10 +116,27 @@ export interface SongImportTabNotePayload {
 export interface SongImportManifestPayload {
     title: string;
     artist: string;
+    instrument?: string;
+    tuning?: {
+        id: string;
+        name: string;
+        stringNotes: string[];
+    };
     difficulty: 'Easy' | 'Medium' | 'Hard';
+    bpm?: number;
     durationSec: number;
     chordEvents: SongImportChordEventPayload[];
     tabNotes: SongImportTabNotePayload[];
+    aiDraft?: boolean;
+    confidence?: SongImportConfidencePayload;
+    warnings?: string[];
+}
+
+export interface SongImportConfidencePayload {
+    overall: number;
+    chords: number;
+    tabs: number;
+    sections: number;
 }
 
 export interface SongImportResultPayload {
@@ -126,9 +145,18 @@ export interface SongImportResultPayload {
     bpm: number;
     beatGrid: number[];
     confidence: number;
+    confidenceBreakdown: SongImportConfidencePayload;
     fallbackUsed: boolean;
     message: string;
+    warnings: string[];
     songManifest: SongImportManifestPayload;
+}
+
+export interface SongAnalysisRequestOptions {
+    instrument?: string;
+    tuningId?: string;
+    tuningName?: string;
+    stringNotes?: string[];
 }
 
 export interface LegacySongAnalysisResponse {
@@ -270,6 +298,10 @@ function getNullableString(payload: ApiPayload, key: string) {
 
 function getErrorMessage(payload: ApiPayload, fallback: string) {
     const nestedError = payload.error;
+    if (typeof nestedError === 'string') {
+        return nestedError;
+    }
+
     if (nestedError && typeof nestedError === 'object') {
         const typedError = nestedError as Record<string, unknown>;
         if (typeof typedError.message === 'string') {
@@ -278,6 +310,28 @@ function getErrorMessage(payload: ApiPayload, fallback: string) {
     }
 
     return getString(payload, 'detail', getString(payload, 'message', fallback));
+}
+
+function normalizeTaskStatus(payload: ApiPayload) {
+    const rawStatus = getString(payload, 'status', getString(payload, 'state', 'processing'));
+
+    if (rawStatus === 'completed' || rawStatus === 'succeeded') {
+        return 'completed';
+    }
+
+    if (rawStatus === 'pending' || rawStatus === 'queued' || rawStatus === 'processing' || rawStatus === 'running') {
+        return 'processing';
+    }
+
+    if (rawStatus === 'timed_out' || rawStatus === 'expired') {
+        return 'timed_out';
+    }
+
+    if (rawStatus === 'failed' || rawStatus === 'cancelled') {
+        return 'failed';
+    }
+
+    return rawStatus;
 }
 
 function buildApiError(response: Response | null, payload: ApiPayload, fallback: string): ApiErrorResponse {
@@ -364,6 +418,10 @@ function mapAnalysisResult(payload: ApiPayload, fallbackMessage: string): Analys
     };
 }
 
+function isValidAnalysisResult(payload: ApiPayload) {
+    return typeof payload.bpm === 'number' && Array.isArray(payload.markers);
+}
+
 function mapSongImportManifest(payload: ApiPayload): SongImportManifestPayload {
     const difficulty = payload.difficulty === 'Easy' || payload.difficulty === 'Hard' || payload.difficulty === 'Medium'
         ? payload.difficulty
@@ -412,13 +470,68 @@ function mapSongImportManifest(payload: ApiPayload): SongImportManifestPayload {
             .filter((entry): entry is SongImportTabNotePayload => !!entry)
         : [];
 
+    const tuningPayload = payload.tuning && typeof payload.tuning === 'object'
+        ? payload.tuning as ApiPayload
+        : null;
+    const tuning = tuningPayload
+        && typeof tuningPayload.id === 'string'
+        && typeof tuningPayload.name === 'string'
+        && Array.isArray(tuningPayload.stringNotes)
+        ? {
+            id: tuningPayload.id,
+            name: tuningPayload.name,
+            stringNotes: tuningPayload.stringNotes.filter((entry): entry is string => typeof entry === 'string'),
+        }
+        : undefined;
+    const confidence = mapSongImportConfidence(payload.confidence);
+    const warnings = Array.isArray(payload.warnings)
+        ? payload.warnings.filter((entry): entry is string => typeof entry === 'string')
+        : [];
+
     return {
-        title: getString(payload, 'title', 'Imported Song'),
+        title: cleanUploadedSongDisplayName(getString(payload, 'title', 'Imported Song')),
         artist: getString(payload, 'artist', 'AI Transcription'),
+        ...(typeof payload.instrument === 'string' ? { instrument: payload.instrument } : {}),
+        ...(tuning ? { tuning } : {}),
         difficulty,
+        ...(typeof payload.bpm === 'number' && Number.isFinite(payload.bpm) && payload.bpm > 0 ? { bpm: payload.bpm } : {}),
         durationSec: typeof payload.durationSec === 'number' ? payload.durationSec : 0,
         chordEvents,
         tabNotes,
+        ...(payload.aiDraft === true ? { aiDraft: true } : {}),
+        ...(confidence ? { confidence } : {}),
+        ...(warnings.length > 0 ? { warnings } : {}),
+    };
+}
+
+function mapSongImportConfidence(value: unknown): SongImportConfidencePayload | null {
+    if (typeof value === 'number') {
+        const normalized = Math.max(0, Math.min(1, value));
+        return {
+            overall: normalized,
+            chords: normalized,
+            tabs: normalized,
+            sections: normalized,
+        };
+    }
+
+    if (!value || typeof value !== 'object') {
+        return null;
+    }
+
+    const payload = value as ApiPayload;
+    const score = (key: keyof SongImportConfidencePayload, fallback: number) => (
+        typeof payload[key] === 'number'
+            ? Math.max(0, Math.min(1, payload[key]))
+            : fallback
+    );
+    const overall = score('overall', 0);
+
+    return {
+        overall,
+        chords: score('chords', overall),
+        tabs: score('tabs', overall),
+        sections: score('sections', overall),
     };
 }
 
@@ -426,6 +539,25 @@ function mapSongImportResult(payload: ApiPayload): SongImportResultPayload {
     const manifestPayload = payload.songManifest && typeof payload.songManifest === 'object'
         ? payload.songManifest as ApiPayload
         : {};
+    const songManifest = mapSongImportManifest(manifestPayload);
+    if (
+        songManifest.bpm === undefined
+        && typeof payload.bpm === 'number'
+        && Number.isFinite(payload.bpm)
+        && payload.bpm > 0
+    ) {
+        songManifest.bpm = payload.bpm;
+    }
+
+    const confidenceBreakdown = mapSongImportConfidence(payload.confidence) ?? {
+        overall: 0,
+        chords: 0,
+        tabs: 0,
+        sections: 0,
+    };
+    const warnings = Array.isArray(payload.warnings)
+        ? payload.warnings.filter((entry): entry is string => typeof entry === 'string')
+        : [];
 
     return {
         songId: getNullableString(payload, 'songId'),
@@ -434,11 +566,25 @@ function mapSongImportResult(payload: ApiPayload): SongImportResultPayload {
         beatGrid: Array.isArray(payload.beatGrid)
             ? payload.beatGrid.filter((entry): entry is number => typeof entry === 'number')
             : [],
-        confidence: typeof payload.confidence === 'number' ? payload.confidence : 0,
+        confidence: confidenceBreakdown.overall,
+        confidenceBreakdown,
         fallbackUsed: payload.fallbackUsed === true,
         message: getString(payload, 'message', 'AI transcription complete.'),
-        songManifest: mapSongImportManifest(manifestPayload),
+        warnings,
+        songManifest,
     };
+}
+
+function isValidSongImportResult(payload: ApiPayload) {
+    const manifestPayload = payload.songManifest && typeof payload.songManifest === 'object'
+        ? payload.songManifest as ApiPayload
+        : null;
+
+    return !!manifestPayload
+        && typeof payload.bpm === 'number'
+        && typeof manifestPayload.durationSec === 'number'
+        && Array.isArray(manifestPayload.chordEvents)
+        && Array.isArray(manifestPayload.tabNotes);
 }
 
 function mapLeaderboardEntry(entry: any): LeaderboardEntry {
@@ -548,14 +694,26 @@ export const uploadAudioForAnalysis = async (
             return buildApiError(response, payload, 'Could not start the background scan.');
         }
 
+        const taskId = getString(payload, 'task_id', getString(payload, 'jobId', ''));
+        if (!taskId) {
+            return {
+                status: 'error',
+                message: 'The analysis server accepted the upload but did not return a task ID.',
+                statusCode: response.status,
+            };
+        }
+
         return {
             status: 'accepted',
-            taskId: getString(payload, 'task_id', ''),
+            taskId,
             progressText: getString(payload, 'progress_text', 'Background scan started.'),
             message: getString(payload, 'message', 'Background scan started.'),
         };
     } catch {
-        return { status: 'error', message: 'Could not connect to server.' };
+        return {
+            status: 'error',
+            message: 'Could not connect to the analysis server. Check that the backend is running and reachable from this device.',
+        };
     }
 };
 
@@ -563,25 +721,52 @@ export const analyzeAudioForSongImport = async (
     fileUri: string,
     fileName: string,
     userId?: string,
+    options?: SongAnalysisRequestOptions,
 ): Promise<AnalyzeSongAudioAcceptedResponse | ApiErrorResponse> => {
     try {
+        const formData = createAudioFormData(fileUri, fileName, 'song.mp3', userId);
+        if (options?.instrument) {
+            formData.append('instrument', options.instrument);
+        }
+        if (options?.tuningId) {
+            formData.append('tuning_id', options.tuningId);
+        }
+        if (options?.tuningName) {
+            formData.append('tuning_name', options.tuningName);
+        }
+        if (options?.stringNotes && options.stringNotes.length > 0) {
+            formData.append('string_notes', options.stringNotes.join(','));
+        }
+
         const { response, payload } = await requestJson('/analyze-audio', {
             method: 'POST',
-            body: createAudioFormData(fileUri, fileName, 'song.mp3', userId),
+            body: formData,
         }, { warmup: true });
 
         if (!response.ok) {
             return buildApiError(response, payload, 'Could not start AI transcription.');
         }
 
+        const taskId = getString(payload, 'task_id', getString(payload, 'jobId', ''));
+        if (!taskId) {
+            return {
+                status: 'error',
+                message: 'The analysis server accepted the upload but did not return a task ID.',
+                statusCode: response.status,
+            };
+        }
+
         return {
             status: 'accepted',
-            taskId: getString(payload, 'task_id', ''),
+            taskId,
             progressText: getString(payload, 'progress_text', 'AI transcription started.'),
             message: getString(payload, 'message', 'AI transcription started.'),
         };
     } catch {
-        return { status: 'error', message: 'Could not connect to server.' };
+        return {
+            status: 'error',
+            message: 'Could not connect to the analysis server. Check that the backend is running and reachable from this device.',
+        };
     }
 };
 
@@ -595,30 +780,43 @@ export const fetchAnalysisTaskStatus = async (taskId: string): Promise<AnalysisT
             return buildApiError(response, payload, 'Could not load scan status.');
         }
 
-        if (payload.status === 'completed') {
+        const normalizedStatus = normalizeTaskStatus(payload);
+
+        if (normalizedStatus === 'completed') {
+            const resultPayload = (payload.result as ApiPayload) ?? {};
+            if (!isValidAnalysisResult(resultPayload)) {
+                return {
+                    status: 'failed',
+                    taskId: getString(payload, 'task_id', getString(payload, 'jobId', taskId)),
+                    progressText: 'Analysis result unavailable.',
+                    updatedAt: getNullableString(payload, 'updated_at'),
+                    message: 'Analysis completed, but the result was unavailable. Please try again.',
+                };
+            }
+
             return {
                 status: 'completed',
-                taskId: getString(payload, 'task_id', taskId),
+                taskId: getString(payload, 'task_id', getString(payload, 'jobId', taskId)),
                 progressText: getString(payload, 'progress_text', 'Analysis complete.'),
                 updatedAt: getNullableString(payload, 'updated_at'),
-                result: mapAnalysisResult((payload.result as ApiPayload) ?? {}, 'Analysis complete.'),
+                result: mapAnalysisResult(resultPayload, 'Analysis complete.'),
             };
         }
 
-        if (payload.status === 'failed') {
+        if (normalizedStatus === 'failed') {
             return {
                 status: 'failed',
-                taskId: getString(payload, 'task_id', taskId),
+                taskId: getString(payload, 'task_id', getString(payload, 'jobId', taskId)),
                 progressText: getString(payload, 'progress_text', 'Analysis failed.'),
                 updatedAt: getNullableString(payload, 'updated_at'),
                 message: getErrorMessage(payload, 'Analysis failed.'),
             };
         }
 
-        if (payload.status === 'timed_out') {
+        if (normalizedStatus === 'timed_out') {
             return {
                 status: 'timed_out',
-                taskId: getString(payload, 'task_id', taskId),
+                taskId: getString(payload, 'task_id', getString(payload, 'jobId', taskId)),
                 progressText: getString(payload, 'progress_text', 'Analysis timed out.'),
                 updatedAt: getNullableString(payload, 'updated_at'),
                 message: getErrorMessage(payload, 'Analysis timed out.'),
@@ -627,12 +825,15 @@ export const fetchAnalysisTaskStatus = async (taskId: string): Promise<AnalysisT
 
         return {
             status: 'processing',
-            taskId: getString(payload, 'task_id', taskId),
+            taskId: getString(payload, 'task_id', getString(payload, 'jobId', taskId)),
             progressText: getString(payload, 'progress_text', 'Analysis is still running...'),
             updatedAt: getNullableString(payload, 'updated_at'),
         };
     } catch {
-        return { status: 'error', message: 'Could not connect to server.' };
+        return {
+            status: 'error',
+            message: 'Could not connect to the analysis server. Check that the backend is running and reachable from this device.',
+        };
     }
 };
 
@@ -646,30 +847,43 @@ export const fetchSongImportTaskStatus = async (taskId: string): Promise<SongImp
             return buildApiError(response, payload, 'Could not load AI transcription status.');
         }
 
-        if (payload.status === 'completed') {
+        const normalizedStatus = normalizeTaskStatus(payload);
+
+        if (normalizedStatus === 'completed') {
+            const resultPayload = (payload.result as ApiPayload) ?? {};
+            if (!isValidSongImportResult(resultPayload)) {
+                return {
+                    status: 'failed',
+                    taskId: getString(payload, 'task_id', getString(payload, 'jobId', taskId)),
+                    progressText: 'AI transcription result unavailable.',
+                    updatedAt: getNullableString(payload, 'updated_at'),
+                    message: 'AI transcription completed, but the song result was unavailable. Please try again.',
+                };
+            }
+
             return {
                 status: 'completed',
-                taskId: getString(payload, 'task_id', taskId),
+                taskId: getString(payload, 'task_id', getString(payload, 'jobId', taskId)),
                 progressText: getString(payload, 'progress_text', 'AI transcription complete.'),
                 updatedAt: getNullableString(payload, 'updated_at'),
-                result: mapSongImportResult((payload.result as ApiPayload) ?? {}),
+                result: mapSongImportResult(resultPayload),
             };
         }
 
-        if (payload.status === 'failed') {
+        if (normalizedStatus === 'failed') {
             return {
                 status: 'failed',
-                taskId: getString(payload, 'task_id', taskId),
+                taskId: getString(payload, 'task_id', getString(payload, 'jobId', taskId)),
                 progressText: getString(payload, 'progress_text', 'AI transcription failed.'),
                 updatedAt: getNullableString(payload, 'updated_at'),
                 message: getErrorMessage(payload, 'AI transcription failed.'),
             };
         }
 
-        if (payload.status === 'timed_out') {
+        if (normalizedStatus === 'timed_out') {
             return {
                 status: 'timed_out',
-                taskId: getString(payload, 'task_id', taskId),
+                taskId: getString(payload, 'task_id', getString(payload, 'jobId', taskId)),
                 progressText: getString(payload, 'progress_text', 'AI transcription timed out.'),
                 updatedAt: getNullableString(payload, 'updated_at'),
                 message: getErrorMessage(payload, 'AI transcription timed out.'),
@@ -678,12 +892,15 @@ export const fetchSongImportTaskStatus = async (taskId: string): Promise<SongImp
 
         return {
             status: 'processing',
-            taskId: getString(payload, 'task_id', taskId),
+            taskId: getString(payload, 'task_id', getString(payload, 'jobId', taskId)),
             progressText: getString(payload, 'progress_text', 'AI is still transcribing...'),
             updatedAt: getNullableString(payload, 'updated_at'),
         };
     } catch {
-        return { status: 'error', message: 'Could not connect to server.' };
+        return {
+            status: 'error',
+            message: 'Could not connect to the analysis server. Check that the backend is running and reachable from this device.',
+        };
     }
 };
 

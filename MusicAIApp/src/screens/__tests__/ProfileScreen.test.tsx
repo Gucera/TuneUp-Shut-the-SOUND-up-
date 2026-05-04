@@ -5,7 +5,11 @@ import ProfileScreen from '../ProfileScreen';
 let consoleErrorSpy: jest.SpyInstance;
 
 jest.mock('@react-navigation/native', () => ({
-    useNavigation: () => ({ navigate: jest.fn(), getParent: jest.fn(() => ({ navigate: jest.fn() })), setParams: jest.fn() }),
+    useNavigation: () => ({
+        navigate: jest.fn(),
+        getParent: jest.fn(() => ({ navigate: jest.fn() })),
+        setParams: jest.fn(),
+    }),
     useRoute: () => ({ params: {} }),
     useFocusEffect: (callback: () => void | (() => void)) => {
         const React = require('react');
@@ -15,65 +19,88 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 jest.mock('../../services/appSettings', () => ({
-    getAppSettings: jest.fn(() => Promise.resolve({
-        leaderboardSyncEnabled: false,
-        lessonAnimationsEnabled: true,
-        theoryShowGameDeck: true,
-        theoryShowQuizExplanation: true,
-        practiceBackendPitchAssist: true,
-        practiceShowFrequencyReadout: true,
-        practiceShowStringHelper: true,
-        studioShowPresetNotes: true,
-        studioShowFocusNotes: true,
-        studioShowQuickMarkers: true,
-        songsDefaultToTabs: false,
-        songsSeekJumpSeconds: 10,
-        songsShowStreakBanner: true,
-        songsBackendPitchAssist: true,
-        profileShowBadgeShelf: true,
-        profileShowLeaderboard: true,
-        hapticsEnabled: false,
-        dailyPracticeGoalMinutes: 20,
-    })),
+    getAppSettings: jest.fn(() =>
+        Promise.resolve({
+            leaderboardSyncEnabled: false,
+            lessonAnimationsEnabled: true,
+            theoryShowGameDeck: true,
+            theoryShowQuizExplanation: true,
+            practiceBackendPitchAssist: true,
+            practiceShowFrequencyReadout: true,
+            practiceShowStringHelper: true,
+            studioShowPresetNotes: true,
+            studioShowFocusNotes: true,
+            studioShowQuickMarkers: true,
+            songsDefaultToTabs: false,
+            songsSeekJumpSeconds: 10,
+            songsShowStreakBanner: true,
+            songsBackendPitchAssist: true,
+            profileShowBadgeShelf: true,
+            profileShowLeaderboard: true,
+            hapticsEnabled: false,
+            dailyPracticeGoalMinutes: 20,
+        }),
+    ),
     updateAppSettings: jest.fn((patch) => Promise.resolve({ ...patch })),
 }));
 
 jest.mock('../../services/gamification', () => ({
-    BADGE_DEFINITIONS: [{ id: 'first_song', title: 'First Song', description: 'desc', howToEarn: 'earn it' }],
-    getGamificationSnapshot: jest.fn(() => Promise.resolve({
-        userId: 'user-1',
-        displayName: 'Player One',
-        streakDays: 4,
-        longestStreak: 7,
-        didPracticeToday: true,
-        streakMessage: 'Keep going',
-        completedLessonIds: [],
-        completedSongIds: [],
-        completedQuizIds: [],
-        unlockedBadgeIds: ['first_song'],
-        xp: 320,
-        level: 4,
-    })),
+    BADGE_DEFINITIONS: [
+        { id: 'first_song', title: 'First Song', description: 'desc', howToEarn: 'earn it' },
+    ],
+    getGamificationSnapshot: jest.fn(() =>
+        Promise.resolve({
+            userId: 'user-1',
+            displayName: 'Player One',
+            streakDays: 4,
+            longestStreak: 7,
+            didPracticeToday: true,
+            streakMessage: 'Keep going',
+            completedLessonIds: [],
+            completedSongIds: [],
+            completedQuizIds: [],
+            unlockedBadgeIds: ['first_song'],
+            xp: 320,
+            level: 4,
+        }),
+    ),
     getLeaderboard: jest.fn(() => Promise.resolve([])),
     syncGamificationProfile: jest.fn(() => Promise.resolve()),
-    updateDisplayName: jest.fn(() => Promise.resolve({
-        userId: 'user-1',
-        displayName: 'Player One',
-        streakDays: 4,
-        longestStreak: 7,
-        didPracticeToday: true,
-        streakMessage: 'Keep going',
-        completedLessonIds: [],
-        completedSongIds: [],
-        completedQuizIds: [],
-        unlockedBadgeIds: ['first_song'],
-        xp: 320,
-        level: 4,
-    })),
+    updateDisplayName: jest.fn(() =>
+        Promise.resolve({
+            userId: 'user-1',
+            displayName: 'Player One',
+            streakDays: 4,
+            longestStreak: 7,
+            didPracticeToday: true,
+            streakMessage: 'Keep going',
+            completedLessonIds: [],
+            completedSongIds: [],
+            completedQuizIds: [],
+            unlockedBadgeIds: ['first_song'],
+            xp: 320,
+            level: 4,
+        }),
+    ),
 }));
 
 jest.mock('../../services/api', () => ({
     fetchTrafficAnalyses: jest.fn(() => Promise.resolve([])),
+}));
+
+jest.mock('../../services/apiDiagnostics', () => ({
+    checkBackendHealth: jest.fn(() =>
+        Promise.resolve({
+            ok: true,
+            baseUrl: 'http://127.0.0.1:8000',
+            statusCode: 200,
+            latencyMs: 12,
+            service: 'tuneup-backend',
+            backendStatus: 'ok',
+            environment: 'development',
+            version: 'unknown',
+        }),
+    ),
 }));
 
 jest.mock('../../services/songLibrary', () => ({
@@ -103,5 +130,6 @@ describe('ProfileScreen', () => {
         expect(screen.getAllByText('Lessons').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Songs').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Badges').length).toBeGreaterThan(0);
+        expect(screen.getByText('Backend diagnostics')).toBeTruthy();
     });
 });

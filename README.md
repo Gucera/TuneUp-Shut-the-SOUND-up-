@@ -86,6 +86,7 @@ This split is intentional: the app owns responsiveness and session UX, the backe
 - [🧩 System At a Glance](#-system-at-a-glance)
 - [🖼️ App Preview](#️-app-preview)
 - [⚡ Quick Start](#-quick-start)
+- [🎓 Viva Demo Startup](#-viva-demo-startup)
 - [🚀 Core Product Experience](#-core-product-experience)
 - [🗂️ Shipped Content](#️-shipped-content)
 - [🏗️ Architecture](#️-architecture)
@@ -114,9 +115,11 @@ cd backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-export SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
-export SUPABASE_KEY="YOUR_SUPABASE_SERVER_KEY"
-export CORS_ALLOW_ORIGINS="*"
+cp .env.example .env
+# Fill in backend/.env with your local Supabase values.
+set -a
+source .env
+set +a
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -125,9 +128,8 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```bash
 cd MusicAIApp
 npm install
-export EXPO_PUBLIC_API_BASE_URL="http://127.0.0.1:8000"
-export EXPO_PUBLIC_SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
-export EXPO_PUBLIC_SUPABASE_ANON_KEY="YOUR_SUPABASE_ANON_KEY"
+cp .env.example .env
+# Fill in MusicAIApp/.env with your local API and Supabase values.
 npx expo start -c
 ```
 
@@ -135,6 +137,17 @@ npx expo start -c
 - open `http://127.0.0.1:8000/healthz` and confirm Supabase is connected
 - sign in or create an account in the app
 - run a **Studio Grid** scan or start an **AI song import** from **Song Flow**
+
+## 🎓 Viva Demo Startup
+
+For dissertation or viva screen-share demos, use the local demo helper and checklist:
+
+```bash
+bash scripts/check-demo-env.sh
+bash scripts/start-demo.sh
+```
+
+The full checklist is in [`docs/viva-demo-checklist.md`](./docs/viva-demo-checklist.md). It covers the backend command, Expo dev-client command, Mac LAN IP setup, iPhone development build connection, and common fixes for Metro, backend, microphone, and port issues.
 
 ---
 
@@ -293,10 +306,10 @@ flowchart TD
 - `GET /healthz` performs a live Supabase table check and returns `503` with a degraded payload if connectivity is broken.
 - `POST /upload-audio` persists a track row, stores audio in Supabase Storage, creates an `ai_analysis_jobs` row, and schedules a worker thread.
 - `POST /analyze-audio` uses the same async job model, but produces an AI-generated song manifest for Song Flow imports.
-- `GET /task-status/{task_id}` can return `processing`, `completed`, `failed`, or `timed_out`, and the frontend handles all four states.
+- `GET /task-status/{task_id}` can return `processing`, `completed`, `failed`, or `timed_out`; failed and expired jobs are terminal so the frontend will not poll forever.
 - The frontend API base URL comes from `EXPO_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000` when unset. The client also sanitizes quoted or markdown-wrapped URLs before using them.
 - The frontend Supabase client requires `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
-- The backend requires `SUPABASE_URL` and `SUPABASE_KEY`; optional knobs include `SUPABASE_AUDIO_BUCKET`, `SUPABASE_AUDIO_PREFIX`, `CORS_ALLOW_ORIGINS`, and `LOG_LEVEL`.
+- The backend requires `SUPABASE_URL` and `SUPABASE_KEY`; optional knobs include `APP_ENV`, `SUPABASE_AUDIO_BUCKET`, `SUPABASE_AUDIO_PREFIX`, `CORS_ALLOW_ORIGINS`, `ANALYSIS_JOB_TIMEOUT_SECONDS`, and `LOG_LEVEL`.
 - `POST /analyze-full` still exists as a synchronous fallback path for older deployments or troubleshooting.
 
 ### Persistence model
@@ -679,17 +692,27 @@ TuneUp/
 Song import is handled by [`MusicAIApp/src/services/songLibrary.ts`](./MusicAIApp/src/services/songLibrary.ts).
 
 ### AI-assisted import flow
-- choose a single **audio file** inside Song Flow
-- the app uploads it to `POST /analyze-audio`
+- open the **Songs** tab and choose **Upload Song**
+- choose the instrument and tuning before starting analysis
+- the app uploads one audio file to `POST /analyze-audio` with tuning metadata
 - the frontend polls `GET /task-status/{task_id}`
-- the backend returns an AI-generated `songManifest`
-- the app persists the imported song locally and opens it immediately
+- failed or expired jobs return a terminal state with a safe message
+- the backend returns an AI-generated `songManifest` only after the result is saved
+- the app shows a review step with BPM, duration, chord count, tab-note count, warnings, and a chord preview
+- the user chooses **Save to Library** or **Practice Now**
+- the app validates the manifest again, persists the imported song locally, and launches Song Flow when requested
 
 If transcription confidence is too low, the backend can still return a safe starter strum map with `fallbackUsed = true` so the song remains playable.
 
+AI song analysis produces a playable draft, not official or verified tabs. Selecting the correct tuning, especially for Drop D, half-step-down, Drop C#, or bass songs, helps TuneUp map generated notes to more realistic fret positions. Unknown/custom tuning is allowed, but the review screen warns that exact tab positions may need manual correction.
+
+Song recognition metadata is optional and currently not required for local demos. Any future recognition provider, such as AudD, must keep API tokens backend-only and must not block analysis if recognition fails.
+
 ### Manual import flow
+- choose **Import Manifest** in the Songs tab
 - choose an **audio file**
 - choose a **JSON manifest**
+- validate the manifest before saving
 - import into the local Song Flow library
 
 ### Supported JSON manifest structure
@@ -714,8 +737,12 @@ If transcription confidence is too low, the backend can still return a safe star
 ### Notes
 - `laneRow` should stay in the `0..3` range
 - `stringIndex` should stay in the `0..5` range
-- at least one of `chordEvents` or `tabNotes` must be present
+- at least one of `chordEvents` or `tabNotes` must be present and non-empty
+- invalid manifests are rejected before the song is saved or opened
 - imported audio is copied into the app sandbox for persistence across reloads
+- demo songs are synthetic/built-in and provide a backend-free fallback for viva demos
+- do not scrape unauthorized tab sites or commit copyrighted audio as fixtures/demo content
+- external verified tab import/manual editing is future work; AI drafts should always be reviewed before practice
 
 ---
 
@@ -735,7 +762,7 @@ If transcription confidence is too low, the backend can still return a safe star
 - Supabase project URL + server-side key with storage and database access
 - optional dev tooling install if you want backend linting/tests locally
 
-No `.env.example` files are currently checked in, so create local `.env` files for the frontend and backend using the snippets below.
+Use the checked-in `.env.example` files as templates for local frontend and backend configuration.
 
 ---
 
@@ -765,26 +792,46 @@ If you want the backend test/lint toolchain too:
 pip install -r requirements-dev.txt
 ```
 
-### Backend environment setup
+### Environment setup
 
-Create a local `backend/.env` file:
+Copy the example environment files and fill in your local values:
+
+```bash
+cp backend/.env.example backend/.env
+cp MusicAIApp/.env.example MusicAIApp/.env
+```
+
+Never commit real `.env` files. Backend `SUPABASE_KEY` must stay server-side only.
+
+The backend example includes:
 
 ```dotenv
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-SUPABASE_KEY=YOUR_SUPABASE_SERVER_KEY
-CORS_ALLOW_ORIGINS=*
+SUPABASE_URL=https://your-project.supabase.co
+APP_ENV=development
+SUPABASE_KEY=your-supabase-service-role-key
+CORS_ALLOW_ORIGINS=http://localhost:8081,http://localhost:19006
 SUPABASE_AUDIO_BUCKET=audio-uploads
 SUPABASE_AUDIO_PREFIX=analysis
+ANALYSIS_JOB_TIMEOUT_SECONDS=900
 LOG_LEVEL=INFO
 ```
 
 What these values do:
 - `SUPABASE_URL` and `SUPABASE_KEY` are required for backend startup.
+- `APP_ENV=production` enables production safety checks such as rejecting wildcard CORS origins.
 - `SUPABASE_AUDIO_BUCKET` and `SUPABASE_AUDIO_PREFIX` control where uploaded audio is stored.
-- `CORS_ALLOW_ORIGINS` is optional and can stay `*` for local mobile development.
+- `CORS_ALLOW_ORIGINS` should list explicit frontend origins for local and production environments.
+- `ANALYSIS_JOB_TIMEOUT_SECONDS` controls when stale queued/running async jobs become timed out.
 - `LOG_LEVEL` is optional and defaults to `INFO`.
 
 The backend will not boot without `SUPABASE_URL` and `SUPABASE_KEY`. If Supabase becomes unreachable after boot, `GET /healthz` returns a degraded response and async writes will fail until connectivity is restored.
+The backend validates environment variables during startup and prints a clear configuration error if required values are missing or malformed.
+
+### Supabase and CORS security
+
+Backend `SUPABASE_KEY` is server-only and must never be copied into `MusicAIApp/.env`, frontend code, logs, or app responses. The Expo app should use only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`; the anon key is public by design, but examples and docs still use placeholders.
+
+Never commit real `.env` files. Use explicit `CORS_ALLOW_ORIGINS` values in deployed environments. If `APP_ENV=production`, backend startup rejects `CORS_ALLOW_ORIGINS=*`. Rotate any Supabase service role key immediately if it was ever exposed outside the backend.
 
 ### Run the backend
 
@@ -801,12 +848,12 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ### 3. Start the frontend
 
-Create a local `MusicAIApp/.env` file:
+The frontend example includes:
 
 ```dotenv
-EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
-EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+EXPO_PUBLIC_API_BASE_URL=http://YOUR_LOCAL_IP:8000
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-public-key
 ```
 
 Then install dependencies and start Expo:
@@ -821,6 +868,10 @@ You can then open:
 - **iOS simulator** with `i`
 - **Android emulator** with `a`
 - **Expo Go** by scanning the QR code on a real device
+
+### Microphone permissions
+
+Tuner, pitch detection, and Song Flow live scoring require microphone access. iOS and Android permission copy is configured in `MusicAIApp/app.json`; if access is blocked on a device or emulator, enable microphone access in system settings and retry the live feature.
 
 ---
 
@@ -844,16 +895,36 @@ The frontend Supabase client also requires:
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 
+### Backend health check
+
+Start the backend, then verify the fast health endpoint from a browser or terminal:
+
+```bash
+curl http://localhost:8000/health
+```
+
+`/health` only checks that the backend process is alive and config loaded. `/ready` returns a lightweight readiness shape, while `/healthz` performs the deeper Supabase connectivity check.
+
+For Expo on a physical device, set:
+
+```dotenv
+EXPO_PUBLIC_API_BASE_URL=http://YOUR_COMPUTER_LAN_IP:8000
+```
+
+Then open **Profile > Settings > Backend diagnostics** in the app and tap **Run check again**. If the check fails, confirm the backend is running, both devices are on the same Wi-Fi, the port is correct, and `CORS_ALLOW_ORIGINS` includes the frontend origin for web testing.
+
 ### 5. End-to-end smoke path
 
 Once both services are running, this is the fastest way to confirm the full stack is healthy:
 
-1. Open `http://127.0.0.1:8000/healthz` and confirm Supabase is connected.
-2. Launch the Expo app and sign in or create an account.
-3. Open **Studio Grid**, pick an audio file, and tap **Scan**.
-4. Confirm the UI shows upload/progress messaging first, then BPM + section markers after completion.
-5. Open **Song Flow**, import one audio file, and confirm the AI-generated song opens after polling completes.
-6. Save a traffic study and verify the backend reports `storage: "supabase"`.
+1. Open `http://127.0.0.1:8000/health` and confirm the backend is alive.
+2. Open `http://127.0.0.1:8000/healthz` and confirm Supabase is connected.
+3. Launch the Expo app and sign in or create an account.
+4. Open **Profile > Settings > Backend diagnostics** and confirm the app can reach the backend.
+5. Open **Studio Grid**, pick an audio file, and tap **Scan**.
+6. Confirm the UI shows upload/progress messaging first, then BPM + section markers after completion.
+7. Open **Song Flow**, import one audio file, and confirm the AI-generated song opens after polling completes.
+8. Save a traffic study and verify the backend reports `storage: "supabase"`.
 
 ---
 
@@ -911,10 +982,37 @@ ruff check .
 black --check .
 ```
 
+Audio accuracy baselines:
+
+```bash
+cd backend
+pytest tests/test_audio_accuracy.py
+```
+
+These tests generate short synthetic WAV signals at runtime and compare BPM, pitch, chord, marker, and manifest outputs with tolerance-based assertions. They are regression checks for obvious analysis drift, not a guarantee of perfect transcription. Do not commit commercial songs, user recordings, or generated audio artifacts as fixtures.
+
+### Critical flow tests
+
+Run these before release:
+
+```bash
+# Backend
+cd backend
+pytest tests/test_config.py tests/test_api.py tests/test_audio_accuracy.py
+
+# Frontend
+cd ../MusicAIApp
+npm run test:critical
+```
+
+These launch-blocking tests cover environment validation, async analysis jobs, status polling, generated result shape, manifest import validation, local import save/reopen behavior, Supabase public env safety, and microphone permission fallback. They use fake env vars, mocked network/storage, synthetic audio, and mocked microphone permissions.
+
 API smoke checks:
 
 ```bash
 curl http://127.0.0.1:8000/
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/ready
 curl http://127.0.0.1:8000/healthz
 ```
 
@@ -959,7 +1057,8 @@ Production hardening would include:
 
 ### Render-specific notes
 - set `SUPABASE_URL` and `SUPABASE_KEY`
-- set `CORS_ALLOW_ORIGINS` if you are calling the API from web origins
+- set `APP_ENV=production`
+- set explicit `CORS_ALLOW_ORIGINS` values if you are calling the API from web origins; wildcard CORS is rejected in production
 - optionally set `SUPABASE_AUDIO_BUCKET`, `SUPABASE_AUDIO_PREFIX`, and `LOG_LEVEL`
 - point the mobile app to the live backend with `EXPO_PUBLIC_API_BASE_URL`
 - expect Studio Grid scans to use `POST /upload-audio` plus `GET /task-status/{task_id}` polling instead of one long blocking request

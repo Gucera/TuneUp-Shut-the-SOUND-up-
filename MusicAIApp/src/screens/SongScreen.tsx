@@ -1,13 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+    Alert,
     Animated,
     Dimensions,
     Easing,
+    Linking,
     Platform,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     View,
 } from 'react-native';
 import { Audio, AVPlaybackStatus } from 'expo-av';
@@ -29,15 +32,53 @@ import SkeletonBlock from '../components/SkeletonBlock';
 import { useAppToast } from '../components/AppToastProvider';
 import { useCelebration } from '../hooks/useCelebration';
 import {
-    buildTabTarget,
+    buildMidiTarget,
     isPitchMatchForTarget,
     TUNER_A4_HZ,
     TUNER_NATIVE_MODULE_MESSAGE,
     useTuner,
 } from '../hooks/useTuner';
 import { GamificationSnapshot, getGamificationSnapshot, rewardPracticeActivity } from '../services/gamification';
-import { analyzeAudioForSongImport, fetchSongImportTaskStatus } from '../services/api';
-import { importSongFromGeneratedManifest, loadImportedSongs } from '../services/songLibrary';
+import { analyzeAudioForSongImport, fetchSongImportTaskStatus, type SongImportResultPayload } from '../services/api';
+import {
+    deleteImportedSong,
+    importSongFromFiles,
+    importSongFromGeneratedManifest,
+    loadImportedSongs,
+    updateSavedSongMetadata,
+    updateSavedSongFavorite,
+} from '../services/songLibrary';
+import { formatManifestValidationError, validateSongManifest } from '../utils/manifestValidation';
+import {
+    buildSongImportReviewWarnings,
+    filterSongLibraryCards,
+    formatBpm,
+    formatLibraryCount,
+    formatSongDuration,
+    getSongLibraryBadges,
+    getSongStatusLabel,
+    sortSongLibraryCards,
+    type SongLibraryFilter,
+    type SongLibrarySortMode,
+    type SongStatus,
+    toSongLibraryCard,
+} from '../utils/songLibraryView';
+import {
+    DEFAULT_SONG_ANALYSIS_TUNING,
+    getDefaultSongAnalysisTuning,
+    getSongAnalysisTuningsForInstrument,
+    type SongAnalysisInstrument,
+    type SongAnalysisTuningPreset,
+} from '../utils/songAnalysisTunings';
+import {
+    FALLBACK_STANDARD_TUNING_WARNING,
+    getDisplayStringLabels,
+    getDisplayStringIndex,
+    getStringLabelForTabNote,
+    getTabNoteTargetMidi,
+    hasExplicitTuning,
+} from '../utils/songFlowStrings';
+import { cleanUploadedSongDisplayName } from '../utils/songDisplayNames';
 import { COLORS, SHADOWS } from '../theme';
 
 const { width } = Dimensions.get('window');
@@ -45,6 +86,9 @@ const SCREEN_PADDING = 14;
 const SHELL_PADDING = 14;
 const LANE_WIDTH = width - (SCREEN_PADDING * 2) - (SHELL_PADDING * 2);
 const LANE_HEIGHT = 308;
+const LIBRARY_CARD_GAP = 10;
+const LIBRARY_CARD_COLUMNS = width >= 760 ? 3 : 2;
+const LIBRARY_CARD_WIDTH = (LANE_WIDTH - 28 - (LIBRARY_CARD_GAP * (LIBRARY_CARD_COLUMNS - 1))) / LIBRARY_CARD_COLUMNS;
 const PLAYHEAD_X = 84;
 const PIXELS_PER_SECOND = 112;
 const PERFECT_WINDOW_SEC = 0.2;
@@ -52,9 +96,25 @@ const GOOD_WINDOW_SEC = 0.45;
 const GOOD_WEIGHT = 0.65;
 const TAB_HIT_WINDOW_SEC = 0.18;
 const MONO_FONT = Platform.select({ ios: 'Menlo', default: 'monospace', android: 'monospace' });
-const STRING_LABELS = ['e', 'B', 'G', 'D', 'A', 'E'];
 
 type SongPanel = 'chords' | 'tabs' | 'guide';
+type SongsSection = 'upload' | 'library';
+
+type SongImportStatus = SongStatus | 'idle' | 'selecting' | 'saved';
+
+type ImportAudioAsset = {
+    uri: string;
+    name: string;
+    size?: number | null;
+    mimeType?: string | null;
+};
+
+type PendingSongReview = {
+    audioAsset: ImportAudioAsset;
+    result: SongImportResultPayload;
+    warnings: string[];
+    createdAt: number;
+};
 
 const SONG_COLORS = {
     backgroundA: COLORS.deepBackground,
@@ -88,7 +148,7 @@ interface HitResult {
 
 type LiveTabTarget = SongLesson['tabNotes'][number] & {
     index: number;
-    target: ReturnType<typeof buildTabTarget>;
+    target: ReturnType<typeof buildMidiTarget>;
 };
 
 const CHORD_TONES: Record<string, string[]> = {
@@ -224,11 +284,20 @@ function getIdleSongStatus(panel: SongPanel) {
     return 'Zero-lag tuner ready';
 }
 
-function toLiveTabTarget(note: SongLesson['tabNotes'][number], index: number): LiveTabTarget {
+function toLiveTabTarget(
+    song: SongLesson,
+    note: SongLesson['tabNotes'][number],
+    index: number,
+): LiveTabTarget | null {
+    const targetMidi = getTabNoteTargetMidi(song, note.stringIndex, note.fret);
+    if (targetMidi === null) {
+        return null;
+    }
+
     return {
         ...note,
         index,
-        target: buildTabTarget(note.stringIndex, note.fret, TUNER_A4_HZ),
+        target: buildMidiTarget(targetMidi, TUNER_A4_HZ),
     };
 }
 
@@ -270,9 +339,48 @@ function estimateSongImportProgress(progressText: string) {
     return 0.28;
 }
 
+function formatFileSize(bytes?: number | null) {
+    if (!bytes || !Number.isFinite(bytes) || bytes <= 0) {
+        return 'Size unknown';
+    }
+
+    const megabytes = bytes / (1024 * 1024);
+    if (megabytes >= 1) {
+        return `${megabytes.toFixed(1)} MB`;
+    }
+
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function getImportStatusText(status: SongImportStatus) {
+    switch (status) {
+        case 'selecting':
+            return 'Selecting audio';
+        case 'uploading':
+            return 'Uploading audio';
+        case 'queued':
+            return 'Queued';
+        case 'analyzing':
+            return 'Analyzing';
+        case 'review_ready':
+            return 'Review ready';
+        case 'failed':
+            return 'Import failed';
+        case 'saved':
+            return 'Saved';
+        default:
+            return 'Ready';
+    }
+}
+
 function delay(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+const SONG_IMPORT_POLL_INTERVAL_MS = 2400;
+const SONG_IMPORT_MAX_DURATION_MS = 10 * 60 * 1000;
+const SONG_IMPORT_MAX_NETWORK_ERRORS = 3;
+const SONG_IMPORT_TIMEOUT_MESSAGE = 'Analysis is taking longer than expected. Please try again or use another audio file.';
 
 function getChordLaneY(row: number) {
     return 82 + (row * 52);
@@ -294,6 +402,22 @@ export default function SongScreen({
     const [activePanel, setActivePanel] = useState<SongPanel>('chords');
     const [isPlaying, setIsPlaying] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
+    const [importStatus, setImportStatus] = useState<SongImportStatus>('idle');
+    const [importError, setImportError] = useState<string | null>(null);
+    const [pendingReview, setPendingReview] = useState<PendingSongReview | null>(null);
+    const [selectedUploadAsset, setSelectedUploadAsset] = useState<ImportAudioAsset | null>(null);
+    const [analysisInstrument, setAnalysisInstrument] = useState<SongAnalysisInstrument>('guitar');
+    const [analysisTuning, setAnalysisTuning] = useState<SongAnalysisTuningPreset>(DEFAULT_SONG_ANALYSIS_TUNING);
+    const [librarySearchQuery, setLibrarySearchQuery] = useState('');
+    const [libraryFilter, setLibraryFilter] = useState<SongLibraryFilter>('all');
+    const [librarySortMode, setLibrarySortMode] = useState<SongLibrarySortMode>('recent');
+    const [songsSection, setSongsSection] = useState<SongsSection>('library');
+    const [actionSong, setActionSong] = useState<SongLesson | null>(null);
+    const [editingSong, setEditingSong] = useState<SongLesson | null>(null);
+    const [editTitle, setEditTitle] = useState('');
+    const [editArtist, setEditArtist] = useState('');
+    const [editBpm, setEditBpm] = useState('');
+    const [editError, setEditError] = useState<string | null>(null);
     const [importProgressText, setImportProgressText] = useState('Pick one audio file and AI will build your chords and tabs.');
     const [importProgressValue, setImportProgressValue] = useState(0);
     const [playbackSec, setPlaybackSec] = useState(0);
@@ -325,12 +449,15 @@ export default function SongScreen({
     const playbackAnchorSecRef = useRef(0);
     const playbackAnchorStampRef = useRef(Date.now());
     const isPlayingRef = useRef(false);
+    const screenMountedRef = useRef(true);
+    const importRunIdRef = useRef(0);
     const importShimmerAnim = useRef(new Animated.Value(0)).current;
     const nextTabTarget = useMemo(() => {
         const nextNote = selectedSong.tabNotes
-            .map((note, index) => toLiveTabTarget(note, index))
+            .map((note, index) => toLiveTabTarget(selectedSong, note, index))
             .find((note) => (
-                !hitTabIndexesRef.current.has(note.index)
+                note !== null
+                && !hitTabIndexesRef.current.has(note.index)
                 && note.timeSec >= playbackSec - 0.05
             ));
 
@@ -350,8 +477,13 @@ export default function SongScreen({
                 return;
             }
 
+            const liveTarget = toLiveTabTarget(selectedSong, note, index);
+            if (!liveTarget) {
+                return;
+            }
+
             bestDistance = distance;
-            bestTarget = toLiveTabTarget(note, index);
+            bestTarget = liveTarget;
         });
 
         return bestTarget;
@@ -365,6 +497,20 @@ export default function SongScreen({
     const stopTuner = tuner.stop;
 
     const allSongs = useMemo(() => [...librarySongs, ...SONG_LESSONS], [librarySongs]);
+    const libraryCards = useMemo(() => allSongs.map(toSongLibraryCard), [allSongs]);
+    const filteredLibraryCards = useMemo(() => {
+        const filtered = filterSongLibraryCards(libraryCards, librarySearchQuery, libraryFilter);
+        return sortSongLibraryCards(filtered, librarySortMode);
+    }, [libraryCards, libraryFilter, librarySearchQuery, librarySortMode]);
+    const hasActiveLibraryFilter = librarySearchQuery.trim().length > 0 || libraryFilter !== 'all';
+    const libraryCountText = useMemo(
+        () => formatLibraryCount(filteredLibraryCards.length, libraryCards.length, hasActiveLibraryFilter),
+        [filteredLibraryCards.length, hasActiveLibraryFilter, libraryCards.length],
+    );
+    const analysisTuningOptions = useMemo(
+        () => getSongAnalysisTuningsForInstrument(analysisInstrument),
+        [analysisInstrument],
+    );
     const focusSongId = route?.params?.focusSongId ?? null;
 
     const loadSessionPrefs = useCallback(async () => {
@@ -408,6 +554,8 @@ export default function SongScreen({
         })();
 
         return () => {
+            screenMountedRef.current = false;
+            importRunIdRef.current += 1;
             void stopTuner();
             if (soundRef.current) {
                 void soundRef.current.unloadAsync();
@@ -421,7 +569,12 @@ export default function SongScreen({
     useFocusEffect(
         useCallback(() => {
             void loadSessionPrefs();
-        }, [loadSessionPrefs]),
+            return () => {
+                void stopTuner();
+                isPlayingRef.current = false;
+                setIsPlaying(false);
+            };
+        }, [loadSessionPrefs, stopTuner]),
     );
 
     useEffect(() => {
@@ -502,7 +655,11 @@ export default function SongScreen({
                 continue;
             }
 
-            const target = buildTabTarget(note.stringIndex, note.fret, TUNER_A4_HZ);
+            const targetMidi = getTabNoteTargetMidi(selectedSongRef.current, note.stringIndex, note.fret);
+            if (targetMidi === null) {
+                continue;
+            }
+            const target = buildMidiTarget(targetMidi, TUNER_A4_HZ);
             if (!isPitchMatchForTarget(liveFrequency, target.midi, TUNER_A4_HZ)) {
                 continue;
             }
@@ -535,12 +692,26 @@ export default function SongScreen({
             return;
         }
 
-        void syncLiveTuner(activePanel);
+        void (async () => {
+            const micReady = await syncLiveTuner(activePanel);
+            if (!micReady && activePanel !== 'guide') {
+                if (soundRef.current) {
+                    await soundRef.current.pauseAsync();
+                }
+                isPlayingRef.current = false;
+                setIsPlaying(false);
+            }
+        })();
     }, [activePanel, isPlaying]);
 
     const displayMode: Exclude<SongPanel, 'guide'> = activePanel === 'guide' ? 'tabs' : activePanel;
     const progress = Math.min(1, playbackSec / selectedSong.durationSec);
     const seekStepSeconds = appSettings?.songsSeekStepSeconds ?? 10;
+    const stringLabels = useMemo(() => getDisplayStringLabels(selectedSong), [selectedSong]);
+    const showFallbackTuningWarning = displayMode === 'tabs'
+        && selectedSong.tabNotes.length > 0
+        && !hasExplicitTuning(selectedSong)
+        && (selectedSong.isImported || selectedSong.aiDraft);
     const nextChord = useMemo(() => {
         const next = selectedSong.chordEvents.find((event, index) => (
             !judgedEventIndexesRef.current.has(index) &&
@@ -550,7 +721,7 @@ export default function SongScreen({
         return next?.chord ?? '--';
     }, [selectedSong, playbackSec]);
     const nextTabLabel = nextTabTarget
-        ? `${nextTabTarget.fret}@${STRING_LABELS[nextTabTarget.stringIndex]}`
+        ? `${nextTabTarget.fret}@${getStringLabelForTabNote(selectedSong, nextTabTarget.stringIndex)}`
         : '--';
 
     const visibleChordEvents = selectedSong.chordEvents
@@ -607,6 +778,14 @@ export default function SongScreen({
             : isPlaying
                 ? tuner.displayStatus
                 : micStatus;
+    const showMicFallbackAction = activePanel !== 'guide' && (
+        tuner.microphonePermissionStatus === 'denied'
+        || tuner.microphonePermissionStatus === 'blocked'
+        || tuner.microphonePermissionStatus === 'error'
+    );
+    const micFallbackActionLabel = tuner.microphonePermissionStatus === 'blocked' || !tuner.canAskPermissionAgain
+        ? 'Open Settings'
+        : 'Try Again';
 
     const importShimmerTranslateX = importShimmerAnim.interpolate({
         inputRange: [0, 1],
@@ -802,14 +981,34 @@ export default function SongScreen({
             return false;
         }
 
+        if (tuner.microphonePermissionStatus === 'blocked') {
+            setMicStatus(tuner.microphonePermissionMessage ?? 'Enable microphone access in your device settings, then return to TuneUp.');
+            return false;
+        }
+
+        if (tuner.microphonePermissionStatus === 'unavailable' || tuner.microphonePermissionStatus === 'error') {
+            setMicStatus(tuner.microphonePermissionMessage ?? 'Could not start microphone input. Please check your microphone permission and try again.');
+            return false;
+        }
+
         const didStart = await startTuner();
         if (!didStart) {
-            setMicStatus('Mic permission needed');
+            setMicStatus(tuner.microphonePermissionMessage ?? tuner.error ?? 'Could not start microphone input. Please check your microphone permission and try again.');
             return false;
         }
 
         return true;
     }
+
+    const handleMicFallbackAction = async () => {
+        if (tuner.microphonePermissionStatus === 'blocked' || !tuner.canAskPermissionAgain) {
+            await Linking.openSettings();
+            return;
+        }
+
+        await tuner.checkMicrophonePermission();
+        await syncLiveTuner(activePanel);
+    };
 
     const seekToTime = async (targetSec: number) => {
         try {
@@ -847,9 +1046,101 @@ export default function SongScreen({
         await seekToTime(playbackSec + deltaSec);
     };
 
+    const runSongAnalysisForReview = async (
+        audioAsset: ImportAudioAsset,
+        tuningPreset: SongAnalysisTuningPreset,
+        runId: number,
+    ) => {
+        setImportStatus('uploading');
+        setImportProgressText('Uploading audio for AI transcription...');
+        setImportProgressValue(0.14);
+
+        const accepted = await analyzeAudioForSongImport(
+            audioAsset.uri,
+            audioAsset.name,
+            gameSnapshot?.userId,
+            {
+                instrument: tuningPreset.instrument,
+                tuningId: tuningPreset.id,
+                tuningName: tuningPreset.name,
+                stringNotes: tuningPreset.stringNotes,
+            },
+        );
+        if (accepted.status !== 'accepted') {
+            throw new Error(accepted.message);
+        }
+
+        if (!screenMountedRef.current || importRunIdRef.current !== runId) {
+            return null;
+        }
+
+        setImportStatus('queued');
+        setImportProgressText(accepted.progressText);
+        setImportProgressValue(estimateSongImportProgress(accepted.progressText));
+
+        let completedResult: SongImportResultPayload | null = null;
+        let networkErrorCount = 0;
+        const startedAt = Date.now();
+
+        while ((Date.now() - startedAt) <= SONG_IMPORT_MAX_DURATION_MS) {
+            if (!screenMountedRef.current || importRunIdRef.current !== runId) {
+                return null;
+            }
+
+            const status = await fetchSongImportTaskStatus(accepted.taskId);
+
+            if (status.status === 'completed') {
+                completedResult = status.result;
+                break;
+            }
+
+            if (status.status === 'failed' || status.status === 'timed_out' || status.status === 'cancelled' || status.status === 'expired') {
+                throw new Error(status.message);
+            }
+
+            if (status.status === 'error') {
+                networkErrorCount += 1;
+                if (networkErrorCount >= SONG_IMPORT_MAX_NETWORK_ERRORS) {
+                    throw new Error(status.message);
+                }
+
+                setImportStatus('analyzing');
+                setImportProgressText('Could not connect to the analysis server. Retrying...');
+                await delay(SONG_IMPORT_POLL_INTERVAL_MS);
+                continue;
+            }
+
+            networkErrorCount = 0;
+            if (status.status !== 'processing') {
+                throw new Error('AI transcription returned an unexpected job status. Please try again.');
+            }
+            setImportStatus('analyzing');
+            setImportProgressText(status.progressText);
+            setImportProgressValue((prev) => Math.max(prev, estimateSongImportProgress(status.progressText)));
+            await delay(SONG_IMPORT_POLL_INTERVAL_MS);
+        }
+
+        if (!completedResult) {
+            throw new Error(SONG_IMPORT_TIMEOUT_MESSAGE);
+        }
+
+        const validation = validateSongManifest(completedResult.songManifest);
+        if (!validation.ok) {
+            throw new Error(formatManifestValidationError(validation.errors));
+        }
+
+        if (!Number.isFinite(completedResult.songManifest.durationSec) || completedResult.songManifest.durationSec <= 0) {
+            throw new Error('AI transcription completed, but the song result was unavailable. Please try again.');
+        }
+
+        return completedResult;
+    };
+
     const importSong = async () => {
-        setIsImporting(true);
-        setImportProgressText('Choose an audio file to start AI transcription.');
+        setImportStatus('selecting');
+        setImportError(null);
+        setPendingReview(null);
+        setImportProgressText('Choose an audio file, then confirm instrument and tuning.');
         setImportProgressValue(0.08);
 
         try {
@@ -859,70 +1150,428 @@ export default function SongScreen({
             });
 
             if (audioResult.canceled) {
+                setImportStatus(selectedUploadAsset ? 'selecting' : 'idle');
+                return;
+            }
+
+            if (!screenMountedRef.current) {
                 return;
             }
 
             const audioAsset = audioResult.assets[0];
-            setImportProgressText('Uploading audio for AI transcription...');
-            setImportProgressValue(0.14);
-
-            const accepted = await analyzeAudioForSongImport(audioAsset.uri, audioAsset.name, gameSnapshot?.userId);
-            if (accepted.status !== 'accepted') {
-                throw new Error(accepted.message);
-            }
-
-            setImportProgressText(accepted.progressText);
-            setImportProgressValue(estimateSongImportProgress(accepted.progressText));
-
-            let completedResult = null;
-            for (let attempt = 0; attempt < 90; attempt += 1) {
-                const status = await fetchSongImportTaskStatus(accepted.taskId);
-
-                if (status.status === 'completed') {
-                    completedResult = status.result;
-                    break;
-                }
-
-                if (status.status === 'failed' || status.status === 'timed_out' || status.status === 'error') {
-                    throw new Error(status.message);
-                }
-
-                if (status.status === 'processing') {
-                    setImportProgressText(status.progressText);
-                    setImportProgressValue((prev) => Math.max(prev, estimateSongImportProgress(status.progressText)));
-                }
-                await delay(2400);
-            }
-
-            if (!completedResult) {
-                throw new Error('AI transcription timed out. Please try the import again.');
-            }
-
-            setImportProgressText('Finalizing your imported song...');
-            setImportProgressValue(0.98);
-
-            const importedSong = await importSongFromGeneratedManifest(audioAsset, completedResult.songManifest);
-            setLibrarySongs((prev) => [importedSong, ...prev.filter((song) => song.id !== importedSong.id)]);
-            await selectSong(importedSong);
-            showCelebration({
-                title: 'Song imported',
-                subtitle: completedResult.fallbackUsed
-                    ? `${importedSong.title} is ready with a safe starter strum map.`
-                    : `${importedSong.title} is ready at ${completedResult.bpm} BPM.`,
-                variant: 'confetti',
-            }, 2200);
+            setSelectedUploadAsset(audioAsset);
+            setImportStatus('selecting');
+            setImportProgressText('Confirm the tuning, then start AI analysis.');
         } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not choose that audio file.';
+            setImportStatus('failed');
+            setImportError(message);
+            showToast({
+                title: 'File selection failed',
+                message,
+                variant: 'error',
+            });
+        }
+    };
+
+    const startSelectedSongAnalysis = async () => {
+        if (!selectedUploadAsset || isImporting) {
+            return;
+        }
+
+        const runId = importRunIdRef.current + 1;
+        importRunIdRef.current = runId;
+        setIsImporting(true);
+        setImportStatus('uploading');
+        setImportError(null);
+        setPendingReview(null);
+        let terminalStatus: SongImportStatus = 'idle';
+
+        try {
+            const completedResult = await runSongAnalysisForReview(selectedUploadAsset, analysisTuning, runId);
+
+            if (!completedResult || !screenMountedRef.current || importRunIdRef.current !== runId) {
+                return;
+            }
+
+            terminalStatus = 'review_ready';
+            setImportStatus('review_ready');
+            setImportProgressText('Review the generated song before saving.');
+            setImportProgressValue(1);
+            setPendingReview({
+                audioAsset: selectedUploadAsset,
+                result: completedResult,
+                warnings: buildSongImportReviewWarnings(completedResult),
+                createdAt: Date.now(),
+            });
+            setSelectedUploadAsset(null);
+            showCelebration({
+                title: 'AI Draft ready',
+                subtitle: completedResult.fallbackUsed
+                    ? 'TuneUp built a safe starter chart. Review it before saving.'
+                    : `${cleanUploadedSongDisplayName(completedResult.songManifest.title)} is ready for review at ${formatBpm(completedResult.bpm)}.`,
+                variant: 'success',
+            }, 1800);
+        } catch (error) {
+            if (!screenMountedRef.current || importRunIdRef.current !== runId) {
+                return;
+            }
+
             const message = error instanceof Error ? error.message : 'Could not import that song package.';
+            terminalStatus = 'failed';
+            setImportStatus('failed');
+            setImportError(message);
             showToast({
                 title: 'Import failed',
                 message,
                 variant: 'error',
             });
         } finally {
-            setIsImporting(false);
-            setImportProgressValue(0);
-            setImportProgressText('Pick one audio file and AI will build your chords and tabs.');
+            if (screenMountedRef.current && importRunIdRef.current === runId) {
+                setIsImporting(false);
+                if (terminalStatus !== 'review_ready') {
+                    setImportProgressValue(0);
+                    setImportProgressText('Pick one audio file and AI will build your chords and tabs.');
+                }
+            }
         }
+    };
+
+    const importManualManifest = async () => {
+        setImportStatus('selecting');
+        setImportError(null);
+
+        try {
+            const audioResult = await DocumentPicker.getDocumentAsync({
+                type: 'audio/*',
+                copyToCacheDirectory: true,
+            });
+
+            if (audioResult.canceled) {
+                setImportStatus('idle');
+                return;
+            }
+
+            const manifestResult = await DocumentPicker.getDocumentAsync({
+                type: ['application/json', 'text/json', 'text/plain'],
+                copyToCacheDirectory: true,
+            });
+
+            if (manifestResult.canceled) {
+                setImportStatus('idle');
+                return;
+            }
+
+            const importedSong = await importSongFromFiles(audioResult.assets[0], manifestResult.assets[0]);
+            setLibrarySongs((prev) => [importedSong, ...prev.filter((song) => song.id !== importedSong.id)]);
+            await selectSong(importedSong);
+            setImportStatus('saved');
+            setSongsSection('library');
+            showToast({
+                title: 'Manifest imported',
+                message: `${importedSong.title} is ready in your Songs library.`,
+                variant: 'success',
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not import that song manifest.';
+            setImportStatus('failed');
+            setImportError(message);
+            showToast({
+                title: 'Manifest import failed',
+                message,
+                variant: 'error',
+            });
+        }
+    };
+
+    const savePendingReview = async (practiceNow: boolean) => {
+        if (!pendingReview) {
+            return;
+        }
+
+        try {
+            const reviewTitle = cleanUploadedSongDisplayName(pendingReview.result.songManifest.title);
+            const reviewArtist = pendingReview.result.songManifest.artist.trim().toLowerCase();
+            const reviewSource = cleanUploadedSongDisplayName(pendingReview.audioAsset.name).toLowerCase();
+            const existingSong = librarySongs.find((song) => (
+                cleanUploadedSongDisplayName(song.title).toLowerCase() === reviewTitle.toLowerCase()
+                && song.artist.trim().toLowerCase() === reviewArtist
+                && !!song.sourceFileName
+                && cleanUploadedSongDisplayName(song.sourceFileName).toLowerCase() === reviewSource
+            ));
+            if (existingSong) {
+                if (practiceNow) {
+                    await selectSong(existingSong);
+                }
+                setPendingReview(null);
+                setImportStatus('saved');
+                setSongsSection('library');
+                showToast({
+                    title: 'Already in library',
+                    message: 'This song is already in your library.',
+                    variant: 'success',
+                });
+                return;
+            }
+
+            const importedSong = await importSongFromGeneratedManifest(pendingReview.audioAsset, pendingReview.result.songManifest);
+            const didAlreadyExist = librarySongs.some((song) => song.id === importedSong.id);
+            setLibrarySongs((prev) => [importedSong, ...prev.filter((song) => song.id !== importedSong.id)]);
+            setPendingReview(null);
+            setImportStatus('saved');
+            setImportError(null);
+            setSongsSection('library');
+
+            if (practiceNow) {
+                await selectSong(importedSong);
+            }
+
+            showCelebration({
+                title: didAlreadyExist ? 'Already in library' : practiceNow ? 'Song saved' : 'Added to library',
+                subtitle: didAlreadyExist
+                    ? 'TuneUp kept your existing saved copy.'
+                    : practiceNow
+                    ? `${importedSong.title} is open in Song Flow.`
+                    : `${importedSong.title} is ready whenever you are.`,
+                variant: 'confetti',
+            }, 2000);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not save that song.';
+            setImportStatus('failed');
+            setImportError(message);
+            showToast({
+                title: 'Save failed',
+                message,
+                variant: 'error',
+            });
+        }
+    };
+
+    const discardPendingReview = () => {
+        setPendingReview(null);
+        setImportStatus('idle');
+        setImportProgressText('Pick one audio file and AI will build your chords and tabs.');
+        setImportProgressValue(0);
+    };
+
+    const chooseAnalysisInstrument = (instrument: SongAnalysisInstrument) => {
+        setAnalysisInstrument(instrument);
+        setAnalysisTuning(getDefaultSongAnalysisTuning(instrument));
+    };
+
+    const reanalyzePendingReview = async () => {
+        if (!pendingReview || isImporting) {
+            return;
+        }
+
+        const runId = importRunIdRef.current + 1;
+        importRunIdRef.current = runId;
+        setIsImporting(true);
+        setImportError(null);
+        setPendingReview(null);
+        let terminalStatus: SongImportStatus = 'idle';
+
+        try {
+            const completedResult = await runSongAnalysisForReview(pendingReview.audioAsset, analysisTuning, runId);
+            if (!completedResult || !screenMountedRef.current || importRunIdRef.current !== runId) {
+                return;
+            }
+
+            terminalStatus = 'review_ready';
+            setImportStatus('review_ready');
+            setPendingReview({
+                audioAsset: pendingReview.audioAsset,
+                result: completedResult,
+                warnings: buildSongImportReviewWarnings(completedResult),
+                createdAt: Date.now(),
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not re-analyze that song.';
+            terminalStatus = 'failed';
+            setImportStatus('failed');
+            setImportError(message);
+            showToast({
+                title: 'Re-analysis failed',
+                message,
+                variant: 'error',
+            });
+        } finally {
+            if (screenMountedRef.current && importRunIdRef.current === runId) {
+                setIsImporting(false);
+                if (terminalStatus !== 'review_ready') {
+                    setImportProgressValue(0);
+                }
+            }
+        }
+    };
+
+    const openDemoSong = async () => {
+        setActionSong(null);
+        setSongsSection('library');
+        await selectSong(SONG_LESSONS[0]);
+        showToast({
+            title: 'Demo song loaded',
+            message: 'TuneUp Demo Riff is verified, offline, and ready for Song Flow.',
+            variant: 'success',
+        });
+    };
+
+    const openSongActions = (song: SongLesson) => {
+        setActionSong(song);
+    };
+
+    const closeSongActions = () => {
+        setActionSong(null);
+    };
+
+    const openEditSong = (song: SongLesson) => {
+        if (!song.isImported) {
+            return;
+        }
+
+        setActionSong(null);
+        setEditingSong(song);
+        setEditTitle(song.title);
+        setEditArtist(song.artist === 'Imported Track' ? '' : song.artist);
+        setEditBpm(typeof song.bpm === 'number' && Number.isFinite(song.bpm) && song.bpm > 0 ? `${Math.round(song.bpm)}` : '');
+        setEditError(null);
+    };
+
+    const cancelEditSong = () => {
+        setEditingSong(null);
+        setEditTitle('');
+        setEditArtist('');
+        setEditBpm('');
+        setEditError(null);
+    };
+
+    const saveEditedSong = async () => {
+        if (!editingSong) {
+            return;
+        }
+
+        const title = editTitle.trim();
+        if (!title) {
+            setEditError('Title is required.');
+            return;
+        }
+
+        const normalizedBpmText = editBpm.trim();
+        let bpm: number | null = null;
+        if (normalizedBpmText) {
+            const parsedBpm = Number(normalizedBpmText);
+            if (!Number.isFinite(parsedBpm) || parsedBpm <= 0) {
+                setEditError('BPM must be a positive number.');
+                return;
+            }
+            bpm = parsedBpm;
+        }
+
+        try {
+            const updatedSong = await updateSavedSongMetadata(editingSong.id, {
+                title,
+                artist: editArtist,
+                bpm,
+            });
+            if (!updatedSong) {
+                throw new Error('That song is no longer in your library.');
+            }
+
+            setLibrarySongs((prev) => prev.map((song) => (song.id === updatedSong.id ? updatedSong : song)));
+            if (selectedSongRef.current.id === updatedSong.id) {
+                setSelectedSong(updatedSong);
+            }
+            cancelEditSong();
+            showToast({
+                title: 'Song updated',
+                message: `${updatedSong.title} was updated in your library.`,
+                variant: 'success',
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not save those song details.';
+            setEditError(message);
+            showToast({
+                title: 'Edit failed',
+                message,
+                variant: 'error',
+            });
+        }
+    };
+
+    const toggleFavoriteSong = async (song: SongLesson) => {
+        if (!song.isImported) {
+            return;
+        }
+
+        try {
+            setActionSong(null);
+            const updatedSong = await updateSavedSongFavorite(song.id, !song.isFavorite);
+            if (!updatedSong) {
+                throw new Error('That song is no longer in your library.');
+            }
+
+            setLibrarySongs((prev) => prev.map((candidate) => (candidate.id === updatedSong.id ? updatedSong : candidate)));
+            if (selectedSongRef.current.id === updatedSong.id) {
+                setSelectedSong(updatedSong);
+            }
+        } catch (error) {
+            showToast({
+                title: 'Favorite failed',
+                message: error instanceof Error ? error.message : 'Could not update that favorite.',
+                variant: 'error',
+            });
+        }
+    };
+
+    const deleteSavedSong = async (song: SongLesson) => {
+        if (!song.isImported) {
+            return;
+        }
+
+        try {
+            setActionSong(null);
+            await deleteImportedSong(song.id);
+            setLibrarySongs((prev) => prev.filter((candidate) => candidate.id !== song.id));
+            if (editingSong?.id === song.id) {
+                cancelEditSong();
+            }
+
+            if (selectedSongRef.current.id === song.id) {
+                await selectSong(SONG_LESSONS[0]);
+            }
+
+            showToast({
+                title: 'Song deleted',
+                message: `${song.title} was removed from your TuneUp library.`,
+                variant: 'success',
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not delete that song.';
+            showToast({
+                title: 'Delete failed',
+                message,
+                variant: 'error',
+            });
+        }
+    };
+
+    const confirmDeleteSong = (song: SongLesson) => {
+        if (!song.isImported) {
+            return;
+        }
+
+        Alert.alert(
+            'Delete this song?',
+            'This removes it from your TuneUp library. You can import or analyze it again later.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => void deleteSavedSong(song),
+                },
+            ],
+        );
     };
 
     const finishSession = async (song: SongLesson) => {
@@ -1123,21 +1772,21 @@ export default function SongScreen({
 
                 <View style={styles.headerRow}>
                     <View style={styles.headerTextWrap}>
-                        <Text style={styles.header}>Song Flow</Text>
-                        <Text style={styles.subHeader}>Smooth chord and tab playback with a Songsterr-style player shell.</Text>
+                        <Text style={styles.header}>Songs</Text>
+                        <Text style={styles.subHeader}>Upload, analyze, and practice your music.</Text>
                     </View>
                     <ScreenSettingsButton />
                 </View>
 
                 <PremiumHeroStrip
                     icon="disc-outline"
-                    eyebrow="Performance Mode"
-                    title="A smoother song player with a more premium stage feel."
-                    body="Chords, tabs, imports, and score tracking stay in the same place, but the entry experience now feels more intentional and more expensive."
+                    eyebrow="Practice Library"
+                    title="Build a playable library from songs, manifests, and safe demo charts."
+                    body="Upload audio for AI analysis, review the generated chart, save it locally, then launch straight into Song Flow practice."
                     metrics={[
                         { label: 'Songs', value: `${allSongs.length}` },
-                        { label: 'View', value: activePanel === 'guide' ? 'Guide' : activePanel === 'tabs' ? 'Tabs' : 'Chords' },
-                        { label: 'Playback', value: isPlaying ? 'Live' : 'Ready' },
+                        { label: 'Imports', value: `${librarySongs.length}` },
+                        { label: 'Import', value: getImportStatusText(importStatus) },
                     ]}
                     dark
                     colors={['#6930c3', '#5390d9', '#4ea8de']}
@@ -1207,43 +1856,562 @@ export default function SongScreen({
                     </View>
                 )}
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.songPickerRow}>
-                    <Pressable
-                        style={({ pressed }) => [
-                            styles.songChip,
-                            styles.importChip,
-                            pressed && styles.songChipPressed,
-                        ]}
-                        onPress={() => void importSong()}
-                        disabled={isImporting}
-                    >
-                        <Text style={styles.importChipTitle}>{isImporting ? 'AI Listening...' : 'AI Import'}</Text>
-                        <Text style={styles.importChipMeta}>
-                            {isImporting ? importProgressText : 'Pick one audio file. AI builds BPM, chords, beat grid, and tabs.'}
-                        </Text>
-                        <Text style={styles.importChipTag}>YOUR LIBRARY</Text>
-                    </Pressable>
+                <View style={styles.libraryPanel}>
+                    <View style={styles.libraryHeaderRow}>
+                        <View style={styles.libraryHeaderText}>
+                            <Text style={styles.libraryTitle}>Practice Library</Text>
+                            <Text style={styles.librarySubtitle}>Review AI charts before saving, or jump into a built-in demo.</Text>
+                        </View>
+                        <View style={styles.libraryCountPill}>
+                            <Text style={styles.libraryCountText}>{allSongs.length} tracks</Text>
+                        </View>
+                    </View>
 
-                    {allSongs.map((song) => (
+                    <View style={styles.songsSectionSwitchRow}>
+                        {(['upload', 'library'] as SongsSection[]).map((section) => {
+                            const isActive = songsSection === section;
+                            return (
+                                <Pressable
+                                    key={section}
+                                    style={({ pressed }) => [
+                                        styles.songsSectionSwitchButton,
+                                        isActive && styles.songsSectionSwitchButtonActive,
+                                        pressed && styles.songChipPressed,
+                                    ]}
+                                    onPress={() => setSongsSection(section)}
+                                >
+                                    <Text style={[styles.songsSectionSwitchText, isActive && styles.songsSectionSwitchTextActive]}>
+                                        {section === 'upload' ? 'Upload' : 'Library'}
+                                    </Text>
+                                </Pressable>
+                            );
+                        })}
+                    </View>
+
+                    {songsSection === 'upload' && (
+                        <>
+                    <View style={styles.uploadIntroBlock}>
+                        <Text style={styles.uploadIntroTitle}>Create a practice chart</Text>
+                        <Text style={styles.uploadIntroText}>Upload audio, import a manifest, or open the verified demo song.</Text>
+                    </View>
+
+                    <View style={styles.libraryActionRow}>
                         <Pressable
-                            key={song.id}
                             style={({ pressed }) => [
-                                styles.songChip,
-                                selectedSong.id === song.id && styles.songChipActive,
+                                styles.libraryActionButton,
+                                styles.libraryActionPrimary,
                                 pressed && styles.songChipPressed,
+                                isImporting && styles.libraryActionDisabled,
                             ]}
-                            onPress={() => void selectSong(song)}
+                            onPress={() => void importSong()}
+                            disabled={isImporting}
                         >
-                            <Text style={styles.songChipTitle}>{song.title}</Text>
-                            <Text style={styles.songChipMeta}>
-                                {song.artist}{song.isImported ? ' • Imported' : ' • Starter'}
-                            </Text>
-                            <Text style={styles.songChipDifficulty}>{song.difficulty}</Text>
+                            <Text style={styles.libraryActionPrimaryText}>Upload Song</Text>
+                            <Text style={styles.libraryActionMeta}>Analyze audio</Text>
                         </Pressable>
-                    ))}
-                </ScrollView>
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.libraryActionButton,
+                                pressed && styles.songChipPressed,
+                                isImporting && styles.libraryActionDisabled,
+                            ]}
+                            onPress={() => void importManualManifest()}
+                            disabled={isImporting}
+                        >
+                            <Text style={styles.libraryActionText}>Import Manifest</Text>
+                            <Text style={styles.libraryActionMeta}>Audio + JSON</Text>
+                        </Pressable>
+                        <Pressable
+                            style={({ pressed }) => [styles.libraryActionButton, pressed && styles.songChipPressed]}
+                            onPress={() => void openDemoSong()}
+                        >
+                            <Text style={styles.libraryActionText}>Demo Song</Text>
+                            <Text style={styles.libraryActionMeta}>No backend</Text>
+                        </Pressable>
+                    </View>
 
-                {isImporting ? (
+                    <View style={styles.tuningPanel}>
+                        <View style={styles.tuningHeaderRow}>
+                            <View style={styles.tuningHeaderText}>
+                                <Text style={styles.tuningTitle}>Instrument & tuning</Text>
+                                <Text style={styles.tuningSubtitle}>
+                                    Choose the tuning that matches your song. This helps TuneUp map detected notes to better fret positions.
+                                </Text>
+                            </View>
+                            <View style={styles.aiDraftPill}>
+                                <Text style={styles.aiDraftPillText}>AI Draft</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.instrumentSwitchRow}>
+                            {(['guitar', 'bass'] as SongAnalysisInstrument[]).map((instrument) => {
+                                const isActive = analysisInstrument === instrument;
+                                return (
+                                    <Pressable
+                                        key={instrument}
+                                        style={({ pressed }) => [
+                                            styles.instrumentSwitchButton,
+                                            isActive && styles.instrumentSwitchButtonActive,
+                                            pressed && styles.songChipPressed,
+                                        ]}
+                                        onPress={() => chooseAnalysisInstrument(instrument)}
+                                    >
+                                        <Text style={[styles.instrumentSwitchText, isActive && styles.instrumentSwitchTextActive]}>
+                                            {instrument === 'guitar' ? 'Guitar' : 'Bass'}
+                                        </Text>
+                                    </Pressable>
+                                );
+                            })}
+                        </View>
+
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tuningChipRow}>
+                            {analysisTuningOptions.map((preset) => {
+                                const isActive = analysisTuning.id === preset.id;
+                                return (
+                                    <Pressable
+                                        key={preset.id}
+                                        style={({ pressed }) => [
+                                            styles.tuningChip,
+                                            isActive && styles.tuningChipActive,
+                                            pressed && styles.songChipPressed,
+                                        ]}
+                                        onPress={() => setAnalysisTuning(preset)}
+                                    >
+                                        <Text style={[styles.tuningChipTitle, isActive && styles.tuningChipTitleActive]}>
+                                            {preset.name}
+                                        </Text>
+                                        <Text style={styles.tuningChipMeta}>
+                                            {preset.stringNotes.length > 0 ? preset.stringNotes.join(' ') : 'Adds a stronger draft warning'}
+                                        </Text>
+                                    </Pressable>
+                                );
+                            })}
+                        </ScrollView>
+
+                        {selectedUploadAsset && (
+                            <View style={styles.selectedUploadCard}>
+                                <View style={styles.selectedUploadText}>
+                                    <Text style={styles.selectedUploadTitle}>{cleanUploadedSongDisplayName(selectedUploadAsset.name)}</Text>
+                                    <Text style={styles.selectedUploadMeta}>
+                                        {formatFileSize(selectedUploadAsset.size)} • {analysisTuning.name}
+                                    </Text>
+                                </View>
+                                <Pressable
+                                    style={({ pressed }) => [
+                                        styles.startAnalysisButton,
+                                        pressed && styles.songChipPressed,
+                                        isImporting && styles.libraryActionDisabled,
+                                    ]}
+                                    onPress={() => void startSelectedSongAnalysis()}
+                                    disabled={isImporting}
+                                >
+                                    <Text style={styles.startAnalysisButtonText}>
+                                        {isImporting ? 'Analyzing...' : 'Start AI Analysis'}
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        )}
+                    </View>
+
+                    {!pendingReview && !selectedUploadAsset && !isImporting && importStatus !== 'failed' && (
+                        <View style={styles.uploadEmptyState}>
+                            <Text style={styles.libraryEmptyTitle}>Ready when you are.</Text>
+                            <Text style={styles.libraryEmptyText}>
+                                Start with audio analysis, bring your own manifest, or use the offline demo as a reliable practice chart.
+                            </Text>
+                        </View>
+                    )}
+                        </>
+                    )}
+
+                    {songsSection === 'library' && (
+                        <>
+                    <View style={styles.librarySearchRow}>
+                        <TextInput
+                            value={librarySearchQuery}
+                            onChangeText={setLibrarySearchQuery}
+                            placeholder="Search songs or artists"
+                            placeholderTextColor={SONG_COLORS.textMute}
+                            style={styles.librarySearchInput}
+                        />
+                        {librarySearchQuery.trim().length > 0 && (
+                            <Pressable
+                                style={({ pressed }) => [styles.librarySearchClearButton, pressed && styles.songChipPressed]}
+                                onPress={() => setLibrarySearchQuery('')}
+                            >
+                                <Text style={styles.librarySearchClearText}>Clear</Text>
+                            </Pressable>
+                        )}
+                    </View>
+
+                    <View style={styles.libraryToolsRow}>
+                        <Text style={styles.libraryCountSubtle}>{libraryCountText}</Text>
+                    </View>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipRow}>
+                        {(['all', 'ready', 'analyzing', 'failed', 'imported', 'favorites'] as SongLibraryFilter[]).map((filter) => {
+                            const isActive = libraryFilter === filter;
+                            return (
+                                <Pressable
+                                    key={filter}
+                                    style={({ pressed }) => [
+                                        styles.filterChip,
+                                        isActive && styles.filterChipActive,
+                                        pressed && styles.songChipPressed,
+                                    ]}
+                                    onPress={() => setLibraryFilter(filter)}
+                                >
+                                    <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                                        {filter.charAt(0).toUpperCase() + filter.slice(1).replace('_', ' ')}
+                                    </Text>
+                                </Pressable>
+                            );
+                        })}
+                    </ScrollView>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipRow}>
+                        {([
+                            ['recent', 'Recently Added'],
+                            ['title', 'Title A-Z'],
+                            ['bpm', 'BPM'],
+                            ['ai_draft', 'AI Draft First'],
+                            ['verified', 'Verified First'],
+                        ] as Array<[SongLibrarySortMode, string]>).map(([sortMode, label]) => {
+                            const isActive = librarySortMode === sortMode;
+                            return (
+                                <Pressable
+                                    key={sortMode}
+                                    style={({ pressed }) => [
+                                        styles.sortChip,
+                                        isActive && styles.sortChipActive,
+                                        pressed && styles.songChipPressed,
+                                    ]}
+                                    onPress={() => setLibrarySortMode(sortMode)}
+                                >
+                                    <Text style={[styles.sortChipText, isActive && styles.sortChipTextActive]}>{label}</Text>
+                                </Pressable>
+                            );
+                        })}
+                    </ScrollView>
+                        </>
+                    )}
+
+                    {songsSection === 'upload' && pendingReview && (
+                        <View style={styles.reviewCard}>
+                            <View style={styles.reviewHeaderRow}>
+                                <View style={styles.reviewHeaderText}>
+                                    <Text style={styles.reviewEyebrow}>Review AI Draft</Text>
+                                    <Text style={styles.reviewTitle}>{cleanUploadedSongDisplayName(pendingReview.result.songManifest.title)}</Text>
+                                    <Text style={styles.reviewMeta}>
+                                        {pendingReview.result.songManifest.artist} • {formatBpm(pendingReview.result.bpm)} • {formatSongDuration(pendingReview.result.songManifest.durationSec)}
+                                    </Text>
+                                    <Text style={styles.reviewMeta}>
+                                        {(pendingReview.result.songManifest.instrument ?? 'guitar').toUpperCase()} • {pendingReview.result.songManifest.tuning?.name ?? analysisTuning.name}
+                                    </Text>
+                                </View>
+                                <View style={styles.reviewBadge}>
+                                    <Text style={styles.reviewBadgeText}>AI Draft</Text>
+                                </View>
+                            </View>
+                            <Text style={styles.reviewPreviewText}>
+                                TuneUp generated a playable draft from your audio. Check the tuning and warnings before saving.
+                            </Text>
+
+                            <View style={styles.reviewMetricsRow}>
+                                <View style={styles.reviewMetricBox}>
+                                    <Text style={styles.reviewMetricValue}>{pendingReview.result.songManifest.chordEvents.length}</Text>
+                                    <Text style={styles.reviewMetricLabel}>Chords</Text>
+                                </View>
+                                <View style={styles.reviewMetricBox}>
+                                    <Text style={styles.reviewMetricValue}>{pendingReview.result.songManifest.tabNotes.length}</Text>
+                                    <Text style={styles.reviewMetricLabel}>Tab notes</Text>
+                                </View>
+                                <View style={styles.reviewMetricBox}>
+                                    <Text style={styles.reviewMetricValue}>{Math.round(pendingReview.result.confidenceBreakdown.tabs * 100)}%</Text>
+                                    <Text style={styles.reviewMetricLabel}>Tab conf.</Text>
+                                </View>
+                            </View>
+
+                            {pendingReview.result.songManifest.chordEvents.length > 0 && (
+                                <Text style={styles.reviewPreviewText}>
+                                    Preview: {pendingReview.result.songManifest.chordEvents.slice(0, 8).map((event) => event.chord).join('  •  ')}
+                                </Text>
+                            )}
+
+                            {pendingReview.warnings.length > 0 && (
+                                <View style={styles.reviewWarningBox}>
+                                    {pendingReview.warnings.slice(0, 4).map((warning) => (
+                                        <Text key={warning} style={styles.reviewWarningText}>• {warning}</Text>
+                                    ))}
+                                </View>
+                            )}
+
+                            <Text style={styles.reviewFileText}>
+                                Source: {cleanUploadedSongDisplayName(pendingReview.audioAsset.name)} • {formatFileSize(pendingReview.audioAsset.size)}
+                            </Text>
+
+                            <View style={styles.reviewActionRow}>
+                                <Pressable
+                                    style={({ pressed }) => [styles.reviewButton, styles.reviewButtonPrimary, pressed && styles.songChipPressed]}
+                                    onPress={() => void savePendingReview(true)}
+                                >
+                                    <Text style={styles.reviewButtonPrimaryText}>Practice Now</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={({ pressed }) => [styles.reviewButton, pressed && styles.songChipPressed]}
+                                    onPress={() => void savePendingReview(false)}
+                                >
+                                    <Text style={styles.reviewButtonText}>Save to Library</Text>
+                                </Pressable>
+                            </View>
+                            <View style={styles.reviewActionRow}>
+                                <Pressable
+                                    style={({ pressed }) => [styles.reviewButton, pressed && styles.songChipPressed]}
+                                    onPress={() => void reanalyzePendingReview()}
+                                    disabled={isImporting}
+                                >
+                                    <Text style={styles.reviewButtonText}>Re-analyze</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={({ pressed }) => [styles.reviewButton, styles.reviewButtonDanger, pressed && styles.songChipPressed]}
+                                    onPress={discardPendingReview}
+                                >
+                                    <Text style={styles.reviewButtonDangerText}>Discard</Text>
+                                </Pressable>
+                            </View>
+                        </View>
+                    )}
+
+                    {songsSection === 'library' && editingSong && (
+                        <View style={styles.editSongCard}>
+                            <View style={styles.reviewHeaderRow}>
+                                <View style={styles.reviewHeaderText}>
+                                    <Text style={styles.reviewEyebrow}>Library</Text>
+                                    <Text style={styles.reviewTitle}>Edit song details</Text>
+                                    <Text style={styles.reviewMeta}>
+                                        {editingSong.tuning?.name ? `Tuning: ${editingSong.tuning.name}` : 'Local saved song'}
+                                    </Text>
+                                </View>
+                                <View style={styles.reviewBadge}>
+                                    <Text style={styles.reviewBadgeText}>Edit</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.editFieldGroup}>
+                                <Text style={styles.editFieldLabel}>Title</Text>
+                                <TextInput
+                                    value={editTitle}
+                                    onChangeText={(value) => {
+                                        setEditTitle(value);
+                                        setEditError(null);
+                                    }}
+                                    placeholder="Song title"
+                                    placeholderTextColor={SONG_COLORS.textMute}
+                                    style={styles.editTextInput}
+                                />
+                            </View>
+                            <View style={styles.editFieldGroup}>
+                                <Text style={styles.editFieldLabel}>Artist</Text>
+                                <TextInput
+                                    value={editArtist}
+                                    onChangeText={(value) => {
+                                        setEditArtist(value);
+                                        setEditError(null);
+                                    }}
+                                    placeholder="Artist optional"
+                                    placeholderTextColor={SONG_COLORS.textMute}
+                                    style={styles.editTextInput}
+                                />
+                            </View>
+                            <View style={styles.editFieldGroup}>
+                                <Text style={styles.editFieldLabel}>BPM</Text>
+                                <TextInput
+                                    value={editBpm}
+                                    onChangeText={(value) => {
+                                        setEditBpm(value.replace(/[^0-9.]/g, ''));
+                                        setEditError(null);
+                                    }}
+                                    placeholder="BPM optional"
+                                    placeholderTextColor={SONG_COLORS.textMute}
+                                    keyboardType="decimal-pad"
+                                    style={styles.editTextInput}
+                                />
+                            </View>
+
+                            {editError && (
+                                <Text style={styles.editErrorText}>{editError}</Text>
+                            )}
+
+                            <View style={styles.reviewActionRow}>
+                                <Pressable
+                                    style={({ pressed }) => [styles.reviewButton, pressed && styles.songChipPressed]}
+                                    onPress={cancelEditSong}
+                                >
+                                    <Text style={styles.reviewButtonText}>Cancel</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={({ pressed }) => [styles.reviewButton, styles.reviewButtonPrimary, pressed && styles.songChipPressed]}
+                                    onPress={() => void saveEditedSong()}
+                                >
+                                    <Text style={styles.reviewButtonPrimaryText}>Save Changes</Text>
+                                </Pressable>
+                            </View>
+                        </View>
+                    )}
+
+                    {songsSection === 'upload' && importStatus === 'failed' && importError && !isImporting && (
+                        <View style={styles.libraryErrorCard}>
+                            <Text style={styles.libraryErrorTitle}>Import needs attention</Text>
+                            <Text style={styles.libraryErrorText}>{importError}</Text>
+                            <Pressable
+                                style={({ pressed }) => [styles.libraryRetryButton, pressed && styles.songChipPressed]}
+                                onPress={() => void importSong()}
+                            >
+                                <Text style={styles.libraryRetryText}>Try Upload Again</Text>
+                            </Pressable>
+                        </View>
+                    )}
+
+                    {songsSection === 'library' && actionSong && (
+                        <View style={styles.songActionSheet}>
+                            <View style={styles.songActionHeader}>
+                                <View style={styles.songActionHeaderText}>
+                                    <Text style={styles.songActionTitle}>{actionSong.title}</Text>
+                                    <Text style={styles.songActionSubtitle}>{actionSong.artist}</Text>
+                                </View>
+                                <View style={styles.songStatusPill}>
+                                    <Text style={styles.songStatusText}>{actionSong.isImported ? 'Saved' : 'Demo'}</Text>
+                                </View>
+                            </View>
+                            <View style={styles.songActionGrid}>
+                                <Pressable
+                                    style={({ pressed }) => [styles.songActionButton, styles.songActionButtonPrimary, pressed && styles.songChipPressed]}
+                                    onPress={() => {
+                                        closeSongActions();
+                                        void selectSong(actionSong);
+                                    }}
+                                >
+                                    <Text style={styles.songActionButtonPrimaryText}>Practice</Text>
+                                </Pressable>
+                                {actionSong.isImported && (
+                                    <>
+                                        <Pressable
+                                            style={({ pressed }) => [styles.songActionButton, pressed && styles.songChipPressed]}
+                                            onPress={() => void toggleFavoriteSong(actionSong)}
+                                        >
+                                            <Text style={styles.songActionButtonText}>{actionSong.isFavorite ? 'Unfavorite' : 'Favorite'}</Text>
+                                        </Pressable>
+                                        <Pressable
+                                            style={({ pressed }) => [styles.songActionButton, pressed && styles.songChipPressed]}
+                                            onPress={() => openEditSong(actionSong)}
+                                        >
+                                            <Text style={styles.songActionButtonText}>Edit</Text>
+                                        </Pressable>
+                                        <Pressable
+                                            style={({ pressed }) => [styles.songActionButton, styles.songActionButtonDanger, pressed && styles.songChipPressed]}
+                                            onPress={() => {
+                                                closeSongActions();
+                                                confirmDeleteSong(actionSong);
+                                            }}
+                                        >
+                                            <Text style={styles.songActionButtonDangerText}>Delete</Text>
+                                        </Pressable>
+                                    </>
+                                )}
+                                <Pressable
+                                    style={({ pressed }) => [styles.songActionButton, pressed && styles.songChipPressed]}
+                                    onPress={closeSongActions}
+                                >
+                                    <Text style={styles.songActionButtonText}>Cancel</Text>
+                                </Pressable>
+                            </View>
+                        </View>
+                    )}
+
+                    {songsSection === 'library' && (
+                    <View style={styles.songGrid}>
+                        {filteredLibraryCards.length === 0 ? (
+                            <View style={styles.libraryEmptyState}>
+                                <Text style={styles.libraryEmptyTitle}>{hasActiveLibraryFilter ? 'No matching songs.' : 'Your library is empty.'}</Text>
+                                <Text style={styles.libraryEmptyText}>
+                                    {hasActiveLibraryFilter
+                                        ? 'Clear search or adjust filters to show more songs.'
+                                        : 'Upload or import a song to build your practice library.'}
+                                </Text>
+                                <Pressable
+                                    style={({ pressed }) => [styles.libraryEmptyButton, pressed && styles.songChipPressed]}
+                                    onPress={() => {
+                                        setLibrarySearchQuery('');
+                                        setLibraryFilter('all');
+                                        setSongsSection('upload');
+                                    }}
+                                >
+                                    <Text style={styles.libraryEmptyButtonText}>Go to Upload</Text>
+                                </Pressable>
+                            </View>
+                        ) : filteredLibraryCards.map((card) => {
+                            const song = allSongs.find((candidate) => candidate.id === card.id);
+                            if (!song) {
+                                return null;
+                            }
+
+                            return (
+                                <Pressable
+                                    key={song.id}
+                                    style={({ pressed }) => [
+                                        styles.librarySongCard,
+                                        selectedSong.id === song.id && styles.librarySongCardActive,
+                                        pressed && styles.songChipPressed,
+                                    ]}
+                                    onPress={() => {
+                                        closeSongActions();
+                                        void selectSong(song);
+                                    }}
+                                    onLongPress={() => openSongActions(song)}
+                                >
+                                    <View style={styles.librarySongTopRow}>
+                                        <View style={styles.librarySongText}>
+                                            <Text style={styles.librarySongTitle}>{song.title}</Text>
+                                            <Text style={styles.librarySongArtist}>{song.artist}</Text>
+                                        </View>
+                                        {song.isFavorite && <Text style={styles.librarySongFavoriteMark}>Fav</Text>}
+                                    </View>
+                                    <View style={styles.librarySongMetaRow}>
+                                        <Text style={styles.librarySongMeta}>{formatBpm(song.bpm)}</Text>
+                                        {song.tuning?.name && <Text style={styles.librarySongMeta}>{song.tuning.name}</Text>}
+                                    </View>
+                                    <View style={styles.contentBadgeRow}>
+                                        {getSongLibraryBadges(song).slice(0, 3).map((badge) => (
+                                            <View key={`${song.id}-${badge}`} style={styles.contentBadge}>
+                                                <Text style={styles.contentBadgeText}>{badge}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                    <View style={styles.librarySongFooter}>
+                                        <Text style={styles.librarySongFooterText}>{selectedSong.id === song.id ? 'Selected' : 'Tap to practice'}</Text>
+                                        <View style={styles.librarySongFooterActions}>
+                                            <View style={styles.songStatusPill}>
+                                                <Text style={styles.songStatusText}>{getSongStatusLabel(card.status)}</Text>
+                                            </View>
+                                            <Pressable
+                                                style={({ pressed }) => [styles.librarySongMoreButton, pressed && styles.songChipPressed]}
+                                                onPress={(event) => {
+                                                    event.stopPropagation();
+                                                    openSongActions(song);
+                                                }}
+                                            >
+                                                <Text style={styles.librarySongMoreText}>More</Text>
+                                            </Pressable>
+                                        </View>
+                                    </View>
+                                </Pressable>
+                            );
+                        })}
+                    </View>
+                    )}
+                </View>
+
+                {songsSection === 'upload' && isImporting ? (
                     <LinearGradient
                         colors={['rgba(116, 0, 184, 0.44)', 'rgba(94, 96, 206, 0.28)', 'rgba(128, 255, 219, 0.16)']}
                         start={{ x: 0, y: 0 }}
@@ -1277,6 +2445,7 @@ export default function SongScreen({
                     </LinearGradient>
                 ) : null}
 
+                {songsSection === 'library' && (
                 <PracticeFlowShell
                     headerContent={(
                         <>
@@ -1363,15 +2532,16 @@ export default function SongScreen({
                             })}
 
                             {displayMode === 'tabs'
-                                ? [0, 1, 2, 3, 4, 5].map((stringIndex) => {
+                                ? stringLabels.map((_label, stringIndex) => {
                                     const y = getStringY(stringIndex);
+                                    const isEdgeString = stringIndex === 0 || stringIndex === stringLabels.length - 1;
                                     return (
                                         <Line
                                             key={`string-${stringIndex}`}
                                             p1={{ x: 14, y }}
                                             p2={{ x: LANE_WIDTH - 16, y }}
-                                            color={withOpacity(SONG_COLORS.textDim, stringIndex === 0 || stringIndex === 5 ? 0.42 : 0.28)}
-                                            strokeWidth={stringIndex === 0 || stringIndex === 5 ? 2 : 1.4}
+                                            color={withOpacity(SONG_COLORS.textDim, isEdgeString ? 0.42 : 0.28)}
+                                            strokeWidth={isEdgeString ? 2 : 1.4}
                                         />
                                     );
                                 })
@@ -1422,7 +2592,8 @@ export default function SongScreen({
 
                             {displayMode === 'tabs' && visibleTabNotes.map((note) => {
                                 const x = PLAYHEAD_X + ((note.timeSec - playbackSec) * PIXELS_PER_SECOND);
-                                const y = getStringY(note.stringIndex) + (Math.sin((animationNow / 250) + (note.index * 0.8)) * 2.5);
+                                const displayStringIndex = getDisplayStringIndex(selectedSong, note.stringIndex);
+                                const y = getStringY(displayStringIndex) + (Math.sin((animationNow / 250) + (note.index * 0.8)) * 2.5);
                                 const tailWidth = Math.max(18, (note.durationSec ?? 0.18) * PIXELS_PER_SECOND);
                                 const wasHit = hitTabIndexesRef.current.has(note.index);
                                 const hitStamp = tabHitMomentsRef.current.get(note.index) ?? null;
@@ -1525,7 +2696,8 @@ export default function SongScreen({
 
                             {displayMode === 'tabs' && visibleTabNotes.map((note) => {
                                 const x = PLAYHEAD_X + ((note.timeSec - playbackSec) * PIXELS_PER_SECOND);
-                                const y = getStringY(note.stringIndex) + (Math.sin((animationNow / 250) + (note.index * 0.8)) * 2.5);
+                                const displayStringIndex = getDisplayStringIndex(selectedSong, note.stringIndex);
+                                const y = getStringY(displayStringIndex) + (Math.sin((animationNow / 250) + (note.index * 0.8)) * 2.5);
                                 const wasHit = hitTabIndexesRef.current.has(note.index);
 
                                 return (
@@ -1548,9 +2720,9 @@ export default function SongScreen({
 
                             {displayMode === 'tabs' && (
                                 <View style={styles.stringLegendWrap}>
-                                    {STRING_LABELS.map((label, index) => (
+                                    {stringLabels.map((label, index) => (
                                         <Text
-                                            key={`legend-${label}`}
+                                            key={`legend-${label}-${index}`}
                                             style={[styles.stringLegend, { top: getStringY(index) - 8 }]}
                                         >
                                             {label}
@@ -1630,6 +2802,21 @@ export default function SongScreen({
                                 </View>
 
                                 <Text style={styles.statusTitle}>{engineText}</Text>
+                                {showFallbackTuningWarning && (
+                                    <Text style={styles.statusWarningText}>{FALLBACK_STANDARD_TUNING_WARNING}</Text>
+                                )}
+
+                                {showMicFallbackAction && (
+                                    <Pressable
+                                        onPress={() => void handleMicFallbackAction()}
+                                        style={({ pressed }) => [
+                                            styles.micFallbackButton,
+                                            pressed && styles.micFallbackButtonPressed,
+                                        ]}
+                                    >
+                                        <Text style={styles.micFallbackButtonText}>{micFallbackActionLabel}</Text>
+                                    </Pressable>
+                                )}
 
                                 <View style={styles.statusMetricsRow}>
                                     <View style={styles.statusMetricBox}>
@@ -1672,6 +2859,7 @@ export default function SongScreen({
                         </>
                     )}
                 />
+                )}
                 </>
                 )}
             </ScrollView>
@@ -1752,6 +2940,857 @@ const styles = StyleSheet.create({
         color: SONG_COLORS.text,
         fontSize: 13,
         lineHeight: 19,
+    },
+    libraryPanel: {
+        borderRadius: 26,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.94),
+        padding: 14,
+        marginBottom: 14,
+        ...SHADOWS.card,
+    },
+    libraryHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginBottom: 12,
+    },
+    libraryHeaderText: {
+        flex: 1,
+    },
+    libraryTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 21,
+        fontWeight: '900',
+    },
+    librarySubtitle: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        lineHeight: 18,
+        marginTop: 4,
+        fontWeight: '600',
+    },
+    libraryCountPill: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.28),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.1),
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+    },
+    libraryCountText: {
+        color: SONG_COLORS.highlight,
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    songsSectionSwitchRow: {
+        flexDirection: 'row',
+        gap: 8,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.68),
+        padding: 4,
+        marginBottom: 12,
+    },
+    songsSectionSwitchButton: {
+        flex: 1,
+        borderRadius: 12,
+        paddingVertical: 10,
+        alignItems: 'center',
+    },
+    songsSectionSwitchButtonActive: {
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.14),
+    },
+    songsSectionSwitchText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    songsSectionSwitchTextActive: {
+        color: SONG_COLORS.text,
+    },
+    uploadIntroBlock: {
+        marginBottom: 12,
+    },
+    uploadIntroTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 18,
+        fontWeight: '900',
+    },
+    uploadIntroText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        lineHeight: 18,
+        marginTop: 4,
+        fontWeight: '700',
+    },
+    libraryActionRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 12,
+    },
+    libraryActionButton: {
+        flex: 1,
+        minHeight: 64,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.9),
+        paddingHorizontal: 10,
+        paddingVertical: 10,
+        justifyContent: 'center',
+        ...SHADOWS.soft,
+    },
+    libraryActionPrimary: {
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.36),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.13),
+    },
+    libraryActionDisabled: {
+        opacity: 0.58,
+    },
+    libraryActionText: {
+        color: SONG_COLORS.text,
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    libraryActionPrimaryText: {
+        color: SONG_COLORS.secondary,
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    libraryActionMeta: {
+        color: SONG_COLORS.textDim,
+        fontSize: 10,
+        fontWeight: '700',
+        marginTop: 4,
+    },
+    tuningPanel: {
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.72),
+        padding: 12,
+        marginBottom: 12,
+    },
+    tuningHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 10,
+        marginBottom: 10,
+    },
+    tuningHeaderText: {
+        flex: 1,
+    },
+    tuningTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 15,
+        fontWeight: '900',
+    },
+    tuningSubtitle: {
+        color: SONG_COLORS.textDim,
+        fontSize: 11,
+        lineHeight: 16,
+        marginTop: 4,
+        fontWeight: '600',
+    },
+    aiDraftPill: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.3),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.1),
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+    },
+    aiDraftPillText: {
+        color: SONG_COLORS.highlight,
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    instrumentSwitchRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 10,
+    },
+    instrumentSwitchButton: {
+        flex: 1,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.7),
+        paddingVertical: 10,
+        alignItems: 'center',
+    },
+    instrumentSwitchButtonActive: {
+        borderColor: SONG_COLORS.highlight,
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.13),
+    },
+    instrumentSwitchText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    instrumentSwitchTextActive: {
+        color: SONG_COLORS.text,
+    },
+    tuningChipRow: {
+        gap: 8,
+        paddingBottom: 2,
+    },
+    tuningChip: {
+        minWidth: 132,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.74),
+        paddingHorizontal: 11,
+        paddingVertical: 10,
+    },
+    tuningChipActive: {
+        borderColor: SONG_COLORS.highlight,
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.12),
+    },
+    tuningChipTitle: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    tuningChipTitleActive: {
+        color: SONG_COLORS.text,
+    },
+    tuningChipMeta: {
+        color: SONG_COLORS.textMute,
+        fontSize: 10,
+        fontWeight: '700',
+        marginTop: 4,
+    },
+    selectedUploadCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.secondary, 0.26),
+        backgroundColor: withOpacity(SONG_COLORS.secondary, 0.08),
+        padding: 10,
+        marginTop: 10,
+    },
+    selectedUploadText: {
+        flex: 1,
+    },
+    selectedUploadTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    selectedUploadMeta: {
+        color: SONG_COLORS.textDim,
+        fontSize: 10,
+        fontWeight: '700',
+        marginTop: 4,
+    },
+    startAnalysisButton: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.13),
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+    },
+    startAnalysisButtonText: {
+        color: SONG_COLORS.secondary,
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    librarySearchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+    },
+    librarySearchInput: {
+        flex: 1,
+        minHeight: 46,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.82),
+        color: SONG_COLORS.text,
+        paddingHorizontal: 12,
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    librarySearchClearButton: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.secondary, 0.32),
+        backgroundColor: withOpacity(SONG_COLORS.secondary, 0.1),
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+    },
+    librarySearchClearText: {
+        color: SONG_COLORS.secondary,
+        fontSize: 11,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    libraryToolsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    libraryCountSubtle: {
+        color: SONG_COLORS.textMute,
+        fontSize: 11,
+        fontWeight: '800',
+    },
+    filterChipRow: {
+        gap: 8,
+        paddingBottom: 12,
+    },
+    filterChip: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.72),
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    filterChipActive: {
+        borderColor: SONG_COLORS.highlight,
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.14),
+    },
+    filterChipText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    filterChipTextActive: {
+        color: SONG_COLORS.text,
+    },
+    sortChip: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.primary, 0.22),
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.62),
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    sortChipActive: {
+        borderColor: SONG_COLORS.primary,
+        backgroundColor: withOpacity(SONG_COLORS.primary, 0.12),
+    },
+    sortChipText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    sortChipTextActive: {
+        color: SONG_COLORS.text,
+    },
+    reviewCard: {
+        borderRadius: 22,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.96),
+        padding: 14,
+        marginBottom: 12,
+        ...SHADOWS.card,
+    },
+    editSongCard: {
+        borderRadius: 22,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.primary, 0.28),
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.96),
+        padding: 14,
+        marginBottom: 12,
+        ...SHADOWS.card,
+    },
+    reviewHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 10,
+    },
+    reviewHeaderText: {
+        flex: 1,
+    },
+    reviewEyebrow: {
+        color: SONG_COLORS.highlight,
+        fontSize: 10,
+        fontWeight: '900',
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+        marginBottom: 5,
+    },
+    reviewTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 19,
+        fontWeight: '900',
+    },
+    reviewMeta: {
+        color: SONG_COLORS.textDim,
+        fontSize: 11,
+        fontWeight: '700',
+        marginTop: 4,
+    },
+    reviewBadge: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.primary, 0.3),
+        backgroundColor: withOpacity(SONG_COLORS.primary, 0.12),
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+    },
+    reviewBadgeText: {
+        color: SONG_COLORS.primary,
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    reviewMetricsRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 12,
+    },
+    reviewMetricBox: {
+        flex: 1,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.74),
+        padding: 10,
+    },
+    reviewMetricValue: {
+        color: SONG_COLORS.text,
+        fontSize: 18,
+        fontWeight: '900',
+    },
+    reviewMetricLabel: {
+        color: SONG_COLORS.textMute,
+        fontSize: 10,
+        fontWeight: '800',
+        marginTop: 3,
+        textTransform: 'uppercase',
+    },
+    reviewPreviewText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        lineHeight: 18,
+        marginTop: 11,
+        fontWeight: '700',
+    },
+    reviewWarningBox: {
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.24),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.08),
+        padding: 10,
+        marginTop: 10,
+        gap: 4,
+    },
+    reviewWarningText: {
+        color: SONG_COLORS.text,
+        fontSize: 11,
+        lineHeight: 16,
+        fontWeight: '700',
+    },
+    reviewFileText: {
+        color: SONG_COLORS.textMute,
+        fontSize: 10,
+        fontWeight: '700',
+        marginTop: 10,
+    },
+    editFieldGroup: {
+        gap: 7,
+        marginTop: 12,
+    },
+    editFieldLabel: {
+        color: SONG_COLORS.textDim,
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    editTextInput: {
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.86),
+        color: SONG_COLORS.text,
+        paddingHorizontal: 12,
+        paddingVertical: 11,
+        fontSize: 13,
+        fontWeight: '800',
+    },
+    editErrorText: {
+        color: '#FFB4C2',
+        fontSize: 11,
+        fontWeight: '800',
+        marginTop: 10,
+    },
+    reviewActionRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 10,
+    },
+    reviewButton: {
+        flex: 1,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.88),
+        paddingVertical: 11,
+        alignItems: 'center',
+    },
+    reviewButtonPrimary: {
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.13),
+    },
+    reviewButtonDanger: {
+        borderColor: withOpacity(SONG_COLORS.miss, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.miss, 0.1),
+    },
+    reviewButtonText: {
+        color: SONG_COLORS.text,
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    reviewButtonPrimaryText: {
+        color: SONG_COLORS.secondary,
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    reviewButtonDangerText: {
+        color: '#FFB4C2',
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    libraryErrorCard: {
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.miss, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.miss, 0.1),
+        padding: 12,
+        marginBottom: 12,
+    },
+    libraryErrorTitle: {
+        color: '#FFB4C2',
+        fontSize: 14,
+        fontWeight: '900',
+        marginBottom: 5,
+    },
+    libraryErrorText: {
+        color: SONG_COLORS.text,
+        fontSize: 12,
+        lineHeight: 18,
+        fontWeight: '700',
+    },
+    songActionSheet: {
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.28),
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.96),
+        padding: 12,
+        marginBottom: 12,
+        ...SHADOWS.soft,
+    },
+    songActionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: 10,
+        marginBottom: 10,
+    },
+    songActionHeaderText: {
+        flex: 1,
+    },
+    songActionTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 16,
+        fontWeight: '900',
+    },
+    songActionSubtitle: {
+        color: SONG_COLORS.textDim,
+        fontSize: 11,
+        fontWeight: '700',
+        marginTop: 3,
+    },
+    songActionGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    songActionButton: {
+        minWidth: 96,
+        flexGrow: 1,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panel, 0.82),
+        paddingVertical: 10,
+        alignItems: 'center',
+    },
+    songActionButtonPrimary: {
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.13),
+    },
+    songActionButtonDanger: {
+        borderColor: withOpacity(SONG_COLORS.miss, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.miss, 0.1),
+    },
+    songActionButtonText: {
+        color: SONG_COLORS.text,
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    songActionButtonPrimaryText: {
+        color: SONG_COLORS.secondary,
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    songActionButtonDangerText: {
+        color: '#FFB4C2',
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    libraryRetryButton: {
+        alignSelf: 'flex-start',
+        marginTop: 10,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.1),
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    libraryRetryText: {
+        color: SONG_COLORS.highlight,
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    songGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: LIBRARY_CARD_GAP,
+    },
+    libraryEmptyState: {
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.74),
+        padding: 14,
+        width: '100%',
+    },
+    uploadEmptyState: {
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.primary, 0.24),
+        backgroundColor: withOpacity(SONG_COLORS.primary, 0.08),
+        padding: 14,
+        marginTop: 2,
+    },
+    libraryEmptyTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 17,
+        fontWeight: '900',
+        marginBottom: 5,
+    },
+    libraryEmptyText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 12,
+        lineHeight: 18,
+        fontWeight: '600',
+    },
+    libraryEmptyButton: {
+        alignSelf: 'flex-start',
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.1),
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginTop: 12,
+    },
+    libraryEmptyButtonText: {
+        color: SONG_COLORS.highlight,
+        fontSize: 11,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    librarySongCard: {
+        width: LIBRARY_CARD_WIDTH,
+        minHeight: 176,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: SONG_COLORS.border,
+        backgroundColor: withOpacity(SONG_COLORS.panelRaised, 0.88),
+        padding: 13,
+        ...SHADOWS.soft,
+    },
+    librarySongCardActive: {
+        borderColor: SONG_COLORS.highlight,
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.1),
+    },
+    librarySongTopRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    librarySongText: {
+        flex: 1,
+    },
+    librarySongTitle: {
+        color: SONG_COLORS.text,
+        fontSize: 14,
+        fontWeight: '900',
+    },
+    librarySongArtist: {
+        color: SONG_COLORS.textDim,
+        fontSize: 11,
+        fontWeight: '700',
+        marginTop: 3,
+    },
+    librarySongFavoriteMark: {
+        color: SONG_COLORS.highlight,
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    songStatusPill: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.primary, 0.25),
+        backgroundColor: withOpacity(SONG_COLORS.primary, 0.1),
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+    },
+    songStatusText: {
+        color: SONG_COLORS.primary,
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    librarySongMetaRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 7,
+        marginTop: 10,
+    },
+    librarySongMeta: {
+        color: SONG_COLORS.textMute,
+        fontSize: 10,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+    },
+    contentBadgeRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginTop: 10,
+    },
+    contentBadge: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.secondary, 0.25),
+        backgroundColor: withOpacity(SONG_COLORS.secondary, 0.08),
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+    },
+    contentBadgeText: {
+        color: SONG_COLORS.secondary,
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    librarySongFooter: {
+        gap: 8,
+        marginTop: 12,
+    },
+    librarySongFooterText: {
+        color: SONG_COLORS.textMute,
+        fontSize: 10,
+        fontWeight: '800',
+    },
+    librarySongFooterActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+    },
+    librarySongMoreButton: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.primary, 0.28),
+        backgroundColor: withOpacity(SONG_COLORS.primary, 0.08),
+        paddingHorizontal: 9,
+        paddingVertical: 6,
+    },
+    librarySongMoreText: {
+        color: SONG_COLORS.primary,
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    librarySongFavoriteButton: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.28),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.08),
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+    },
+    librarySongFavoriteButtonActive: {
+        borderColor: SONG_COLORS.highlight,
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.16),
+    },
+    librarySongFavoriteText: {
+        color: SONG_COLORS.textDim,
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    librarySongFavoriteTextActive: {
+        color: SONG_COLORS.highlight,
+    },
+    librarySongEditButton: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.primary, 0.3),
+        backgroundColor: withOpacity(SONG_COLORS.primary, 0.1),
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+    },
+    librarySongEditText: {
+        color: SONG_COLORS.primary,
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    librarySongDeleteButton: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity('#ff6b7a', 0.34),
+        backgroundColor: withOpacity('#ff6b7a', 0.1),
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+    },
+    librarySongDeleteText: {
+        color: '#ff9aa5',
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    librarySongActionText: {
+        color: SONG_COLORS.highlight,
+        fontSize: 11,
+        fontWeight: '900',
     },
     songPickerRow: {
         gap: 10,
@@ -2175,6 +4214,31 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         marginTop: 10,
         lineHeight: 22,
+    },
+    statusWarningText: {
+        color: '#FFD166',
+        fontSize: 11,
+        fontWeight: '700',
+        lineHeight: 16,
+        marginTop: 6,
+    },
+    micFallbackButton: {
+        alignSelf: 'flex-start',
+        marginTop: 10,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withOpacity(SONG_COLORS.highlight, 0.34),
+        backgroundColor: withOpacity(SONG_COLORS.highlight, 0.12),
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+    },
+    micFallbackButtonPressed: {
+        transform: [{ scale: 0.98 }],
+    },
+    micFallbackButtonText: {
+        color: SONG_COLORS.highlight,
+        fontSize: 12,
+        fontWeight: '900',
     },
     statusMetricsRow: {
         flexDirection: 'row',

@@ -89,6 +89,7 @@ jest.mock('expo-document-picker', () => ({
 jest.mock('expo-av', () => ({
     Audio: {
         usePermissions: () => [{ status: 'granted', canAskAgain: true }, jest.fn(() => Promise.resolve({ status: 'granted', canAskAgain: true }))],
+        getPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted', canAskAgain: true })),
         setAudioModeAsync: jest.fn(() => Promise.resolve()),
         Sound: {
             createAsync: jest.fn(() => Promise.resolve({

@@ -16,6 +16,8 @@ interface StartScanInput {
 
 interface UseAudioAnalysisJobOptions {
     pollIntervalMs?: number;
+    maxPollDurationMs?: number;
+    maxNetworkErrors?: number;
 }
 
 const IDLE_PROGRESS_TEXT = 'Load a track to start a scan.';
@@ -24,6 +26,7 @@ const FALLBACK_PROGRESS_TEXT = 'Background scan is unavailable on this server. F
 const BACKGROUND_PROGRESS_TEXT = 'Scan still running in the background. Polling will resume when you return.';
 const RESUME_PROGRESS_TEXT = 'Checking scan progress...';
 const FAILURE_PROGRESS_TEXT = 'Could not start the scan.';
+const POLL_TIMEOUT_MESSAGE = 'Analysis is taking longer than expected. Please try again or use another audio file.';
 
 function getOptionalProgressText(status: unknown, fallback: string) {
     if (
@@ -40,6 +43,8 @@ function getOptionalProgressText(status: unknown, fallback: string) {
 
 export function useAudioAnalysisJob({
     pollIntervalMs = 4000,
+    maxPollDurationMs = 10 * 60 * 1000,
+    maxNetworkErrors = 3,
 }: UseAudioAnalysisJobOptions = {}) {
     const [isScanning, setIsScanning] = useState(false);
     const [progressText, setProgressText] = useState(IDLE_PROGRESS_TEXT);
@@ -50,6 +55,10 @@ export function useAudioAnalysisJob({
     const activeTaskIdRef = useRef<string | null>(null);
     const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+    const mountedRef = useRef(true);
+    const pollStartedAtRef = useRef<number | null>(null);
+    const networkErrorCountRef = useRef(0);
+    const pollInFlightRef = useRef(false);
 
     const clearScheduledPoll = useCallback(() => {
         if (!pollTimeoutRef.current) {
@@ -63,6 +72,12 @@ export function useAudioAnalysisJob({
     const stopTrackingTask = useCallback(() => {
         clearScheduledPoll();
         activeTaskIdRef.current = null;
+        pollStartedAtRef.current = null;
+        networkErrorCountRef.current = 0;
+        pollInFlightRef.current = false;
+        if (!mountedRef.current) {
+            return;
+        }
         setTaskId(null);
         setIsScanning(false);
     }, [clearScheduledPoll]);
@@ -84,6 +99,9 @@ export function useAudioAnalysisJob({
 
     const completeScan = useCallback((analysisResult: AnalysisResultPayload, nextProgressText = 'Analysis complete.') => {
         stopTrackingTask();
+        if (!mountedRef.current) {
+            return;
+        }
         setProgressText(nextProgressText);
         setError(null);
         setResult(analysisResult);
@@ -91,28 +109,69 @@ export function useAudioAnalysisJob({
 
     const failScan = useCallback((message: string, nextProgressText = FAILURE_PROGRESS_TEXT) => {
         stopTrackingTask();
+        if (!mountedRef.current) {
+            return;
+        }
         setProgressText(nextProgressText);
         setError(message);
     }, [stopTrackingTask]);
 
     const pollTask = useCallback(async (nextTaskId: string) => {
+        if (!nextTaskId || !mountedRef.current || pollInFlightRef.current) {
+            return;
+        }
+
+        const startedAt = pollStartedAtRef.current ?? Date.now();
+        pollStartedAtRef.current = startedAt;
+
+        if ((Date.now() - startedAt) > maxPollDurationMs) {
+            failScan(POLL_TIMEOUT_MESSAGE, 'Analysis is taking longer than expected...');
+            return;
+        }
+
+        pollInFlightRef.current = true;
         const status = await fetchAnalysisTaskStatus(nextTaskId);
+        pollInFlightRef.current = false;
+
+        if (!mountedRef.current || activeTaskIdRef.current !== nextTaskId) {
+            return;
+        }
 
         if (status.status === 'completed') {
             completeScan(status.result, status.progressText);
             return;
         }
 
-        if (status.status === 'failed' || status.status === 'timed_out' || status.status === 'error') {
+        if (status.status === 'failed' || status.status === 'timed_out' || status.status === 'cancelled' || status.status === 'expired') {
             failScan(status.message, getOptionalProgressText(status, 'Analysis failed.'));
             return;
         }
+
+        if (status.status === 'error') {
+            networkErrorCountRef.current += 1;
+            if (networkErrorCountRef.current >= maxNetworkErrors) {
+                failScan(status.message, 'Could not connect to the analysis server.');
+                return;
+            }
+
+            setProgressText('Could not connect to the analysis server. Retrying...');
+            clearScheduledPoll();
+            pollTimeoutRef.current = setTimeout(() => {
+                pollTimeoutRef.current = null;
+                void pollTask(nextTaskId);
+            }, pollIntervalMs);
+            return;
+        }
+
+        networkErrorCountRef.current = 0;
 
         if (status.status !== 'processing') {
             return;
         }
 
-        setProgressText(status.progressText);
+        if (mountedRef.current) {
+            setProgressText(status.progressText);
+        }
 
         if (appStateRef.current !== 'active') {
             return;
@@ -123,7 +182,14 @@ export function useAudioAnalysisJob({
             pollTimeoutRef.current = null;
             void pollTask(nextTaskId);
         }, pollIntervalMs);
-    }, [clearScheduledPoll, completeScan, failScan, pollIntervalMs]);
+    }, [
+        clearScheduledPoll,
+        completeScan,
+        failScan,
+        maxNetworkErrors,
+        maxPollDurationMs,
+        pollIntervalMs,
+    ]);
 
     const runLegacyFallbackScan = useCallback(async (
         fileUri: string,
@@ -151,6 +217,10 @@ export function useAudioAnalysisJob({
 
     const startScan = useCallback(async ({ fileUri, fileName, userId }: StartScanInput) => {
         clearScheduledPoll();
+        activeTaskIdRef.current = null;
+        pollStartedAtRef.current = null;
+        networkErrorCountRef.current = 0;
+        pollInFlightRef.current = false;
         setResult(null);
         setError(null);
         setIsScanning(true);
@@ -163,7 +233,13 @@ export function useAudioAnalysisJob({
             return uploadResult;
         }
 
+        if (!uploadResult.taskId?.trim()) {
+            failScan('Analysis job could not be tracked. Please try again.');
+            return uploadResult;
+        }
+
         activeTaskIdRef.current = uploadResult.taskId;
+        pollStartedAtRef.current = Date.now();
         setTaskId(uploadResult.taskId);
         setProgressText(uploadResult.progressText);
         await pollTask(uploadResult.taskId);
@@ -172,6 +248,7 @@ export function useAudioAnalysisJob({
     }, [clearScheduledPoll, pollTask, runLegacyFallbackScan]);
 
     useEffect(() => {
+        mountedRef.current = true;
         const subscription = AppState.addEventListener('change', (nextState) => {
             appStateRef.current = nextState;
 
@@ -193,8 +270,13 @@ export function useAudioAnalysisJob({
         });
 
         return () => {
+            mountedRef.current = false;
             subscription.remove();
             clearScheduledPoll();
+            activeTaskIdRef.current = null;
+            pollStartedAtRef.current = null;
+            networkErrorCountRef.current = 0;
+            pollInFlightRef.current = false;
         };
     }, [clearScheduledPoll, pollTask]);
 

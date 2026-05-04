@@ -14,8 +14,17 @@ Icon?
 # Secrets / credentials
 # ----------------------------
 .env
-.env.*
+.env.local
+.env.*.local
+backend/.env
+backend/.env.local
+backend/.env.*.local
+MusicAIApp/.env
+MusicAIApp/.env.local
+MusicAIApp/.env.*.local
 !.env.example
+!backend/.env.example
+!MusicAIApp/.env.example
 !.env.sample
 *.pem
 *.key

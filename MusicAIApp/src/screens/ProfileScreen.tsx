@@ -24,6 +24,7 @@ import { LESSON_PACKS, LessonPackage } from '../data/lessonLibrary';
 import { SongLesson, SONG_LESSONS } from '../data/songLessons';
 import { COLORS, SHADOWS } from '../theme';
 import { AppSettings, getAppSettings, updateAppSettings } from '../services/appSettings';
+import { ApiDiagnosticsResult, checkBackendHealth } from '../services/apiDiagnostics';
 import { useCelebration } from '../hooks/useCelebration';
 import {
     BADGE_DEFINITIONS,
@@ -57,9 +58,13 @@ const BADGE_VISUALS: Record<string, { icon: IconName; start: string; end: string
 function withOpacity(hex: string, opacity: number) {
     const safeOpacity = Math.max(0, Math.min(1, opacity));
     const sanitized = hex.replace('#', '');
-    const fullHex = sanitized.length === 3
-        ? sanitized.split('').map((char) => `${char}${char}`).join('')
-        : sanitized;
+    const fullHex =
+        sanitized.length === 3
+            ? sanitized
+                  .split('')
+                  .map((char) => `${char}${char}`)
+                  .join('')
+            : sanitized;
 
     const value = parseInt(fullHex, 16);
     const r = (value >> 16) & 255;
@@ -139,15 +144,24 @@ function LibraryButton({
     onPress: () => void;
 }) {
     return (
-        <TouchableOpacity style={[styles.libraryButton, active && styles.libraryButtonActive]} onPress={onPress}>
+        <TouchableOpacity
+            style={[styles.libraryButton, active && styles.libraryButtonActive]}
+            onPress={onPress}
+        >
             <View style={[styles.libraryIconWrap, active && styles.libraryIconWrapActive]}>
-                <Ionicons name={icon} size={18} color={active ? COLORS.panelAlt : COLORS.textStrong} />
+                <Ionicons
+                    name={icon}
+                    size={18}
+                    color={active ? COLORS.panelAlt : COLORS.textStrong}
+                />
             </View>
             <View style={styles.libraryButtonTextWrap}>
                 <Text style={styles.libraryButtonLabel}>{label}</Text>
                 <Text style={styles.libraryButtonMeta}>{meta}</Text>
             </View>
-            <Text style={[styles.libraryButtonCount, active && styles.libraryButtonCountActive]}>{count}</Text>
+            <Text style={[styles.libraryButtonCount, active && styles.libraryButtonCountActive]}>
+                {count}
+            </Text>
         </TouchableOpacity>
     );
 }
@@ -172,7 +186,12 @@ export default function ProfileScreen() {
     const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
     const [selectedFlowSongId, setSelectedFlowSongId] = useState<string | null>(null);
     const [selectedStudioSongKey, setSelectedStudioSongKey] = useState<string | null>(null);
-    const [selectedBadgeId, setSelectedBadgeId] = useState<string | null>(BADGE_DEFINITIONS[0]?.id ?? null);
+    const [selectedBadgeId, setSelectedBadgeId] = useState<string | null>(
+        BADGE_DEFINITIONS[0]?.id ?? null,
+    );
+    const [apiDiagnostics, setApiDiagnostics] = useState<ApiDiagnosticsResult | null>(null);
+    const [apiDiagnosticsCheckedAt, setApiDiagnosticsCheckedAt] = useState<string | null>(null);
+    const [isCheckingApiDiagnostics, setIsCheckingApiDiagnostics] = useState(false);
     const { celebration, showCelebration } = useCelebration();
 
     const loadProfile = useCallback(async () => {
@@ -293,29 +312,52 @@ export default function ProfileScreen() {
         }
     };
 
-    const openLessonFromProfile = useCallback((lessonId: string) => {
-        navigation.navigate('Lessons', {
-            screen: 'LessonDetail',
-            params: { lessonId },
-        });
-    }, [navigation]);
+    const runApiDiagnostics = useCallback(async () => {
+        setIsCheckingApiDiagnostics(true);
+        const result = await checkBackendHealth();
+        setApiDiagnostics(result);
+        setApiDiagnosticsCheckedAt(
+            new Date().toLocaleTimeString(undefined, {
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+            }),
+        );
+        setIsCheckingApiDiagnostics(false);
+    }, []);
 
-    const openSongFromProfile = useCallback((songId: string) => {
-        navigation.navigate('Songs', {
-            focusSongId: songId,
-        });
-    }, [navigation]);
+    const openLessonFromProfile = useCallback(
+        (lessonId: string) => {
+            navigation.navigate('Lessons', {
+                screen: 'LessonDetail',
+                params: { lessonId },
+            });
+        },
+        [navigation],
+    );
 
-    const openStudioSave = useCallback((song: StudioSaveWithKey) => {
-        navigation.getParent()?.navigate('Studio', {
-            savedAnalysis: {
-                songName: song.songName,
-                duration: song.duration,
-                markers: song.markers,
-                createdAt: song.createdAt,
-            },
-        });
-    }, [navigation]);
+    const openSongFromProfile = useCallback(
+        (songId: string) => {
+            navigation.navigate('Songs', {
+                focusSongId: songId,
+            });
+        },
+        [navigation],
+    );
+
+    const openStudioSave = useCallback(
+        (song: StudioSaveWithKey) => {
+            navigation.getParent()?.navigate('Studio', {
+                savedAnalysis: {
+                    songName: song.songName,
+                    duration: song.duration,
+                    markers: song.markers,
+                    createdAt: song.createdAt,
+                },
+            });
+        },
+        [navigation],
+    );
 
     const userRank = useMemo(() => {
         if (!snapshot) {
@@ -361,18 +403,20 @@ export default function ProfileScreen() {
         return ordered;
     }, [flowSongMap, importedSongs, snapshot?.completedSongIds]);
 
-    const keyedStudioSaves = useMemo<StudioSaveWithKey[]>(() => (
-        studioSaves
-            .map((item, index) => ({
-                ...item,
-                key: `${item.songName}-${item.createdAt ?? 'save'}-${index}`,
-            }))
-            .sort((a, b) => {
-                const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                return bTime - aTime;
-            })
-    ), [studioSaves]);
+    const keyedStudioSaves = useMemo<StudioSaveWithKey[]>(
+        () =>
+            studioSaves
+                .map((item, index) => ({
+                    ...item,
+                    key: `${item.songName}-${item.createdAt ?? 'save'}-${index}`,
+                }))
+                .sort((a, b) => {
+                    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return bTime - aTime;
+                }),
+        [studioSaves],
+    );
 
     useEffect(() => {
         if (completedLessons.length === 0) {
@@ -417,23 +461,37 @@ export default function ProfileScreen() {
         }
     }, [activeSongMode, flowSongs.length, keyedStudioSaves.length]);
 
-    const selectedLesson = useMemo(() => (
-        completedLessons.find((lesson) => lesson.id === selectedLessonId) ?? null
-    ), [completedLessons, selectedLessonId]);
+    useEffect(() => {
+        void runApiDiagnostics();
+    }, [runApiDiagnostics]);
 
-    const selectedFlowSong = useMemo(() => (
-        flowSongs.find((song) => song.id === selectedFlowSongId) ?? null
-    ), [flowSongs, selectedFlowSongId]);
+    const selectedLesson = useMemo(
+        () => completedLessons.find((lesson) => lesson.id === selectedLessonId) ?? null,
+        [completedLessons, selectedLessonId],
+    );
 
-    const selectedStudioSong = useMemo(() => (
-        keyedStudioSaves.find((item) => item.key === selectedStudioSongKey) ?? null
-    ), [keyedStudioSaves, selectedStudioSongKey]);
+    const selectedFlowSong = useMemo(
+        () => flowSongs.find((song) => song.id === selectedFlowSongId) ?? null,
+        [flowSongs, selectedFlowSongId],
+    );
 
-    const selectedBadge = useMemo(() => (
-        BADGE_DEFINITIONS.find((badge) => badge.id === selectedBadgeId) ?? BADGE_DEFINITIONS[0] ?? null
-    ), [selectedBadgeId]);
+    const selectedStudioSong = useMemo(
+        () => keyedStudioSaves.find((item) => item.key === selectedStudioSongKey) ?? null,
+        [keyedStudioSaves, selectedStudioSongKey],
+    );
 
-    const unlockedBadgeIds = useMemo(() => new Set(snapshot?.unlockedBadgeIds ?? []), [snapshot?.unlockedBadgeIds]);
+    const selectedBadge = useMemo(
+        () =>
+            BADGE_DEFINITIONS.find((badge) => badge.id === selectedBadgeId) ??
+            BADGE_DEFINITIONS[0] ??
+            null,
+        [selectedBadgeId],
+    );
+
+    const unlockedBadgeIds = useMemo(
+        () => new Set(snapshot?.unlockedBadgeIds ?? []),
+        [snapshot?.unlockedBadgeIds],
+    );
     const songCardCount = `${flowSongs.length + keyedStudioSaves.length}`;
     const badgeCount = `${snapshot?.unlockedBadgeIds.length ?? 0}/${BADGE_DEFINITIONS.length}`;
     const isInitialLoading = isRefreshing && (!snapshot || !settings);
@@ -485,7 +543,10 @@ export default function ProfileScreen() {
                 ))}
             </View>
 
-            <TouchableOpacity style={styles.detailActionButton} onPress={() => openLessonFromProfile(lesson.id)}>
+            <TouchableOpacity
+                style={styles.detailActionButton}
+                onPress={() => openLessonFromProfile(lesson.id)}
+            >
                 <Ionicons name="arrow-forward-outline" size={16} color={COLORS.panelAlt} />
                 <Text style={styles.detailActionButtonText}>Open lesson</Text>
             </TouchableOpacity>
@@ -498,7 +559,9 @@ export default function ProfileScreen() {
             <View style={styles.detailCard}>
                 <View style={styles.detailHeaderRow}>
                     <View style={styles.detailTitleWrap}>
-                        <Text style={styles.detailKicker}>{song.isImported ? 'Saved from Songs tab' : 'Song Flow progress'}</Text>
+                        <Text style={styles.detailKicker}>
+                            {song.isImported ? 'Saved from Songs tab' : 'Song Flow progress'}
+                        </Text>
                         <Text style={styles.detailTitle}>{song.title}</Text>
                         <Text style={styles.detailSubtitle}>{song.artist}</Text>
                     </View>
@@ -507,7 +570,9 @@ export default function ProfileScreen() {
                             <Text style={styles.detailPillText}>{song.difficulty}</Text>
                         </View>
                         <View style={styles.detailPill}>
-                            <Text style={styles.detailPillText}>{song.isImported ? 'Imported' : 'Built-In'}</Text>
+                            <Text style={styles.detailPillText}>
+                                {song.isImported ? 'Imported' : 'Built-In'}
+                            </Text>
                         </View>
                     </View>
                 </View>
@@ -515,7 +580,9 @@ export default function ProfileScreen() {
                 <View style={styles.detailMetricRow}>
                     <View style={styles.detailMetricCard}>
                         <Text style={styles.detailMetricLabel}>Duration</Text>
-                        <Text style={styles.detailMetricValue}>{formatDuration(song.durationSec)}</Text>
+                        <Text style={styles.detailMetricValue}>
+                            {formatDuration(song.durationSec)}
+                        </Text>
                     </View>
                     <View style={styles.detailMetricCard}>
                         <Text style={styles.detailMetricLabel}>Chords</Text>
@@ -541,7 +608,10 @@ export default function ProfileScreen() {
                         : 'Saved in the Songs tab, but not completed yet.'}
                 </Text>
 
-                <TouchableOpacity style={styles.detailActionButton} onPress={() => openSongFromProfile(song.id)}>
+                <TouchableOpacity
+                    style={styles.detailActionButton}
+                    onPress={() => openSongFromProfile(song.id)}
+                >
                     <Ionicons name="play-outline" size={16} color={COLORS.panelAlt} />
                     <Text style={styles.detailActionButtonText}>Open in Song Flow</Text>
                 </TouchableOpacity>
@@ -587,9 +657,14 @@ export default function ProfileScreen() {
                     </View>
                 ))}
             </View>
-            {song.markers.length > 8 ? <Text style={styles.detailHint}>Showing the first 8 saved section markers.</Text> : null}
+            {song.markers.length > 8 ? (
+                <Text style={styles.detailHint}>Showing the first 8 saved section markers.</Text>
+            ) : null}
 
-            <TouchableOpacity style={styles.detailActionButton} onPress={() => openStudioSave(song)}>
+            <TouchableOpacity
+                style={styles.detailActionButton}
+                onPress={() => openStudioSave(song)}
+            >
                 <Ionicons name="pulse-outline" size={16} color={COLORS.panelAlt} />
                 <Text style={styles.detailActionButtonText}>Open in Studio</Text>
             </TouchableOpacity>
@@ -609,10 +684,16 @@ export default function ProfileScreen() {
                         end={{ x: 1, y: 1 }}
                         style={styles.badgeDetailIconWrap}
                     >
-                        <Ionicons name={visual.icon} size={26} color={unlocked ? COLORS.panelAlt : COLORS.textDim} />
+                        <Ionicons
+                            name={visual.icon}
+                            size={26}
+                            color={unlocked ? COLORS.panelAlt : COLORS.textDim}
+                        />
                     </LinearGradient>
                     <View style={styles.badgeDetailTextWrap}>
-                        <Text style={styles.detailKicker}>{unlocked ? 'Unlocked badge' : 'Locked badge'}</Text>
+                        <Text style={styles.detailKicker}>
+                            {unlocked ? 'Unlocked badge' : 'Locked badge'}
+                        </Text>
                         <Text style={styles.detailTitle}>{badge.title}</Text>
                         <Text style={styles.detailSubtitle}>{badge.description}</Text>
                     </View>
@@ -648,11 +729,21 @@ export default function ProfileScreen() {
                     <View style={styles.headerRow}>
                         <View style={styles.headerTextWrap}>
                             <Text style={styles.title}>Profile</Text>
-                            <Text style={styles.subTitle}>Your stats, streaks, saved work, badges, and app setup all in one place.</Text>
+                            <Text style={styles.subTitle}>
+                                Your stats, streaks, saved work, badges, and app setup all in one
+                                place.
+                            </Text>
                         </View>
                         <View style={styles.headerActions}>
-                            <TouchableOpacity style={styles.signOutButton} onPress={() => void handleSignOut()}>
-                                <Ionicons name="log-out-outline" size={16} color={COLORS.textStrong} />
+                            <TouchableOpacity
+                                style={styles.signOutButton}
+                                onPress={() => void handleSignOut()}
+                            >
+                                <Ionicons
+                                    name="log-out-outline"
+                                    size={16}
+                                    color={COLORS.textStrong}
+                                />
                                 <Text style={styles.signOutButtonText}>Sign out</Text>
                             </TouchableOpacity>
                             <ScreenSettingsButton onPress={scrollToSettings} />
@@ -674,11 +765,18 @@ export default function ProfileScreen() {
                     {isInitialLoading ? (
                         <>
                             <View style={styles.heroCard}>
-                                <SkeletonBlock style={{ width: 72, height: 12, marginBottom: 10 }} />
-                                <SkeletonBlock style={{ width: '72%', height: 46, marginBottom: 14 }} />
+                                <SkeletonBlock
+                                    style={{ width: 72, height: 12, marginBottom: 10 }}
+                                />
+                                <SkeletonBlock
+                                    style={{ width: '72%', height: 46, marginBottom: 14 }}
+                                />
                                 <View style={styles.heroStatsRow}>
                                     {[0, 1, 2].map((index) => (
-                                        <SkeletonBlock key={`hero-skeleton-${index}`} style={{ flex: 1, height: 62 }} />
+                                        <SkeletonBlock
+                                            key={`hero-skeleton-${index}`}
+                                            style={{ flex: 1, height: 62 }}
+                                        />
                                     ))}
                                 </View>
                             </View>
@@ -686,17 +784,26 @@ export default function ProfileScreen() {
                             <View style={styles.statGrid}>
                                 {Array.from({ length: 8 }).map((_, index) => (
                                     <View key={`stat-skeleton-${index}`} style={styles.statCard}>
-                                        <SkeletonBlock style={{ width: '36%', height: 10, marginBottom: 8 }} />
+                                        <SkeletonBlock
+                                            style={{ width: '36%', height: 10, marginBottom: 8 }}
+                                        />
                                         <SkeletonBlock style={{ width: '58%', height: 20 }} />
                                     </View>
                                 ))}
                             </View>
 
                             <View style={styles.libraryCard}>
-                                <SkeletonBlock style={{ width: 120, height: 16, marginBottom: 8 }} />
-                                <SkeletonBlock style={{ width: '84%', height: 12, marginBottom: 14 }} />
+                                <SkeletonBlock
+                                    style={{ width: 120, height: 16, marginBottom: 8 }}
+                                />
+                                <SkeletonBlock
+                                    style={{ width: '84%', height: 12, marginBottom: 14 }}
+                                />
                                 {[0, 1, 2].map((index) => (
-                                    <SkeletonBlock key={`library-skeleton-${index}`} style={{ height: 72, marginBottom: index === 2 ? 0 : 10 }} />
+                                    <SkeletonBlock
+                                        key={`library-skeleton-${index}`}
+                                        style={{ height: 72, marginBottom: index === 2 ? 0 : 10 }}
+                                    />
                                 ))}
                             </View>
                         </>
@@ -715,23 +822,35 @@ export default function ProfileScreen() {
                                         />
                                     </View>
 
-                                    <TouchableOpacity style={styles.saveButton} onPress={() => void handleSaveName()}>
-                                        <Text style={styles.saveButtonText}>{isSavingName ? 'Saving...' : 'Save'}</Text>
+                                    <TouchableOpacity
+                                        style={styles.saveButton}
+                                        onPress={() => void handleSaveName()}
+                                    >
+                                        <Text style={styles.saveButtonText}>
+                                            {isSavingName ? 'Saving...' : 'Save'}
+                                        </Text>
                                     </TouchableOpacity>
                                 </View>
 
                                 <View style={styles.heroStatsRow}>
                                     <View style={styles.heroMetric}>
                                         <Text style={styles.heroMetricLabel}>Rank</Text>
-                                        <Text style={styles.heroMetricValue}>{userRank ?? '--'}</Text>
+                                        <Text style={styles.heroMetricValue}>
+                                            {userRank ?? '--'}
+                                        </Text>
                                     </View>
                                     <View style={styles.heroMetric}>
                                         <Text style={styles.heroMetricLabel}>Goal</Text>
-                                        <Text style={styles.heroMetricValue}>{settings?.practiceGoalMinutes ?? 20} min</Text>
+                                        <Text style={styles.heroMetricValue}>
+                                            {settings?.practiceGoalMinutes ?? 20} min
+                                        </Text>
                                     </View>
                                     <View style={styles.heroMetric}>
                                         <Text style={styles.heroMetricLabel}>Songs</Text>
-                                        <Text style={styles.heroMetricValue}>{snapshot?.completedSongIds.length ?? 0}/{SONG_LESSONS.length}</Text>
+                                        <Text style={styles.heroMetricValue}>
+                                            {snapshot?.completedSongIds.length ?? 0}/
+                                            {SONG_LESSONS.length}
+                                        </Text>
                                     </View>
                                 </View>
                             </View>
@@ -747,33 +866,48 @@ export default function ProfileScreen() {
                                 </View>
                                 <View style={styles.statCard}>
                                     <Text style={styles.statLabel}>Streak</Text>
-                                    <Text style={styles.statValue}>{snapshot?.streakDays ?? 0}</Text>
+                                    <Text style={styles.statValue}>
+                                        {snapshot?.streakDays ?? 0}
+                                    </Text>
                                 </View>
                                 <View style={styles.statCard}>
                                     <Text style={styles.statLabel}>Longest</Text>
-                                    <Text style={styles.statValue}>{snapshot?.longestStreak ?? 0}</Text>
+                                    <Text style={styles.statValue}>
+                                        {snapshot?.longestStreak ?? 0}
+                                    </Text>
                                 </View>
                                 <View style={styles.statCard}>
                                     <Text style={styles.statLabel}>Lessons</Text>
-                                    <Text style={styles.statValue}>{snapshot?.completedLessonIds.length ?? 0}</Text>
+                                    <Text style={styles.statValue}>
+                                        {snapshot?.completedLessonIds.length ?? 0}
+                                    </Text>
                                 </View>
                                 <View style={styles.statCard}>
                                     <Text style={styles.statLabel}>Quiz Wins</Text>
-                                    <Text style={styles.statValue}>{snapshot?.completedQuizIds.length ?? 0}</Text>
+                                    <Text style={styles.statValue}>
+                                        {snapshot?.completedQuizIds.length ?? 0}
+                                    </Text>
                                 </View>
                                 <View style={styles.statCard}>
                                     <Text style={styles.statLabel}>Songs</Text>
-                                    <Text style={styles.statValue}>{snapshot?.completedSongIds.length ?? 0}</Text>
+                                    <Text style={styles.statValue}>
+                                        {snapshot?.completedSongIds.length ?? 0}
+                                    </Text>
                                 </View>
                                 <View style={styles.statCard}>
                                     <Text style={styles.statLabel}>Badges</Text>
-                                    <Text style={styles.statValue}>{snapshot?.unlockedBadgeIds.length ?? 0}</Text>
+                                    <Text style={styles.statValue}>
+                                        {snapshot?.unlockedBadgeIds.length ?? 0}
+                                    </Text>
                                 </View>
                             </View>
 
                             <View style={styles.libraryCard}>
                                 <Text style={styles.libraryTitle}>Your Libraries</Text>
-                                <Text style={styles.librarySubtitle}>These buttons open the things you have saved, completed, or can still unlock.</Text>
+                                <Text style={styles.librarySubtitle}>
+                                    These buttons open the things you have saved, completed, or can
+                                    still unlock.
+                                </Text>
 
                                 <View style={styles.libraryButtonColumn}>
                                     <LibraryButton
@@ -802,185 +936,372 @@ export default function ProfileScreen() {
                                     />
                                 </View>
 
-                    {activeShelf === 'lessons' ? (
-                        <View style={styles.shelfCard}>
-                            <View style={styles.shelfHeaderRow}>
-                                <View>
-                                    <Text style={styles.shelfTitle}>Completed Lessons</Text>
-                                    <Text style={styles.shelfSubtitle}>{completedLessons.length} of {LESSON_PACKS.length} lessons finished</Text>
-                                </View>
-                            </View>
-
-                            {completedLessons.length === 0 ? (
-                                <View style={styles.emptyState}>
-                                    <Text style={styles.emptyStateTitle}>No completed lessons yet</Text>
-                                    <Text style={styles.emptyStateBody}>Finish a lesson in Theory and it will appear here with its details.</Text>
-                                </View>
-                            ) : (
-                                <>
-                                    <View style={styles.listColumn}>
-                                        {completedLessons.map((lesson) => {
-                                            const active = lesson.id === selectedLessonId;
-                                            return (
-                                                <TouchableOpacity
-                                                    key={lesson.id}
-                                                    style={[styles.listItem, active && styles.listItemActive]}
-                                                    onPress={() => setSelectedLessonId(lesson.id)}
-                                                >
-                                                    <View style={styles.listIconWrap}>
-                                                        <Ionicons name="school-outline" size={18} color={COLORS.primary} />
-                                                    </View>
-                                                    <View style={styles.listItemBody}>
-                                                        <Text style={styles.listItemTitle}>{lesson.title}</Text>
-                                                        <Text style={styles.listItemMeta}>{lesson.instrument} • {lesson.tier} • {lesson.durationMin} min</Text>
-                                                    </View>
-                                                    <Ionicons name="chevron-forward" size={18} color={COLORS.textDim} />
-                                                </TouchableOpacity>
-                                            );
-                                        })}
-                                    </View>
-                                    {selectedLesson ? renderLessonDetail(selectedLesson) : null}
-                                </>
-                            )}
-                        </View>
-                    ) : null}
-
-                    {activeShelf === 'songs' ? (
-                        <View style={styles.shelfCard}>
-                            <View style={styles.songModeRow}>
-                                <TouchableOpacity
-                                    style={[styles.songModeChip, activeSongMode === 'flow' && styles.songModeChipActive]}
-                                    onPress={() => setActiveSongMode('flow')}
-                                >
-                                    <Text style={[styles.songModeChipText, activeSongMode === 'flow' && styles.songModeChipTextActive]}>
-                                        Song Flow ({flowSongs.length})
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.songModeChip, activeSongMode === 'studio' && styles.songModeChipActive]}
-                                    onPress={() => setActiveSongMode('studio')}
-                                >
-                                    <Text style={[styles.songModeChipText, activeSongMode === 'studio' && styles.songModeChipTextActive]}>
-                                        Studio ({keyedStudioSaves.length})
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            {activeSongMode === 'flow' ? (
-                                flowSongs.length === 0 ? (
-                                    <View style={styles.emptyState}>
-                                        <Text style={styles.emptyStateTitle}>No Song Flow saves yet</Text>
-                                        <Text style={styles.emptyStateBody}>Import a song in the Songs tab or complete a built-in song and it will show up here.</Text>
-                                    </View>
-                                ) : (
-                                    <>
-                                        <View style={styles.listColumn}>
-                                            {flowSongs.map((song) => {
-                                                const active = song.id === selectedFlowSongId;
-                                                return (
-                                                    <TouchableOpacity
-                                                        key={song.id}
-                                                        style={[styles.listItem, active && styles.listItemActive]}
-                                                        onPress={() => setSelectedFlowSongId(song.id)}
-                                                    >
-                                                        <View style={styles.listIconWrap}>
-                                                            <Ionicons name="musical-notes-outline" size={18} color={COLORS.primary} />
-                                                        </View>
-                                                        <View style={styles.listItemBody}>
-                                                            <Text style={styles.listItemTitle}>{song.title}</Text>
-                                                            <Text style={styles.listItemMeta}>
-                                                                {song.artist} • {song.isImported ? 'Imported' : 'Built-In'} • {song.difficulty}
-                                                            </Text>
-                                                        </View>
-                                                        <Ionicons name="chevron-forward" size={18} color={COLORS.textDim} />
-                                                    </TouchableOpacity>
-                                                );
-                                            })}
+                                {activeShelf === 'lessons' ? (
+                                    <View style={styles.shelfCard}>
+                                        <View style={styles.shelfHeaderRow}>
+                                            <View>
+                                                <Text style={styles.shelfTitle}>
+                                                    Completed Lessons
+                                                </Text>
+                                                <Text style={styles.shelfSubtitle}>
+                                                    {completedLessons.length} of{' '}
+                                                    {LESSON_PACKS.length} lessons finished
+                                                </Text>
+                                            </View>
                                         </View>
-                                        {selectedFlowSong ? renderFlowSongDetail(selectedFlowSong) : null}
-                                    </>
-                                )
-                            ) : null}
 
-                            {activeSongMode === 'studio' ? (
-                                keyedStudioSaves.length === 0 ? (
-                                    <View style={styles.emptyState}>
-                                        <Text style={styles.emptyStateTitle}>No Studio saves yet</Text>
-                                        <Text style={styles.emptyStateBody}>Save a traffic study from Studio and it will show up here under your profile.</Text>
-                                    </View>
-                                ) : (
-                                    <>
-                                        <View style={styles.listColumn}>
-                                            {keyedStudioSaves.map((song) => {
-                                                const active = song.key === selectedStudioSongKey;
-                                                return (
-                                                    <TouchableOpacity
-                                                        key={song.key}
-                                                        style={[styles.listItem, active && styles.listItemActive]}
-                                                        onPress={() => setSelectedStudioSongKey(song.key)}
-                                                    >
-                                                        <View style={styles.listIconWrap}>
-                                                            <Ionicons name="albums-outline" size={18} color={COLORS.primary} />
-                                                        </View>
-                                                        <View style={styles.listItemBody}>
-                                                            <Text style={styles.listItemTitle}>{song.songName}</Text>
-                                                            <Text style={styles.listItemMeta}>{song.markers.length} markers • {formatSavedAt(song.createdAt)}</Text>
-                                                        </View>
-                                                        <Ionicons name="chevron-forward" size={18} color={COLORS.textDim} />
-                                                    </TouchableOpacity>
-                                                );
-                                            })}
-                                        </View>
-                                        {selectedStudioSong ? renderStudioSongDetail(selectedStudioSong) : null}
-                                    </>
-                                )
-                            ) : null}
-                        </View>
-                    ) : null}
-
-                    {activeShelf === 'badges' ? (
-                        <View style={styles.shelfCard}>
-                            <Text style={styles.shelfTitle}>Badge Wall</Text>
-                            <Text style={styles.shelfSubtitle}>Locked badges stay black and white. Unlocked badges light up in color.</Text>
-
-                            <View style={styles.badgeGrid}>
-                                {BADGE_DEFINITIONS.map((badge) => {
-                                    const unlocked = unlockedBadgeIds.has(badge.id);
-                                    const active = selectedBadgeId === badge.id;
-                                    const visual = BADGE_VISUALS[badge.id] ?? BADGE_VISUALS.first_song;
-
-                                    return (
-                                        <TouchableOpacity
-                                            key={badge.id}
-                                            style={[styles.badgeTileOuter, active && styles.badgeTileOuterActive]}
-                                            onPress={() => setSelectedBadgeId(badge.id)}
-                                        >
-                                            {unlocked ? (
-                                                <LinearGradient
-                                                    colors={[visual.start, visual.end]}
-                                                    start={{ x: 0, y: 0 }}
-                                                    end={{ x: 1, y: 1 }}
-                                                    style={styles.badgeTile}
-                                                >
-                                                    <Ionicons name={visual.icon} size={22} color={COLORS.panelAlt} />
-                                                    <Text style={styles.badgeTileTitleUnlocked}>{badge.title}</Text>
-                                                    <Text style={styles.badgeTileStatusUnlocked}>Unlocked</Text>
-                                                </LinearGradient>
-                                            ) : (
-                                                <View style={[styles.badgeTile, styles.badgeTileLocked]}>
-                                                    <Ionicons name={visual.icon} size={22} color={COLORS.textDim} />
-                                                    <Text style={styles.badgeTileTitleLocked}>{badge.title}</Text>
-                                                    <Text style={styles.badgeTileStatusLocked}>Locked</Text>
+                                        {completedLessons.length === 0 ? (
+                                            <View style={styles.emptyState}>
+                                                <Text style={styles.emptyStateTitle}>
+                                                    No completed lessons yet
+                                                </Text>
+                                                <Text style={styles.emptyStateBody}>
+                                                    Finish a lesson in Theory and it will appear
+                                                    here with its details.
+                                                </Text>
+                                            </View>
+                                        ) : (
+                                            <>
+                                                <View style={styles.listColumn}>
+                                                    {completedLessons.map((lesson) => {
+                                                        const active =
+                                                            lesson.id === selectedLessonId;
+                                                        return (
+                                                            <TouchableOpacity
+                                                                key={lesson.id}
+                                                                style={[
+                                                                    styles.listItem,
+                                                                    active && styles.listItemActive,
+                                                                ]}
+                                                                onPress={() =>
+                                                                    setSelectedLessonId(lesson.id)
+                                                                }
+                                                            >
+                                                                <View style={styles.listIconWrap}>
+                                                                    <Ionicons
+                                                                        name="school-outline"
+                                                                        size={18}
+                                                                        color={COLORS.primary}
+                                                                    />
+                                                                </View>
+                                                                <View style={styles.listItemBody}>
+                                                                    <Text
+                                                                        style={styles.listItemTitle}
+                                                                    >
+                                                                        {lesson.title}
+                                                                    </Text>
+                                                                    <Text
+                                                                        style={styles.listItemMeta}
+                                                                    >
+                                                                        {lesson.instrument} •{' '}
+                                                                        {lesson.tier} •{' '}
+                                                                        {lesson.durationMin} min
+                                                                    </Text>
+                                                                </View>
+                                                                <Ionicons
+                                                                    name="chevron-forward"
+                                                                    size={18}
+                                                                    color={COLORS.textDim}
+                                                                />
+                                                            </TouchableOpacity>
+                                                        );
+                                                    })}
                                                 </View>
-                                            )}
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
+                                                {selectedLesson
+                                                    ? renderLessonDetail(selectedLesson)
+                                                    : null}
+                                            </>
+                                        )}
+                                    </View>
+                                ) : null}
 
-                            {selectedBadge ? renderBadgeDetail(selectedBadge) : null}
-                        </View>
-                    ) : null}
+                                {activeShelf === 'songs' ? (
+                                    <View style={styles.shelfCard}>
+                                        <View style={styles.songModeRow}>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.songModeChip,
+                                                    activeSongMode === 'flow' &&
+                                                        styles.songModeChipActive,
+                                                ]}
+                                                onPress={() => setActiveSongMode('flow')}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.songModeChipText,
+                                                        activeSongMode === 'flow' &&
+                                                            styles.songModeChipTextActive,
+                                                    ]}
+                                                >
+                                                    Song Flow ({flowSongs.length})
+                                                </Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.songModeChip,
+                                                    activeSongMode === 'studio' &&
+                                                        styles.songModeChipActive,
+                                                ]}
+                                                onPress={() => setActiveSongMode('studio')}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.songModeChipText,
+                                                        activeSongMode === 'studio' &&
+                                                            styles.songModeChipTextActive,
+                                                    ]}
+                                                >
+                                                    Studio ({keyedStudioSaves.length})
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        {activeSongMode === 'flow' ? (
+                                            flowSongs.length === 0 ? (
+                                                <View style={styles.emptyState}>
+                                                    <Text style={styles.emptyStateTitle}>
+                                                        No Song Flow saves yet
+                                                    </Text>
+                                                    <Text style={styles.emptyStateBody}>
+                                                        Import a song in the Songs tab or complete a
+                                                        built-in song and it will show up here.
+                                                    </Text>
+                                                </View>
+                                            ) : (
+                                                <>
+                                                    <View style={styles.listColumn}>
+                                                        {flowSongs.map((song) => {
+                                                            const active =
+                                                                song.id === selectedFlowSongId;
+                                                            return (
+                                                                <TouchableOpacity
+                                                                    key={song.id}
+                                                                    style={[
+                                                                        styles.listItem,
+                                                                        active &&
+                                                                            styles.listItemActive,
+                                                                    ]}
+                                                                    onPress={() =>
+                                                                        setSelectedFlowSongId(
+                                                                            song.id,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <View
+                                                                        style={styles.listIconWrap}
+                                                                    >
+                                                                        <Ionicons
+                                                                            name="musical-notes-outline"
+                                                                            size={18}
+                                                                            color={COLORS.primary}
+                                                                        />
+                                                                    </View>
+                                                                    <View
+                                                                        style={styles.listItemBody}
+                                                                    >
+                                                                        <Text
+                                                                            style={
+                                                                                styles.listItemTitle
+                                                                            }
+                                                                        >
+                                                                            {song.title}
+                                                                        </Text>
+                                                                        <Text
+                                                                            style={
+                                                                                styles.listItemMeta
+                                                                            }
+                                                                        >
+                                                                            {song.artist} •{' '}
+                                                                            {song.isImported
+                                                                                ? 'Imported'
+                                                                                : 'Built-In'}{' '}
+                                                                            • {song.difficulty}
+                                                                        </Text>
+                                                                    </View>
+                                                                    <Ionicons
+                                                                        name="chevron-forward"
+                                                                        size={18}
+                                                                        color={COLORS.textDim}
+                                                                    />
+                                                                </TouchableOpacity>
+                                                            );
+                                                        })}
+                                                    </View>
+                                                    {selectedFlowSong
+                                                        ? renderFlowSongDetail(selectedFlowSong)
+                                                        : null}
+                                                </>
+                                            )
+                                        ) : null}
+
+                                        {activeSongMode === 'studio' ? (
+                                            keyedStudioSaves.length === 0 ? (
+                                                <View style={styles.emptyState}>
+                                                    <Text style={styles.emptyStateTitle}>
+                                                        No Studio saves yet
+                                                    </Text>
+                                                    <Text style={styles.emptyStateBody}>
+                                                        Save a traffic study from Studio and it will
+                                                        show up here under your profile.
+                                                    </Text>
+                                                </View>
+                                            ) : (
+                                                <>
+                                                    <View style={styles.listColumn}>
+                                                        {keyedStudioSaves.map((song) => {
+                                                            const active =
+                                                                song.key === selectedStudioSongKey;
+                                                            return (
+                                                                <TouchableOpacity
+                                                                    key={song.key}
+                                                                    style={[
+                                                                        styles.listItem,
+                                                                        active &&
+                                                                            styles.listItemActive,
+                                                                    ]}
+                                                                    onPress={() =>
+                                                                        setSelectedStudioSongKey(
+                                                                            song.key,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <View
+                                                                        style={styles.listIconWrap}
+                                                                    >
+                                                                        <Ionicons
+                                                                            name="albums-outline"
+                                                                            size={18}
+                                                                            color={COLORS.primary}
+                                                                        />
+                                                                    </View>
+                                                                    <View
+                                                                        style={styles.listItemBody}
+                                                                    >
+                                                                        <Text
+                                                                            style={
+                                                                                styles.listItemTitle
+                                                                            }
+                                                                        >
+                                                                            {song.songName}
+                                                                        </Text>
+                                                                        <Text
+                                                                            style={
+                                                                                styles.listItemMeta
+                                                                            }
+                                                                        >
+                                                                            {song.markers.length}{' '}
+                                                                            markers •{' '}
+                                                                            {formatSavedAt(
+                                                                                song.createdAt,
+                                                                            )}
+                                                                        </Text>
+                                                                    </View>
+                                                                    <Ionicons
+                                                                        name="chevron-forward"
+                                                                        size={18}
+                                                                        color={COLORS.textDim}
+                                                                    />
+                                                                </TouchableOpacity>
+                                                            );
+                                                        })}
+                                                    </View>
+                                                    {selectedStudioSong
+                                                        ? renderStudioSongDetail(selectedStudioSong)
+                                                        : null}
+                                                </>
+                                            )
+                                        ) : null}
+                                    </View>
+                                ) : null}
+
+                                {activeShelf === 'badges' ? (
+                                    <View style={styles.shelfCard}>
+                                        <Text style={styles.shelfTitle}>Badge Wall</Text>
+                                        <Text style={styles.shelfSubtitle}>
+                                            Locked badges stay black and white. Unlocked badges
+                                            light up in color.
+                                        </Text>
+
+                                        <View style={styles.badgeGrid}>
+                                            {BADGE_DEFINITIONS.map((badge) => {
+                                                const unlocked = unlockedBadgeIds.has(badge.id);
+                                                const active = selectedBadgeId === badge.id;
+                                                const visual =
+                                                    BADGE_VISUALS[badge.id] ??
+                                                    BADGE_VISUALS.first_song;
+
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={badge.id}
+                                                        style={[
+                                                            styles.badgeTileOuter,
+                                                            active && styles.badgeTileOuterActive,
+                                                        ]}
+                                                        onPress={() => setSelectedBadgeId(badge.id)}
+                                                    >
+                                                        {unlocked ? (
+                                                            <LinearGradient
+                                                                colors={[visual.start, visual.end]}
+                                                                start={{ x: 0, y: 0 }}
+                                                                end={{ x: 1, y: 1 }}
+                                                                style={styles.badgeTile}
+                                                            >
+                                                                <Ionicons
+                                                                    name={visual.icon}
+                                                                    size={22}
+                                                                    color={COLORS.panelAlt}
+                                                                />
+                                                                <Text
+                                                                    style={
+                                                                        styles.badgeTileTitleUnlocked
+                                                                    }
+                                                                >
+                                                                    {badge.title}
+                                                                </Text>
+                                                                <Text
+                                                                    style={
+                                                                        styles.badgeTileStatusUnlocked
+                                                                    }
+                                                                >
+                                                                    Unlocked
+                                                                </Text>
+                                                            </LinearGradient>
+                                                        ) : (
+                                                            <View
+                                                                style={[
+                                                                    styles.badgeTile,
+                                                                    styles.badgeTileLocked,
+                                                                ]}
+                                                            >
+                                                                <Ionicons
+                                                                    name={visual.icon}
+                                                                    size={22}
+                                                                    color={COLORS.textDim}
+                                                                />
+                                                                <Text
+                                                                    style={
+                                                                        styles.badgeTileTitleLocked
+                                                                    }
+                                                                >
+                                                                    {badge.title}
+                                                                </Text>
+                                                                <Text
+                                                                    style={
+                                                                        styles.badgeTileStatusLocked
+                                                                    }
+                                                                >
+                                                                    Locked
+                                                                </Text>
+                                                            </View>
+                                                        )}
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
+
+                                        {selectedBadge ? renderBadgeDetail(selectedBadge) : null}
+                                    </View>
+                                ) : null}
                             </View>
                         </>
                     )}
@@ -1000,162 +1321,325 @@ export default function ProfileScreen() {
                         style={styles.settingsCard}
                         onLayout={(event) => setSettingsOffsetY(event.nativeEvent.layout.y)}
                     >
-                    <Text style={styles.settingsTitle}>Settings</Text>
-                    <Text style={styles.settingsSubtitle}>Real controls for each tab, all saved locally.</Text>
+                        <Text style={styles.settingsTitle}>Settings</Text>
+                        <Text style={styles.settingsSubtitle}>
+                            Real controls for each tab, all saved locally.
+                        </Text>
 
-                    <View style={styles.settingsSectionCard}>
-                        <Text style={styles.settingsSectionTitle}>General</Text>
-                        <SettingRow
-                            label="Haptics"
-                            description="Use touch feedback on timing hits and misses."
-                            value={settings?.hapticsEnabled ?? true}
-                            onChange={(value) => void updateSetting('hapticsEnabled', value)}
-                        />
-                        <SettingRow
-                            label="Leaderboard sync"
-                            description="Send profile progress to the backend leaderboard."
-                            value={settings?.leaderboardSyncEnabled ?? true}
-                            onChange={(value) => void updateSetting('leaderboardSyncEnabled', value)}
-                        />
-                        <View style={styles.goalWrap}>
-                            <Text style={styles.goalTitle}>Daily practice goal</Text>
-                            <View style={styles.goalRow}>
-                                {GOAL_OPTIONS.map((goal) => {
-                                    const active = settings?.practiceGoalMinutes === goal;
-                                    return (
-                                        <TouchableOpacity
-                                            key={goal}
-                                            style={[styles.goalChip, active && styles.goalChipActive]}
-                                            onPress={() => void updateSetting('practiceGoalMinutes', goal)}
-                                        >
-                                            <Text style={[styles.goalChipText, active && styles.goalChipTextActive]}>{goal} min</Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
+                        <View style={styles.settingsSectionCard}>
+                            <Text style={styles.settingsSectionTitle}>General</Text>
+                            <SettingRow
+                                label="Haptics"
+                                description="Use touch feedback on timing hits and misses."
+                                value={settings?.hapticsEnabled ?? true}
+                                onChange={(value) => void updateSetting('hapticsEnabled', value)}
+                            />
+                            <SettingRow
+                                label="Leaderboard sync"
+                                description="Send profile progress to the backend leaderboard."
+                                value={settings?.leaderboardSyncEnabled ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('leaderboardSyncEnabled', value)
+                                }
+                            />
+                            <View style={styles.goalWrap}>
+                                <Text style={styles.goalTitle}>Daily practice goal</Text>
+                                <View style={styles.goalRow}>
+                                    {GOAL_OPTIONS.map((goal) => {
+                                        const active = settings?.practiceGoalMinutes === goal;
+                                        return (
+                                            <TouchableOpacity
+                                                key={goal}
+                                                style={[
+                                                    styles.goalChip,
+                                                    active && styles.goalChipActive,
+                                                ]}
+                                                onPress={() =>
+                                                    void updateSetting('practiceGoalMinutes', goal)
+                                                }
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.goalChipText,
+                                                        active && styles.goalChipTextActive,
+                                                    ]}
+                                                >
+                                                    {goal} min
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
                             </View>
                         </View>
-                    </View>
 
-                    <View style={styles.settingsSectionCard}>
-                        <Text style={styles.settingsSectionTitle}>Theory Tab</Text>
-                        <SettingRow
-                            label="Lesson animations"
-                            description="Show animated finger and motion guides in lesson visuals."
-                            value={settings?.showLessonAnimations ?? true}
-                            onChange={(value) => void updateSetting('showLessonAnimations', value)}
-                        />
-                        <SettingRow
-                            label="Show game deck"
-                            description="Show the streak, badge, and leaderboard deck at the top of Theory."
-                            value={settings?.theoryShowGamificationDeck ?? true}
-                            onChange={(value) => void updateSetting('theoryShowGamificationDeck', value)}
-                        />
-                        <SettingRow
-                            label="Quiz explanation card"
-                            description="Show the explanation card after answering a theory question."
-                            value={settings?.theoryShowQuizExplanation ?? true}
-                            onChange={(value) => void updateSetting('theoryShowQuizExplanation', value)}
-                        />
-                    </View>
+                        <View style={styles.settingsSectionCard}>
+                            <View style={styles.diagnosticsHeaderRow}>
+                                <View style={styles.diagnosticsTitleWrap}>
+                                    <Text style={styles.settingsSectionTitle}>
+                                        Backend diagnostics
+                                    </Text>
+                                    <Text style={styles.diagnosticsSubtitle}>
+                                        Verify the Expo app can reach the configured API.
+                                    </Text>
+                                </View>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.diagnosticsButton,
+                                        isCheckingApiDiagnostics &&
+                                            styles.diagnosticsButtonDisabled,
+                                    ]}
+                                    disabled={isCheckingApiDiagnostics}
+                                    onPress={() => void runApiDiagnostics()}
+                                >
+                                    <Text style={styles.diagnosticsButtonText}>
+                                        {isCheckingApiDiagnostics
+                                            ? 'Checking...'
+                                            : 'Run check again'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
 
-                    <View style={styles.settingsSectionCard}>
-                        <Text style={styles.settingsSectionTitle}>Practice Tab</Text>
-                        <SettingRow
-                            label="Backend pitch assist"
-                            description="Prefer backend pitch help in the tuner when local reads are shaky."
-                            value={settings?.practicePreferBackendPitchAssist ?? true}
-                            onChange={(value) => void updateSetting('practicePreferBackendPitchAssist', value)}
-                        />
-                        <SettingRow
-                            label="Show frequency readout"
-                            description="Display the incoming Hz value in the tuner info panel."
-                            value={settings?.practiceShowFrequencyReadout ?? true}
-                            onChange={(value) => void updateSetting('practiceShowFrequencyReadout', value)}
-                        />
-                        <SettingRow
-                            label="Show string helper"
-                            description="Keep the string target chips visible under the tuner."
-                            value={settings?.practiceShowStringHelper ?? true}
-                            onChange={(value) => void updateSetting('practiceShowStringHelper', value)}
-                        />
-                    </View>
+                            <View style={styles.diagnosticsGrid}>
+                                <View style={styles.diagnosticsMetric}>
+                                    <Text style={styles.diagnosticsLabel}>API base URL</Text>
+                                    <Text style={styles.diagnosticsValue}>
+                                        {apiDiagnostics?.baseUrl ?? 'Not configured'}
+                                    </Text>
+                                </View>
+                                <View style={styles.diagnosticsMetric}>
+                                    <Text style={styles.diagnosticsLabel}>Backend reachable</Text>
+                                    <Text
+                                        style={[
+                                            styles.diagnosticsValue,
+                                            apiDiagnostics?.ok
+                                                ? styles.diagnosticsOk
+                                                : styles.diagnosticsError,
+                                        ]}
+                                    >
+                                        {apiDiagnostics
+                                            ? apiDiagnostics.ok
+                                                ? 'Yes'
+                                                : 'No'
+                                            : 'Not checked'}
+                                    </Text>
+                                </View>
+                                <View style={styles.diagnosticsMetric}>
+                                    <Text style={styles.diagnosticsLabel}>Status code</Text>
+                                    <Text style={styles.diagnosticsValue}>
+                                        {apiDiagnostics?.statusCode ?? '--'}
+                                    </Text>
+                                </View>
+                                <View style={styles.diagnosticsMetric}>
+                                    <Text style={styles.diagnosticsLabel}>Latency</Text>
+                                    <Text style={styles.diagnosticsValue}>
+                                        {typeof apiDiagnostics?.latencyMs === 'number'
+                                            ? `${apiDiagnostics.latencyMs}ms`
+                                            : '--'}
+                                    </Text>
+                                </View>
+                                <View style={styles.diagnosticsMetric}>
+                                    <Text style={styles.diagnosticsLabel}>Service</Text>
+                                    <Text style={styles.diagnosticsValue}>
+                                        {apiDiagnostics?.ok
+                                            ? (apiDiagnostics.service ?? '--')
+                                            : '--'}
+                                    </Text>
+                                </View>
+                                <View style={styles.diagnosticsMetric}>
+                                    <Text style={styles.diagnosticsLabel}>Environment</Text>
+                                    <Text style={styles.diagnosticsValue}>
+                                        {apiDiagnostics?.ok
+                                            ? (apiDiagnostics.environment ?? '--')
+                                            : '--'}
+                                    </Text>
+                                </View>
+                                <View style={styles.diagnosticsMetric}>
+                                    <Text style={styles.diagnosticsLabel}>Version</Text>
+                                    <Text style={styles.diagnosticsValue}>
+                                        {apiDiagnostics?.ok
+                                            ? (apiDiagnostics.version ?? '--')
+                                            : '--'}
+                                    </Text>
+                                </View>
+                                <View style={styles.diagnosticsMetric}>
+                                    <Text style={styles.diagnosticsLabel}>Last checked</Text>
+                                    <Text style={styles.diagnosticsValue}>
+                                        {apiDiagnosticsCheckedAt ?? '--'}
+                                    </Text>
+                                </View>
+                            </View>
 
-                    <View style={styles.settingsSectionCard}>
-                        <Text style={styles.settingsSectionTitle}>Studio Tab</Text>
-                        <SettingRow
-                            label="Show coach note"
-                            description="Display the preset study note under the traffic study header."
-                            value={settings?.studioShowPresetNotes ?? true}
-                            onChange={(value) => void updateSetting('studioShowPresetNotes', value)}
-                        />
-                        <SettingRow
-                            label="Show focus hint"
-                            description="Keep the structure focus hint visible in the track block."
-                            value={settings?.studioShowFocusNotes ?? true}
-                            onChange={(value) => void updateSetting('studioShowFocusNotes', value)}
-                        />
-                        <SettingRow
-                            label="Quick markers"
-                            description="Show the fast INTRO / CHORUS / BRIDGE marker buttons."
-                            value={settings?.studioShowQuickMarkers ?? true}
-                            onChange={(value) => void updateSetting('studioShowQuickMarkers', value)}
-                        />
-                    </View>
+                            {apiDiagnostics && !apiDiagnostics.ok ? (
+                                <Text style={styles.diagnosticsMessage}>
+                                    {apiDiagnostics.message}
+                                </Text>
+                            ) : null}
+                        </View>
 
-                    <View style={styles.settingsSectionCard}>
-                        <Text style={styles.settingsSectionTitle}>Songs Tab</Text>
-                        <SettingRow
-                            label="Default to tabs"
-                            description="Open Song Flow in Tabs mode instead of Chords mode."
-                            value={settings?.songsPreferTabsDefault ?? false}
-                            onChange={(value) => void updateSetting('songsPreferTabsDefault', value)}
-                        />
-                        <SettingRow
-                            label="Show streak banner"
-                            description="Show the streak reminder banner above the song picker."
-                            value={settings?.songsShowStreakBanner ?? true}
-                            onChange={(value) => void updateSetting('songsShowStreakBanner', value)}
-                        />
-                        <SettingRow
-                            label="Backend pitch assist"
-                            description="Prefer backend pitch help during live listening in Songs."
-                            value={settings?.songsPreferBackendPitchAssist ?? true}
-                            onChange={(value) => void updateSetting('songsPreferBackendPitchAssist', value)}
-                        />
-                        <View style={styles.goalWrap}>
-                            <Text style={styles.goalTitle}>Seek jump size</Text>
-                            <View style={styles.goalRow}>
-                                {SEEK_STEP_OPTIONS.map((seconds) => {
-                                    const active = settings?.songsSeekStepSeconds === seconds;
-                                    return (
-                                        <TouchableOpacity
-                                            key={seconds}
-                                            style={[styles.goalChip, active && styles.goalChipActive]}
-                                            onPress={() => void updateSetting('songsSeekStepSeconds', seconds)}
-                                        >
-                                            <Text style={[styles.goalChipText, active && styles.goalChipTextActive]}>{seconds}s</Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
+                        <View style={styles.settingsSectionCard}>
+                            <Text style={styles.settingsSectionTitle}>Theory Tab</Text>
+                            <SettingRow
+                                label="Lesson animations"
+                                description="Show animated finger and motion guides in lesson visuals."
+                                value={settings?.showLessonAnimations ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('showLessonAnimations', value)
+                                }
+                            />
+                            <SettingRow
+                                label="Show game deck"
+                                description="Show the streak, badge, and leaderboard deck at the top of Theory."
+                                value={settings?.theoryShowGamificationDeck ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('theoryShowGamificationDeck', value)
+                                }
+                            />
+                            <SettingRow
+                                label="Quiz explanation card"
+                                description="Show the explanation card after answering a theory question."
+                                value={settings?.theoryShowQuizExplanation ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('theoryShowQuizExplanation', value)
+                                }
+                            />
+                        </View>
+
+                        <View style={styles.settingsSectionCard}>
+                            <Text style={styles.settingsSectionTitle}>Practice Tab</Text>
+                            <SettingRow
+                                label="Backend pitch assist"
+                                description="Prefer backend pitch help in the tuner when local reads are shaky."
+                                value={settings?.practicePreferBackendPitchAssist ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('practicePreferBackendPitchAssist', value)
+                                }
+                            />
+                            <SettingRow
+                                label="Show frequency readout"
+                                description="Display the incoming Hz value in the tuner info panel."
+                                value={settings?.practiceShowFrequencyReadout ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('practiceShowFrequencyReadout', value)
+                                }
+                            />
+                            <SettingRow
+                                label="Show string helper"
+                                description="Keep the string target chips visible under the tuner."
+                                value={settings?.practiceShowStringHelper ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('practiceShowStringHelper', value)
+                                }
+                            />
+                        </View>
+
+                        <View style={styles.settingsSectionCard}>
+                            <Text style={styles.settingsSectionTitle}>Studio Tab</Text>
+                            <SettingRow
+                                label="Show coach note"
+                                description="Display the preset study note under the traffic study header."
+                                value={settings?.studioShowPresetNotes ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('studioShowPresetNotes', value)
+                                }
+                            />
+                            <SettingRow
+                                label="Show focus hint"
+                                description="Keep the structure focus hint visible in the track block."
+                                value={settings?.studioShowFocusNotes ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('studioShowFocusNotes', value)
+                                }
+                            />
+                            <SettingRow
+                                label="Quick markers"
+                                description="Show the fast INTRO / CHORUS / BRIDGE marker buttons."
+                                value={settings?.studioShowQuickMarkers ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('studioShowQuickMarkers', value)
+                                }
+                            />
+                        </View>
+
+                        <View style={styles.settingsSectionCard}>
+                            <Text style={styles.settingsSectionTitle}>Songs Tab</Text>
+                            <SettingRow
+                                label="Default to tabs"
+                                description="Open Song Flow in Tabs mode instead of Chords mode."
+                                value={settings?.songsPreferTabsDefault ?? false}
+                                onChange={(value) =>
+                                    void updateSetting('songsPreferTabsDefault', value)
+                                }
+                            />
+                            <SettingRow
+                                label="Show streak banner"
+                                description="Show the streak reminder banner above the song picker."
+                                value={settings?.songsShowStreakBanner ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('songsShowStreakBanner', value)
+                                }
+                            />
+                            <SettingRow
+                                label="Backend pitch assist"
+                                description="Prefer backend pitch help during live listening in Songs."
+                                value={settings?.songsPreferBackendPitchAssist ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('songsPreferBackendPitchAssist', value)
+                                }
+                            />
+                            <View style={styles.goalWrap}>
+                                <Text style={styles.goalTitle}>Seek jump size</Text>
+                                <View style={styles.goalRow}>
+                                    {SEEK_STEP_OPTIONS.map((seconds) => {
+                                        const active = settings?.songsSeekStepSeconds === seconds;
+                                        return (
+                                            <TouchableOpacity
+                                                key={seconds}
+                                                style={[
+                                                    styles.goalChip,
+                                                    active && styles.goalChipActive,
+                                                ]}
+                                                onPress={() =>
+                                                    void updateSetting(
+                                                        'songsSeekStepSeconds',
+                                                        seconds,
+                                                    )
+                                                }
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.goalChipText,
+                                                        active && styles.goalChipTextActive,
+                                                    ]}
+                                                >
+                                                    {seconds}s
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
                             </View>
                         </View>
-                    </View>
 
-                    <View style={styles.settingsSectionCard}>
-                        <Text style={styles.settingsSectionTitle}>Profile Tab</Text>
-                        <SettingRow
-                            label="Show badge shelf"
-                            description="Keep the badge cards visible inside your profile deck."
-                            value={settings?.profileShowBadgeShelf ?? true}
-                            onChange={(value) => void updateSetting('profileShowBadgeShelf', value)}
-                        />
-                        <SettingRow
-                            label="Show leaderboard"
-                            description="Keep the leaderboard section visible inside your profile deck."
-                            value={settings?.profileShowLeaderboard ?? true}
-                            onChange={(value) => void updateSetting('profileShowLeaderboard', value)}
-                        />
-                    </View>
+                        <View style={styles.settingsSectionCard}>
+                            <Text style={styles.settingsSectionTitle}>Profile Tab</Text>
+                            <SettingRow
+                                label="Show badge shelf"
+                                description="Keep the badge cards visible inside your profile deck."
+                                value={settings?.profileShowBadgeShelf ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('profileShowBadgeShelf', value)
+                                }
+                            />
+                            <SettingRow
+                                label="Show leaderboard"
+                                description="Keep the leaderboard section visible inside your profile deck."
+                                value={settings?.profileShowLeaderboard ?? true}
+                                onChange={(value) =>
+                                    void updateSetting('profileShowLeaderboard', value)
+                                }
+                            />
+                        </View>
                     </View>
                 </ScrollView>
             </PageTransitionView>
@@ -1715,6 +2199,75 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '900',
         marginBottom: 10,
+    },
+    diagnosticsHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginBottom: 12,
+    },
+    diagnosticsTitleWrap: {
+        flex: 1,
+    },
+    diagnosticsSubtitle: {
+        color: COLORS.textDim,
+        fontSize: 12,
+        lineHeight: 18,
+    },
+    diagnosticsButton: {
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: COLORS.primary,
+        backgroundColor: withOpacity(COLORS.primary, 0.12),
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+    },
+    diagnosticsButtonDisabled: {
+        opacity: 0.6,
+    },
+    diagnosticsButtonText: {
+        color: COLORS.primary,
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    diagnosticsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    diagnosticsMetric: {
+        width: '48%',
+        minWidth: 130,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: COLORS.pixelLine,
+        backgroundColor: COLORS.panelAlt,
+        padding: 10,
+    },
+    diagnosticsLabel: {
+        color: COLORS.textDim,
+        fontSize: 10,
+        fontWeight: '800',
+        marginBottom: 5,
+        textTransform: 'uppercase',
+    },
+    diagnosticsValue: {
+        color: COLORS.textStrong,
+        fontSize: 12,
+        fontWeight: '800',
+    },
+    diagnosticsOk: {
+        color: COLORS.success,
+    },
+    diagnosticsError: {
+        color: COLORS.danger,
+    },
+    diagnosticsMessage: {
+        color: COLORS.textDim,
+        fontSize: 12,
+        lineHeight: 18,
+        marginTop: 12,
     },
     headerActions: {
         flexDirection: 'row',

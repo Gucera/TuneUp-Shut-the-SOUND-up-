@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Gitarını ve çaldığın notaları duymak için mikrofon iznine ihtiyacımız var."
+        "NSMicrophoneUsageDescription": "TuneUp uses the microphone for tuning, pitch detection, and live practice scoring."
       },
       "bundleIdentifier": "com.anonymous.MusicAIApp"
     },
@@ -38,7 +38,7 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Gitarını ve çaldığın notaları duymak için mikrofon iznine ihtiyacımız var."
+          "microphonePermission": "TuneUp uses the microphone for tuning, pitch detection, and live practice scoring."
         }
       ],
       "expo-font"
