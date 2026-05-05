@@ -13,6 +13,7 @@ const LESSON_INTRO_VIDEO = require('../images/videos/lesson-intro.mp4');
 
 export const IMAGE_ASSET_MAP = {
     guitar_carousel: GUITAR_CAROUSEL,
+    bass_carousel: GUITAR_CAROUSEL,
     piano_carousel: PIANO_CAROUSEL,
     drums_carousel: DRUMS_CAROUSEL,
     guitar_foundations_thumb: FOUNDATIONS_THUMB,

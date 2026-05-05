@@ -1,104 +1,185 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import PageTransitionView from '../components/PageTransitionView';
 import PremiumBackdrop from '../components/PremiumBackdrop';
-import InstrumentCarousel from '../components/InstrumentCarousel';
+import InstrumentCarousel, { InstrumentCarouselItem } from '../components/InstrumentCarousel';
 import LessonList from '../components/LessonList';
-import { LessonInstrument } from '../data/lessonLibrary';
+import { LessonInstrument, LESSON_PACK_COUNTS } from '../data/lessonLibrary';
 import type { LessonsStackParamList } from '../navigation/lessonStack';
 import { GamificationSnapshot, getGamificationSnapshot } from '../services/gamification';
 import {
     fetchLessonCatalog,
     LessonCatalogItem,
     LessonCategory,
-    LESSON_CATEGORY_LABELS,
 } from '../services/lessonCatalog';
 import type { AssetImageKey } from '../utils/AssetMap';
 import { COLORS, PREMIUM_GRADIENT, RADII, SHADOWS } from '../theme';
 
-const LESSON_INSTRUMENT_CONTENT: Record<LessonInstrument, {
+type LessonsStep = 'instrument_picker' | 'lesson_list';
+type LessonPath = LessonInstrument | 'Theory';
+type LessonLevelGroup = 'Beginner' | 'Intermediate' | 'Advanced';
+
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+interface LessonPathContent {
     eyebrow: string;
     subtitle: string;
+    listSubtitle: string;
+    emptyTitle: string;
+    emptyBody: string;
     imageKey: AssetImageKey;
-    iconName: 'musical-notes-outline' | 'keypad-outline' | 'radio-outline';
-}> = {
+    iconName: IconName;
+}
+
+const PRACTICAL_PATHS: LessonInstrument[] = ['Guitar', 'Bass', 'Piano', 'Drums'];
+const LEARNING_PATHS: LessonPath[] = [...PRACTICAL_PATHS, 'Theory'];
+const THEORY_CATEGORIES: LessonCategory[] = ['theory', 'quiz', 'game'];
+const LEVEL_GROUPS: LessonLevelGroup[] = ['Beginner', 'Intermediate', 'Advanced'];
+
+const LESSON_PATH_CONTENT: Record<LessonPath, LessonPathContent> = {
     Guitar: {
         eyebrow: 'Strings',
-        subtitle: 'Dynamic Supabase lessons for clean chord work, rhythm control, and confident first-song progress.',
+        subtitle: 'Riffs, chords, timing, and confident first-song progress.',
+        listSubtitle: 'Build clean fretting, rhythm control, and musical confidence one focused rep at a time.',
+        emptyTitle: 'No guitar lessons yet',
+        emptyBody: 'This guitar path is ready, but the live catalog does not have lessons to show right now.',
         imageKey: 'guitar_carousel',
         iconName: 'musical-notes-outline',
     },
+    Bass: {
+        eyebrow: 'Groove',
+        subtitle: 'Pocket, timing, low-end control, and practical bass movement.',
+        listSubtitle: 'Train the pocket, note length, and simple movement that keeps a band locked together.',
+        emptyTitle: 'No bass lessons yet',
+        emptyBody: 'The bass path is being built. Try Guitar, Piano, Drums, or Theory for now.',
+        imageKey: 'bass_carousel',
+        iconName: 'pulse-outline',
+    },
     Piano: {
         eyebrow: 'Keys',
-        subtitle: 'Live lesson packs for harmony, touch, and flow once your piano catalog lands in Supabase.',
+        subtitle: 'Chords, scales, reading, touch, and modern harmony.',
+        listSubtitle: 'Move from clean hand position into voicings, inversions, and expressive practice routines.',
+        emptyTitle: 'No piano lessons yet',
+        emptyBody: 'This piano path is ready, but the live catalog does not have lessons to show right now.',
         imageKey: 'piano_carousel',
         iconName: 'keypad-outline',
     },
     Drums: {
         eyebrow: 'Rhythm',
-        subtitle: 'Groove and time-feel lessons with room for drum-specific catalog drops from the database.',
+        subtitle: 'Rudiments, coordination, groove, and reliable time feel.',
+        listSubtitle: 'Work through balance, limb coordination, groove shape, and practical rhythm vocabulary.',
+        emptyTitle: 'No drum lessons yet',
+        emptyBody: 'This drum path is ready, but the live catalog does not have lessons to show right now.',
         imageKey: 'drums_carousel',
         iconName: 'radio-outline',
+    },
+    Theory: {
+        eyebrow: 'Concepts',
+        subtitle: 'Notes, intervals, harmony, quizzes, and musician drills.',
+        listSubtitle: 'Connect what you play to the theory underneath it with compact explanations and checkpoints.',
+        emptyTitle: 'No theory content yet',
+        emptyBody: 'Theory, quiz, and game shelves are ready, but the live catalog does not have rows to show yet.',
+        imageKey: 'theory_icon_4',
+        iconName: 'library-outline',
     },
 };
 
 type TheoryScreenProps = NativeStackScreenProps<LessonsStackParamList, 'LessonLibrary'>;
 
-const CATEGORY_CONTENT: Record<LessonCategory, {
-    eyebrow: string;
-    title: string;
-    subtitle: string;
-    helper: string;
-    emptyTitle: string;
-    emptyBody: string;
-}> = {
-    practical: {
-        eyebrow: 'Hands-On',
-        title: 'Practical Lessons',
-        subtitle: 'Instrument-specific coaching for technique, groove, speed, and clean reps that translate straight into practice time.',
-        helper: 'Instrument filters stay visible here so the live catalog can pivot between guitar, piano, and drums.',
-        emptyTitle: 'No practical lessons yet',
-        emptyBody: 'This instrument tab is connected to Supabase, but there are no practical lesson rows for it yet.',
-    },
-    theory: {
-        eyebrow: 'Concepts',
-        title: 'Theory Pack',
-        subtitle: 'Rich theory modules, premium breakdowns, and visual explanations loaded dynamically from Supabase.',
-        helper: 'Theory lessons ignore the instrument carousel so you can browse general musicianship content in one place.',
-        emptyTitle: 'No theory lessons yet',
-        emptyBody: 'Theory content is wired up, but Supabase does not have theory rows for this category yet.',
-    },
-    quiz: {
-        eyebrow: 'Challenge',
-        title: 'Quiz Packs',
-        subtitle: 'Standalone quiz sets with question banks that can ship independently from the app release cycle.',
-        helper: 'Quiz entries are fetched as their own category and can show multi-question packs from the related quizzes table.',
-        emptyTitle: 'No quiz packs yet',
-        emptyBody: 'This quiz category is live, but there are no standalone quiz lessons in Supabase yet.',
-    },
-    game: {
-        eyebrow: 'Play',
-        title: 'Games & Puzzles',
-        subtitle: 'Interactive training formats like ear drills, speed runs, and rhythm puzzles now live beside the core academy.',
-        helper: 'Game entries share the same premium layout, but they pull category-specific instructions from Supabase.',
-        emptyTitle: 'No games yet',
-        emptyBody: 'The games shelf is ready, but Supabase does not have any game rows to render yet.',
-    },
-};
+function isPracticalPath(path: LessonPath): path is LessonInstrument {
+    return path !== 'Theory';
+}
+
+async function fetchLessonsForPath(path: LessonPath): Promise<LessonCatalogItem[]> {
+    if (path === 'Theory') {
+        const categoryResults = await Promise.all(
+            THEORY_CATEGORIES.map((category) => fetchLessonCatalog({ category })),
+        );
+
+        return categoryResults
+            .flat()
+            .sort((left, right) => left.orderIndex - right.orderIndex);
+    }
+
+    return fetchLessonCatalog({ category: 'practical', instrument: path });
+}
+
+function getStaticPathMeta(path: LessonPath) {
+    if (path === 'Theory') {
+        return 'Concepts and drills';
+    }
+
+    const count = LESSON_PACK_COUNTS[path];
+    return count > 0 ? `${count} lessons` : 'Path building';
+}
+
+function getLessonLevel(lesson: LessonCatalogItem, index: number, total: number): LessonLevelGroup {
+    const tier = lesson.tier.toLowerCase();
+
+    if (tier.includes('beginner')) {
+        return 'Beginner';
+    }
+
+    if (tier.includes('advanced') || tier.includes('upper')) {
+        return 'Advanced';
+    }
+
+    if (tier.includes('intermediate')) {
+        return 'Intermediate';
+    }
+
+    if (index < total / 3) {
+        return 'Beginner';
+    }
+
+    if (index < (total * 2) / 3) {
+        return 'Intermediate';
+    }
+
+    return 'Advanced';
+}
+
+function groupLessonsByLevel(lessons: LessonCatalogItem[]) {
+    const groups: Record<LessonLevelGroup, LessonCatalogItem[]> = {
+        Beginner: [],
+        Intermediate: [],
+        Advanced: [],
+    };
+
+    lessons.forEach((lesson, index) => {
+        groups[getLessonLevel(lesson, index, lessons.length)].push(lesson);
+    });
+
+    return LEVEL_GROUPS
+        .map((level) => ({ level, lessons: groups[level] }))
+        .filter((group) => group.lessons.length > 0);
+}
+
+function formatProgress(completedCount: number, totalCount: number) {
+    if (totalCount <= 0) {
+        return '0%';
+    }
+
+    return `${Math.round((completedCount / totalCount) * 100)}%`;
+}
 
 export default function TheoryScreen({ navigation, route }: TheoryScreenProps) {
     const tabBarHeight = useBottomTabBarHeight();
-    const [snapshot, setSnapshot] = useState<GamificationSnapshot | null>(null);
     const routeLessonInstrument = route.params?.lessonInstrument;
     const requestedLessonId = route.params?.selectedLessonId;
-    const [selectedCategory, setSelectedCategory] = useState<LessonCategory>('practical');
-    const [lessonInstrument, setLessonInstrument] = useState<LessonInstrument>(routeLessonInstrument ?? 'Guitar');
+    const initialPath = routeLessonInstrument ?? 'Guitar';
+    const [lessonsStep, setLessonsStep] = useState<LessonsStep>(
+        routeLessonInstrument || requestedLessonId ? 'lesson_list' : 'instrument_picker',
+    );
+    const [selectedPath, setSelectedPath] = useState<LessonPath>(initialPath);
     const [selectedLessonId, setSelectedLessonId] = useState<string>(requestedLessonId ?? '');
     const [lessonOptions, setLessonOptions] = useState<LessonCatalogItem[]>([]);
+    const [snapshot, setSnapshot] = useState<GamificationSnapshot | null>(null);
     const [catalogError, setCatalogError] = useState<string | null>(null);
     const [isCatalogLoading, setIsCatalogLoading] = useState(true);
 
@@ -114,7 +195,7 @@ export default function TheoryScreen({ navigation, route }: TheoryScreenProps) {
                         setSnapshot(nextSnapshot);
                     }
                 } catch (error) {
-                    console.error('Failed to load lesson catalog snapshot:', error);
+                    console.error('Failed to load lesson progress snapshot:', error);
                 }
             };
 
@@ -128,12 +209,13 @@ export default function TheoryScreen({ navigation, route }: TheoryScreenProps) {
 
     useEffect(() => {
         if (routeLessonInstrument) {
-            setSelectedCategory('practical');
-            setLessonInstrument(routeLessonInstrument);
+            setSelectedPath(routeLessonInstrument);
+            setLessonsStep('lesson_list');
         }
 
         if (requestedLessonId) {
             setSelectedLessonId(requestedLessonId);
+            setLessonsStep('lesson_list');
         }
     }, [requestedLessonId, routeLessonInstrument]);
 
@@ -145,10 +227,7 @@ export default function TheoryScreen({ navigation, route }: TheoryScreenProps) {
             setCatalogError(null);
 
             try {
-                const nextLessons = await fetchLessonCatalog({
-                    category: selectedCategory,
-                    instrument: selectedCategory === 'practical' ? lessonInstrument : undefined,
-                });
+                const nextLessons = await fetchLessonsForPath(selectedPath);
 
                 if (!isMounted) {
                     return;
@@ -164,14 +243,14 @@ export default function TheoryScreen({ navigation, route }: TheoryScreenProps) {
                         return requestedLessonId;
                     }
 
-                    return nextLessons[0]?.id ?? '';
+                    return '';
                 });
             } catch (error) {
-                console.error('Failed to load lessons from Supabase:', error);
+                console.error('Failed to load lessons:', error);
 
                 if (isMounted) {
                     setLessonOptions([]);
-                    setCatalogError('Could not load the live lesson catalog.');
+                    setCatalogError('Could not load this learning path.');
                 }
             } finally {
                 if (isMounted) {
@@ -185,36 +264,63 @@ export default function TheoryScreen({ navigation, route }: TheoryScreenProps) {
         return () => {
             isMounted = false;
         };
-    }, [lessonInstrument, requestedLessonId, selectedCategory]);
+    }, [requestedLessonId, selectedPath]);
 
-    const instrumentCarouselItems = useMemo(() => (
-        (Object.keys(LESSON_INSTRUMENT_CONTENT) as LessonInstrument[]).map((instrument) => {
-            const isCurrentInstrument = instrument === lessonInstrument;
-            const liveCount = isCurrentInstrument ? lessonOptions.length : null;
-            const meta = isCatalogLoading && isCurrentInstrument
-                ? 'Syncing live catalog...'
-                : `${liveCount ?? 0} live lessons`;
-
-            return {
-                id: instrument,
-                title: instrument,
-                subtitle: LESSON_INSTRUMENT_CONTENT[instrument].subtitle,
-                eyebrow: LESSON_INSTRUMENT_CONTENT[instrument].eyebrow,
-                meta,
-                assetKey: LESSON_INSTRUMENT_CONTENT[instrument].imageKey,
-                iconName: LESSON_INSTRUMENT_CONTENT[instrument].iconName,
-            };
-        })
-    ), [isCatalogLoading, lessonInstrument, lessonOptions.length]);
-
-    const categorySummary = CATEGORY_CONTENT[selectedCategory];
     const completedContentIds = useMemo(() => {
-        if (selectedCategory === 'quiz' || selectedCategory === 'game') {
-            return snapshot?.completedQuizIds ?? [];
+        if (selectedPath === 'Theory') {
+            return Array.from(new Set([
+                ...(snapshot?.completedLessonIds ?? []),
+                ...(snapshot?.completedQuizIds ?? []),
+            ]));
         }
 
         return snapshot?.completedLessonIds ?? [];
-    }, [selectedCategory, snapshot?.completedLessonIds, snapshot?.completedQuizIds]);
+    }, [selectedPath, snapshot?.completedLessonIds, snapshot?.completedQuizIds]);
+
+    const completedVisibleLessons = useMemo(
+        () => lessonOptions.filter((lesson) => completedContentIds.includes(lesson.id)).length,
+        [completedContentIds, lessonOptions],
+    );
+
+    const lessonGroups = useMemo(() => groupLessonsByLevel(lessonOptions), [lessonOptions]);
+    const selectedPathContent = LESSON_PATH_CONTENT[selectedPath];
+    const selectedPathMeta = isCatalogLoading
+        ? 'Syncing path...'
+        : `${lessonOptions.length} ${lessonOptions.length === 1 ? 'lesson' : 'lessons'}`;
+    const pathProgress = formatProgress(completedVisibleLessons, lessonOptions.length);
+    const progressFillWidth = lessonOptions.length > 0 && completedVisibleLessons > 0
+        ? Math.max(8, (completedVisibleLessons / lessonOptions.length) * 100)
+        : 0;
+
+    const instrumentCarouselItems: InstrumentCarouselItem[] = useMemo(() => (
+        LEARNING_PATHS.map((path) => ({
+            id: path,
+            title: path,
+            subtitle: LESSON_PATH_CONTENT[path].subtitle,
+            eyebrow: LESSON_PATH_CONTENT[path].eyebrow,
+            meta: path === selectedPath ? selectedPathMeta : getStaticPathMeta(path),
+            ctaLabel: path === selectedPath ? 'View lessons' : 'Focus path',
+            assetKey: LESSON_PATH_CONTENT[path].imageKey,
+            iconName: LESSON_PATH_CONTENT[path].iconName,
+        }))
+    ), [selectedPath, selectedPathMeta]);
+
+    const handleSelectPath = (path: LessonPath) => {
+        setSelectedPath(path);
+        setSelectedLessonId('');
+    };
+
+    const handleOpenPath = (item?: InstrumentCarouselItem) => {
+        if (item && LEARNING_PATHS.includes(item.id as LessonPath)) {
+            handleSelectPath(item.id as LessonPath);
+        }
+
+        setLessonsStep('lesson_list');
+    };
+
+    const handleChangeInstrument = () => {
+        setLessonsStep('instrument_picker');
+    };
 
     const handleOpenLesson = (lessonId: string) => {
         setSelectedLessonId(lessonId);
@@ -223,7 +329,7 @@ export default function TheoryScreen({ navigation, route }: TheoryScreenProps) {
 
     return (
         <LinearGradient
-            colors={['#19072f', '#25114a', '#34205f']}
+            colors={['#160721', '#22113a', '#103344']}
             start={{ x: 0.08, y: 0 }}
             end={{ x: 0.92, y: 1 }}
             style={styles.screen}
@@ -234,122 +340,196 @@ export default function TheoryScreen({ navigation, route }: TheoryScreenProps) {
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={[styles.contentContainer, { paddingBottom: tabBarHeight + 28 }]}
                 >
-                    <View style={styles.carouselSection}>
-                        <View style={styles.categorySection}>
-                            <View style={styles.categoryHeaderRow}>
-                                <View style={styles.categoryHeaderCopy}>
-                                    <Text style={styles.categoryEyebrow}>Academy</Text>
-                                    <Text style={styles.categoryTitle}>Dynamic Content Library</Text>
-                                    <Text style={styles.categoryBody}>
-                                        Switch between {LESSON_CATEGORY_LABELS.practical.toLowerCase()}, {LESSON_CATEGORY_LABELS.theory.toLowerCase()}, {LESSON_CATEGORY_LABELS.quiz.toLowerCase()}, and {LESSON_CATEGORY_LABELS.game.toLowerCase()} without shipping a new app build.
-                                    </Text>
-                                </View>
-                                <View style={styles.categoryCountBadge}>
-                                    <Text style={styles.categoryCountLabel}>LIVE</Text>
-                                    <Text style={styles.categoryCountValue}>{lessonOptions.length}</Text>
-                                </View>
-                            </View>
-
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={styles.categoryChipRow}
-                            >
-                                {(Object.keys(CATEGORY_CONTENT) as LessonCategory[]).map((category, index) => {
-                                    const isActive = category === selectedCategory;
-                                    return (
-                                        <Pressable
-                                            key={category}
-                                            onPress={() => {
-                                                setSelectedCategory(category);
-                                                setSelectedLessonId('');
-                                            }}
-                                            style={({ pressed }) => [
-                                                styles.categoryChipShell,
-                                                pressed && styles.categoryChipPressed,
-                                            ]}
-                                        >
-                                            <LinearGradient
-                                                colors={isActive
-                                                    ? [
-                                                        PREMIUM_GRADIENT[index],
-                                                        PREMIUM_GRADIENT[Math.min(index + 3, PREMIUM_GRADIENT.length - 1)],
-                                                        PREMIUM_GRADIENT[Math.min(index + 6, PREMIUM_GRADIENT.length - 1)],
-                                                    ]
-                                                    : ['rgba(35, 17, 72, 0.96)', 'rgba(24, 11, 52, 0.9)', 'rgba(18, 9, 40, 0.88)']}
-                                                start={{ x: 0, y: 0 }}
-                                                end={{ x: 1, y: 1 }}
-                                                style={[styles.categoryChip, isActive && styles.categoryChipActive]}
-                                            >
-                                                <Text style={[styles.categoryChipEyebrow, isActive && styles.categoryChipEyebrowActive]}>
-                                                    {CATEGORY_CONTENT[category].eyebrow}
-                                                </Text>
-                                                <Text style={styles.categoryChipTitle}>{LESSON_CATEGORY_LABELS[category]}</Text>
-                                            </LinearGradient>
-                                        </Pressable>
-                                    );
-                                })}
-                            </ScrollView>
-
-                            <LinearGradient
-                                colors={['rgba(116, 0, 184, 0.18)', 'rgba(78, 168, 222, 0.18)', 'rgba(128, 255, 219, 0.12)']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={styles.categorySummaryCard}
-                            >
-                                <Text style={styles.categorySummaryEyebrow}>{categorySummary.eyebrow}</Text>
-                                <Text style={styles.categorySummaryTitle}>{categorySummary.title}</Text>
-                                <Text style={styles.categorySummaryBody}>{categorySummary.subtitle}</Text>
-                                <Text style={styles.categorySummaryHelper}>{categorySummary.helper}</Text>
-                            </LinearGradient>
+                    <View style={styles.headerBlock}>
+                        <View style={styles.headerCopy}>
+                            <Text style={styles.headerEyebrow}>Lessons</Text>
+                            <Text style={styles.headerTitle}>
+                                {lessonsStep === 'instrument_picker' ? 'Choose your path' : `${selectedPath} lessons`}
+                            </Text>
+                            <Text style={styles.headerBody}>
+                                {lessonsStep === 'instrument_picker'
+                                    ? 'Pick an instrument path first, then move into focused lessons and guided practice content.'
+                                    : selectedPathContent.listSubtitle}
+                            </Text>
                         </View>
 
-                        {selectedCategory === 'practical' ? (
+                        <View style={styles.progressRailCard}>
+                            <Text style={styles.progressLabel}>Path progress</Text>
+                            <Text style={styles.progressValue}>{pathProgress}</Text>
+                            <View style={styles.progressRail}>
+                                <View
+                                    style={[
+                                        styles.progressFill,
+                                        { width: `${progressFillWidth}%` },
+                                    ]}
+                                />
+                            </View>
+                        </View>
+                    </View>
+
+                    {lessonsStep === 'instrument_picker' ? (
+                        <View style={styles.pickerSection}>
                             <InstrumentCarousel
                                 items={instrumentCarouselItems}
-                                selectedId={lessonInstrument}
-                                onSelect={(item) => {
-                                    setLessonInstrument(item.id as LessonInstrument);
-                                    setSelectedLessonId('');
-                                }}
+                                selectedId={selectedPath}
+                                onSelect={(item) => handleSelectPath(item.id as LessonPath)}
+                                onOpen={handleOpenPath}
                             />
-                        ) : null}
-                    </View>
 
-                    <View style={styles.lessonListSection}>
-                        {isCatalogLoading ? (
-                            <View style={styles.stateCard}>
-                                <ActivityIndicator color={COLORS.mint} size="large" />
-                                <Text style={styles.stateTitle}>Loading live lessons</Text>
-                                <Text style={styles.stateBody}>
-                                    Pulling the latest academy catalog from Supabase so every tap opens current content.
-                                </Text>
+                            <LinearGradient
+                                colors={['rgba(27, 17, 55, 0.92)', 'rgba(14, 42, 52, 0.84)']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.pathPreviewCard}
+                            >
+                                <View style={styles.pathPreviewHeader}>
+                                    <View style={styles.pathPreviewIcon}>
+                                        <Ionicons name={selectedPathContent.iconName} size={22} color={COLORS.mint} />
+                                    </View>
+                                    <View style={styles.pathPreviewCopy}>
+                                        <Text style={styles.pathPreviewEyebrow}>{selectedPathContent.eyebrow}</Text>
+                                        <Text style={styles.pathPreviewTitle}>{selectedPath}</Text>
+                                    </View>
+                                </View>
+
+                                <Text style={styles.pathPreviewBody}>{selectedPathContent.listSubtitle}</Text>
+
+                                <View style={styles.pathMetaRow}>
+                                    <View style={styles.pathMetaPill}>
+                                        <Text style={styles.pathMetaValue}>{selectedPathMeta}</Text>
+                                        <Text style={styles.pathMetaLabel}>Catalog</Text>
+                                    </View>
+                                    <View style={styles.pathMetaPill}>
+                                        <Text style={styles.pathMetaValue}>{completedVisibleLessons}</Text>
+                                        <Text style={styles.pathMetaLabel}>Completed</Text>
+                                    </View>
+                                    <View style={styles.pathMetaPill}>
+                                        <Text style={styles.pathMetaValue}>{snapshot?.streakDays ?? 0}d</Text>
+                                        <Text style={styles.pathMetaLabel}>Streak</Text>
+                                    </View>
+                                </View>
+
+                                <Pressable
+                                    onPress={() => handleOpenPath()}
+                                    style={({ pressed }) => [
+                                        styles.primaryButtonWrap,
+                                        pressed && styles.primaryButtonPressed,
+                                    ]}
+                                >
+                                    <LinearGradient
+                                        colors={[PREMIUM_GRADIENT[0], PREMIUM_GRADIENT[4], PREMIUM_GRADIENT[8]]}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={styles.primaryButton}
+                                    >
+                                        <Text style={styles.primaryButtonText}>View lessons</Text>
+                                        <Ionicons name="arrow-forward" color="#F8FCFF" size={18} />
+                                    </LinearGradient>
+                                </Pressable>
+                            </LinearGradient>
+                        </View>
+                    ) : (
+                        <View style={styles.lessonPathSection}>
+                            <View style={styles.pathHeaderRow}>
+                                <Pressable
+                                    hitSlop={10}
+                                    onPress={handleChangeInstrument}
+                                    style={({ pressed }) => [styles.changePathButton, pressed && styles.changePathButtonPressed]}
+                                >
+                                    <Ionicons name="chevron-back" color="#F8FCFF" size={17} />
+                                    <Text style={styles.changePathText}>Change path</Text>
+                                </Pressable>
+
+                                <View style={styles.pathStatusPill}>
+                                    <Text style={styles.pathStatusText}>
+                                        {isPracticalPath(selectedPath) ? 'Instrument path' : 'Theory path'}
+                                    </Text>
+                                </View>
                             </View>
-                        ) : null}
 
-                        {!isCatalogLoading && catalogError ? (
-                            <View style={styles.stateCard}>
-                                <Text style={styles.stateTitle}>Catalog unavailable</Text>
-                                <Text style={styles.stateBody}>{catalogError}</Text>
-                            </View>
-                        ) : null}
+                            <LinearGradient
+                                colors={['rgba(116, 0, 184, 0.18)', 'rgba(78, 168, 222, 0.16)', 'rgba(128, 255, 219, 0.1)']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.lessonSummaryCard}
+                            >
+                                <Text style={styles.lessonSummaryEyebrow}>{selectedPathContent.eyebrow}</Text>
+                                <Text style={styles.lessonSummaryTitle}>{selectedPath}</Text>
+                                <Text style={styles.lessonSummaryBody}>{selectedPathContent.listSubtitle}</Text>
 
-                        {!isCatalogLoading && !catalogError && lessonOptions.length === 0 ? (
-                            <View style={styles.stateCard}>
-                                <Text style={styles.stateTitle}>{categorySummary.emptyTitle}</Text>
-                                <Text style={styles.stateBody}>{categorySummary.emptyBody}</Text>
-                            </View>
-                        ) : null}
+                                <View style={styles.summaryChipRow}>
+                                    <View style={styles.summaryChip}>
+                                        <Text style={styles.summaryChipText}>{selectedPathMeta}</Text>
+                                    </View>
+                                    <View style={styles.summaryChip}>
+                                        <Text style={styles.summaryChipText}>{completedVisibleLessons} completed</Text>
+                                    </View>
+                                    <View style={styles.summaryChip}>
+                                        <Text style={styles.summaryChipText}>{snapshot?.xp ?? 0} XP</Text>
+                                    </View>
+                                </View>
+                            </LinearGradient>
 
-                        {!isCatalogLoading && !catalogError && lessonOptions.length > 0 ? (
-                            <LessonList
-                                lessons={lessonOptions}
-                                selectedLessonId={selectedLessonId}
-                                onSelectLesson={handleOpenLesson}
-                                completedLessonIds={completedContentIds}
-                            />
-                        ) : null}
-                    </View>
+                            {isCatalogLoading ? (
+                                <View style={styles.stateCard}>
+                                    <ActivityIndicator color={COLORS.mint} size="large" />
+                                    <Text style={styles.stateTitle}>Loading lessons</Text>
+                                    <Text style={styles.stateBody}>
+                                        Preparing the latest lesson path for {selectedPath}.
+                                    </Text>
+                                </View>
+                            ) : null}
+
+                            {!isCatalogLoading && catalogError ? (
+                                <View style={styles.stateCard}>
+                                    <Text style={styles.stateTitle}>Lessons unavailable</Text>
+                                    <Text style={styles.stateBody}>{catalogError}</Text>
+                                    <Pressable
+                                        onPress={handleChangeInstrument}
+                                        style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+                                    >
+                                        <Text style={styles.secondaryButtonText}>Back to instruments</Text>
+                                    </Pressable>
+                                </View>
+                            ) : null}
+
+                            {!isCatalogLoading && !catalogError && lessonOptions.length === 0 ? (
+                                <View style={styles.stateCard}>
+                                    <Text style={styles.stateTitle}>{selectedPathContent.emptyTitle}</Text>
+                                    <Text style={styles.stateBody}>{selectedPathContent.emptyBody}</Text>
+                                    <Pressable
+                                        onPress={handleChangeInstrument}
+                                        style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+                                    >
+                                        <Text style={styles.secondaryButtonText}>Back to instruments</Text>
+                                    </Pressable>
+                                </View>
+                            ) : null}
+
+                            {!isCatalogLoading && !catalogError && lessonOptions.length > 0 ? (
+                                <View style={styles.levelStack}>
+                                    {lessonGroups.map((group) => (
+                                        <View key={group.level} style={styles.levelSection}>
+                                            <View style={styles.levelHeaderRow}>
+                                                <View>
+                                                    <Text style={styles.levelEyebrow}>Level</Text>
+                                                    <Text style={styles.levelTitle}>{group.level}</Text>
+                                                </View>
+                                                <Text style={styles.levelCount}>{group.lessons.length} lessons</Text>
+                                            </View>
+
+                                            <LessonList
+                                                lessons={group.lessons}
+                                                selectedLessonId={selectedLessonId}
+                                                onSelectLesson={handleOpenLesson}
+                                                completedLessonIds={completedContentIds}
+                                            />
+                                        </View>
+                                    ))}
+                                </View>
+                            ) : null}
+                        </View>
+                    )}
                 </ScrollView>
             </PageTransitionView>
         </LinearGradient>
@@ -365,136 +545,276 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         gap: 18,
     },
-    carouselSection: {
-        marginTop: 4,
-        gap: 18,
-    },
-    lessonListSection: {
-        paddingTop: 2,
-    },
-    categorySection: {
-        gap: 16,
-    },
-    categoryHeaderRow: {
+    headerBlock: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
-        gap: 16,
+        gap: 14,
     },
-    categoryHeaderCopy: {
+    headerCopy: {
         flex: 1,
-        gap: 6,
+        gap: 7,
     },
-    categoryEyebrow: {
-        color: 'rgba(128,255,219,0.86)',
+    headerEyebrow: {
+        color: 'rgba(128,255,219,0.88)',
         fontSize: 12,
-        fontWeight: '800',
-        letterSpacing: 1.4,
+        fontWeight: '900',
+        letterSpacing: 1.2,
         textTransform: 'uppercase',
     },
-    categoryTitle: {
-        color: '#F7FBFF',
-        fontSize: 28,
+    headerTitle: {
+        color: '#F8FCFF',
+        fontSize: 31,
+        lineHeight: 36,
         fontWeight: '900',
-        letterSpacing: -0.8,
     },
-    categoryBody: {
-        color: 'rgba(226,238,255,0.76)',
+    headerBody: {
+        color: 'rgba(226,238,255,0.78)',
         fontSize: 14,
         lineHeight: 21,
     },
-    categoryCountBadge: {
-        minWidth: 78,
-        paddingHorizontal: 14,
+    progressRailCard: {
+        width: 104,
+        paddingHorizontal: 12,
         paddingVertical: 12,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.16)',
-        backgroundColor: 'rgba(17, 10, 40, 0.58)',
-        alignItems: 'center',
-        gap: 2,
-    },
-    categoryCountLabel: {
-        color: 'rgba(128,255,219,0.82)',
-        fontSize: 11,
-        fontWeight: '800',
-        letterSpacing: 1.2,
-    },
-    categoryCountValue: {
-        color: '#FFFFFF',
-        fontSize: 22,
-        fontWeight: '900',
-    },
-    categoryChipRow: {
-        gap: 12,
-        paddingRight: 4,
-    },
-    categoryChipShell: {
-        borderRadius: 22,
-    },
-    categoryChipPressed: {
-        transform: [{ scale: 0.98 }],
-    },
-    categoryChip: {
-        minWidth: 138,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        borderRadius: 22,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.12)',
-        gap: 3,
+        borderColor: 'rgba(255,255,255,0.14)',
+        backgroundColor: 'rgba(14, 10, 33, 0.62)',
+        gap: 7,
         ...SHADOWS.soft,
     },
-    categoryChipActive: {
-        borderColor: 'rgba(128,255,219,0.42)',
-    },
-    categoryChipEyebrow: {
-        color: 'rgba(241,247,255,0.7)',
-        fontSize: 11,
+    progressLabel: {
+        color: 'rgba(228,240,255,0.7)',
+        fontSize: 10,
         fontWeight: '800',
+        textTransform: 'uppercase',
+    },
+    progressValue: {
+        color: '#FFFFFF',
+        fontSize: 24,
+        fontWeight: '900',
+    },
+    progressRail: {
+        height: 6,
+        borderRadius: 999,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255,255,255,0.12)',
+    },
+    progressFill: {
+        height: '100%',
+        borderRadius: 999,
+        backgroundColor: COLORS.mint,
+    },
+    pickerSection: {
+        gap: 18,
+    },
+    pathPreviewCard: {
+        borderRadius: RADII.l,
+        paddingHorizontal: 20,
+        paddingVertical: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.13)',
+        gap: 16,
+        ...SHADOWS.card,
+    },
+    pathPreviewHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    pathPreviewIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(128,255,219,0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(128,255,219,0.24)',
+    },
+    pathPreviewCopy: {
+        flex: 1,
+        gap: 2,
+    },
+    pathPreviewEyebrow: {
+        color: COLORS.mint,
+        fontSize: 11,
+        fontWeight: '900',
         letterSpacing: 1,
         textTransform: 'uppercase',
     },
-    categoryChipEyebrowActive: {
-        color: '#F8FCFF',
-    },
-    categoryChipTitle: {
+    pathPreviewTitle: {
         color: '#FFFFFF',
-        fontSize: 17,
-        fontWeight: '800',
-        letterSpacing: -0.3,
+        fontSize: 25,
+        fontWeight: '900',
     },
-    categorySummaryCard: {
+    pathPreviewBody: {
+        color: 'rgba(238,247,255,0.86)',
+        fontSize: 14,
+        lineHeight: 21,
+    },
+    pathMetaRow: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    pathMetaPill: {
+        flex: 1,
+        minHeight: 64,
+        justifyContent: 'center',
+        paddingHorizontal: 11,
+        paddingVertical: 10,
+        borderRadius: 18,
+        backgroundColor: 'rgba(13, 10, 31, 0.46)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.12)',
+        gap: 3,
+    },
+    pathMetaValue: {
+        color: '#F8FCFF',
+        fontSize: 15,
+        fontWeight: '900',
+    },
+    pathMetaLabel: {
+        color: 'rgba(225,238,255,0.64)',
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    primaryButtonWrap: {
+        borderRadius: 999,
+        overflow: 'hidden',
+    },
+    primaryButtonPressed: {
+        transform: [{ scale: 0.985 }],
+    },
+    primaryButton: {
+        minHeight: 52,
+        borderRadius: 999,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    primaryButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '900',
+    },
+    lessonPathSection: {
+        gap: 16,
+    },
+    pathHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    changePathButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 13,
+        paddingVertical: 10,
+        borderRadius: 999,
+        backgroundColor: 'rgba(16, 13, 37, 0.68)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.14)',
+    },
+    changePathButtonPressed: {
+        transform: [{ scale: 0.985 }],
+    },
+    changePathText: {
+        color: '#F7FBFF',
+        fontSize: 13,
+        fontWeight: '800',
+    },
+    pathStatusPill: {
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        borderRadius: 999,
+        backgroundColor: 'rgba(128,255,219,0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(128,255,219,0.22)',
+    },
+    pathStatusText: {
+        color: COLORS.mint,
+        fontSize: 11,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    lessonSummaryCard: {
         borderRadius: RADII.l,
         paddingHorizontal: 20,
         paddingVertical: 18,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.12)',
-        gap: 8,
+        gap: 9,
         ...SHADOWS.card,
     },
-    categorySummaryEyebrow: {
+    lessonSummaryEyebrow: {
         color: COLORS.mint,
         fontSize: 12,
-        fontWeight: '800',
-        letterSpacing: 1.2,
+        fontWeight: '900',
+        letterSpacing: 1.1,
         textTransform: 'uppercase',
     },
-    categorySummaryTitle: {
+    lessonSummaryTitle: {
         color: '#FFFFFF',
-        fontSize: 24,
+        fontSize: 26,
         fontWeight: '900',
-        letterSpacing: -0.7,
     },
-    categorySummaryBody: {
-        color: 'rgba(244,248,255,0.88)',
+    lessonSummaryBody: {
+        color: 'rgba(244,248,255,0.86)',
         fontSize: 14,
         lineHeight: 21,
     },
-    categorySummaryHelper: {
-        color: 'rgba(212,233,255,0.62)',
-        fontSize: 13,
-        lineHeight: 19,
+    summaryChipRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        paddingTop: 3,
+    },
+    summaryChip: {
+        paddingHorizontal: 11,
+        paddingVertical: 8,
+        borderRadius: 999,
+        backgroundColor: 'rgba(9, 13, 30, 0.26)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.14)',
+    },
+    summaryChipText: {
+        color: '#F4FBFF',
+        fontSize: 12,
+        fontWeight: '800',
+    },
+    levelStack: {
+        gap: 18,
+    },
+    levelSection: {
+        gap: 12,
+    },
+    levelHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+        paddingHorizontal: 2,
+    },
+    levelEyebrow: {
+        color: 'rgba(128,255,219,0.82)',
+        fontSize: 11,
+        fontWeight: '900',
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+    },
+    levelTitle: {
+        color: '#F8FCFF',
+        fontSize: 22,
+        fontWeight: '900',
+    },
+    levelCount: {
+        color: 'rgba(225,238,255,0.7)',
+        fontSize: 12,
+        fontWeight: '800',
     },
     stateCard: {
         borderRadius: RADII.l,
@@ -518,5 +838,22 @@ const styles = StyleSheet.create({
         fontSize: 14,
         lineHeight: 21,
         textAlign: 'center',
+    },
+    secondaryButton: {
+        marginTop: 4,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 999,
+        backgroundColor: 'rgba(128,255,219,0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(128,255,219,0.24)',
+    },
+    secondaryButtonPressed: {
+        transform: [{ scale: 0.985 }],
+    },
+    secondaryButtonText: {
+        color: COLORS.mint,
+        fontSize: 13,
+        fontWeight: '900',
     },
 });

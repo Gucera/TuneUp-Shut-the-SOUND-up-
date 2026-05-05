@@ -1,4 +1,4 @@
-export type LessonInstrument = 'Guitar' | 'Piano' | 'Drums';
+export type LessonInstrument = 'Guitar' | 'Bass' | 'Piano' | 'Drums';
 export type LessonTier = 'Beginner' | 'Early Intermediate' | 'Intermediate' | 'Upper Intermediate';
 import { LESSON_VISUALS, LessonVisual } from './lessonVisuals';
 
@@ -37,6 +37,7 @@ export const LESSON_PACKS: LessonPackage[] = [...guitarLessons, ...pianoLessons,
 
 export const LESSON_PACK_COUNTS: Record<LessonInstrument, number> = {
     Guitar: guitarLessons.length,
+    Bass: 0,
     Piano: pianoLessons.length,
     Drums: drumLessons.length,
 };

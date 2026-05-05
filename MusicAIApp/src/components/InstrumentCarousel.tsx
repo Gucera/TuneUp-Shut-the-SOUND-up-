@@ -35,6 +35,7 @@ export interface InstrumentCarouselItem {
     subtitle: string;
     eyebrow: string;
     meta?: string;
+    ctaLabel?: string;
     imageSource?: ImageSourcePropType;
     assetKey?: string;
     iconName: React.ComponentProps<typeof Ionicons>['name'];
@@ -44,6 +45,7 @@ interface InstrumentCarouselProps {
     items: InstrumentCarouselItem[];
     selectedId: string;
     onSelect: (item: InstrumentCarouselItem) => void;
+    onOpen?: (item: InstrumentCarouselItem) => void;
 }
 
 interface InstrumentCardProps {
@@ -52,6 +54,7 @@ interface InstrumentCardProps {
     scrollX: SharedValue<number>;
     isActive: boolean;
     onPress: () => void;
+    onOpen?: () => void;
 }
 
 const InstrumentCard = memo(function InstrumentCard({
@@ -60,6 +63,7 @@ const InstrumentCard = memo(function InstrumentCard({
     scrollX,
     isActive,
     onPress,
+    onOpen,
 }: InstrumentCardProps) {
     const inputRange = [
         (index - 1) * SNAP_INTERVAL,
@@ -92,7 +96,14 @@ const InstrumentCard = memo(function InstrumentCard({
         <Animated.View style={[styles.cardShell, animatedStyle]}>
             <Animated.View style={[styles.cardHalo, haloStyle]} />
             <Pressable
-                onPress={onPress}
+                onPress={() => {
+                    if (isActive && onOpen) {
+                        onOpen();
+                        return;
+                    }
+
+                    onPress();
+                }}
                 style={({ pressed }) => [
                     styles.cardPressable,
                     pressed && styles.cardPressed,
@@ -152,6 +163,12 @@ const InstrumentCard = memo(function InstrumentCard({
                             <Text style={styles.cardTitle}>{item.title}</Text>
                             <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
                             {item.meta ? <Text style={styles.cardMeta}>{item.meta}</Text> : null}
+                            {item.ctaLabel ? (
+                                <View style={[styles.cardCta, isActive && styles.cardCtaActive]}>
+                                    <Text style={styles.cardCtaText}>{item.ctaLabel}</Text>
+                                    <Ionicons name="arrow-forward" size={14} color="#F8FCFF" />
+                                </View>
+                            ) : null}
                         </View>
                     </View>
                 </ImageBackground>
@@ -190,6 +207,7 @@ export default function InstrumentCarousel({
     items,
     selectedId,
     onSelect,
+    onOpen,
 }: InstrumentCarouselProps) {
     const scrollX = useSharedValue(0);
     const scrollRef = useRef<Animated.ScrollView | null>(null);
@@ -250,6 +268,7 @@ export default function InstrumentCarousel({
                             });
                             onSelect(item);
                         }}
+                        onOpen={onOpen ? () => onOpen(item) : undefined}
                     />
                 ))}
             </Animated.ScrollView>
@@ -399,6 +418,28 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '800',
         letterSpacing: 0.4,
+    },
+    cardCta: {
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 7,
+        marginTop: 2,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        borderRadius: 999,
+        backgroundColor: 'rgba(19, 10, 43, 0.5)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.16)',
+    },
+    cardCtaActive: {
+        backgroundColor: 'rgba(35, 99, 107, 0.36)',
+        borderColor: 'rgba(128,255,219,0.34)',
+    },
+    cardCtaText: {
+        color: '#F8FCFF',
+        fontSize: 12,
+        fontWeight: '900',
     },
     paginationRow: {
         flexDirection: 'row',

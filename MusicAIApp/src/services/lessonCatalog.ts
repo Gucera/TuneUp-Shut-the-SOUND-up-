@@ -107,7 +107,7 @@ function asSingleRow<T>(value: T | T[] | null | undefined): T | null {
 }
 
 function normalizePracticeInstrument(raw: string | null | undefined): LessonInstrument | null {
-    if (raw === 'Piano' || raw === 'Drums') {
+    if (raw === 'Bass' || raw === 'Piano' || raw === 'Drums') {
         return raw;
     }
 

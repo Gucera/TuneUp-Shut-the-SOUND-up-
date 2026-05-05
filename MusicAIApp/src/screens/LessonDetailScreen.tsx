@@ -184,8 +184,22 @@ export default function LessonDetailScreen() {
             : lesson?.category === 'quiz'
                 ? `Finish Quiz • +${lesson?.xpReward ?? 0} XP`
                 : lesson?.category === 'game'
-                    ? `Finish Game • +${lesson?.xpReward ?? 0} XP`
-                    : `Complete Lesson • +${lesson?.xpReward ?? 0} XP`;
+                ? `Finish Game • +${lesson?.xpReward ?? 0} XP`
+                : `Complete Lesson • +${lesson?.xpReward ?? 0} XP`;
+    const objectiveBullets = useMemo(() => {
+        if (!lesson) {
+            return [];
+        }
+
+        const tagObjectives = lesson.focusTags
+            .slice(0, 2)
+            .map((tag) => `Apply ${tag.toLowerCase()} inside a short practice loop.`);
+
+        return [
+            lesson.summary,
+            ...tagObjectives,
+        ].slice(0, 3);
+    }, [lesson]);
 
     const handleCompleteLesson = async () => {
         if (!lesson || isCompleting || isCompleted) {
@@ -310,15 +324,28 @@ export default function LessonDetailScreen() {
                                 </View>
                             </ImageBackground>
 
+                            <View style={styles.sectionCard}>
+                                <Text style={styles.sectionEyebrow}>Objectives</Text>
+                                <Text style={styles.sectionTitle}>What you will work on</Text>
+                                <View style={styles.objectiveList}>
+                                    {objectiveBullets.map((objective, index) => (
+                                        <View key={`${lesson.id}-objective-${index + 1}`} style={styles.objectiveRow}>
+                                            <Ionicons name="checkmark-circle" size={19} color="#80ffdb" />
+                                            <Text style={styles.objectiveText}>{objective}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+
                             <View style={styles.mediaSection}>
                                 <View style={styles.mediaHeaderRow}>
                                     <View>
                                         <Text style={styles.sectionEyebrow}>Lesson Media</Text>
-                                        <Text style={styles.sectionTitle}>Premium Preview</Text>
+                                        <Text style={styles.sectionTitle}>Watch and prepare</Text>
                                     </View>
                                     <View style={styles.mediaBadge}>
                                         <Text style={styles.mediaBadgeText}>
-                                            {hasPlayableVideo ? 'Bundled Video' : 'Artwork Fallback'}
+                                            {hasPlayableVideo ? 'Video' : 'Preview'}
                                         </Text>
                                     </View>
                                 </View>
@@ -349,9 +376,9 @@ export default function LessonDetailScreen() {
                                             />
                                             <View style={styles.videoFallbackCopy}>
                                                 <Ionicons name="play-circle-outline" size={40} color="#80ffdb" />
-                                                <Text style={styles.videoFallbackTitle}>Premium lesson preview</Text>
+                                                <Text style={styles.videoFallbackTitle}>Lesson preview</Text>
                                                 <Text style={styles.videoFallbackBody}>
-                                                    This lesson is ready for local video playback. If the clip key is missing, the artwork still keeps the page polished.
+                                                    Use the steps below as your guided practice plan for this session.
                                                 </Text>
                                             </View>
                                         </ImageBackground>
@@ -359,7 +386,7 @@ export default function LessonDetailScreen() {
                                 </View>
 
                                 <Text style={styles.mediaCaption}>
-                                    Local media is resolved through the asset map, so Supabase only stores string keys and the UI still fails gracefully.
+                                    Keep the first run slow, then repeat once the movement feels reliable.
                                 </Text>
                             </View>
 
@@ -388,7 +415,7 @@ export default function LessonDetailScreen() {
                                 <Text style={styles.sectionTitle}>{quizSectionTitle}</Text>
                                 {lesson.quizzes.length === 0 ? (
                                     <Text style={styles.emptyQuizText}>
-                                        This lesson does not have a live quiz yet. The lesson body is ready, and quiz rows can be added in Supabase at any time.
+                                        No checkpoint questions for this lesson yet. Focus on the practice flow, then mark it complete when you are ready.
                                     </Text>
                                 ) : (
                                     <View style={styles.quizList}>
@@ -449,6 +476,13 @@ export default function LessonDetailScreen() {
                                         {completeButtonText}
                                     </Text>
                                 </LinearGradient>
+                            </Pressable>
+
+                            <Pressable
+                                onPress={handleBackPress}
+                                style={({ pressed }) => [styles.lessonsButton, pressed && styles.lessonsButtonPressed]}
+                            >
+                                <Text style={styles.lessonsButtonText}>Back to lessons</Text>
                             </Pressable>
                         </>
                     ) : null}
@@ -715,6 +749,20 @@ const styles = StyleSheet.create({
         fontSize: 15,
         lineHeight: 23,
     },
+    objectiveList: {
+        gap: 12,
+    },
+    objectiveRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+    },
+    objectiveText: {
+        flex: 1,
+        color: '#E7F3FF',
+        fontSize: 15,
+        lineHeight: 22,
+    },
     quizList: {
         gap: 14,
     },
@@ -811,5 +859,23 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '900',
         letterSpacing: 0.3,
+    },
+    lessonsButton: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderRadius: 999,
+        backgroundColor: 'rgba(128,255,219,0.08)',
+        borderWidth: 1,
+        borderColor: 'rgba(128,255,219,0.2)',
+    },
+    lessonsButtonPressed: {
+        transform: [{ scale: 0.985 }],
+    },
+    lessonsButtonText: {
+        color: '#80ffdb',
+        fontSize: 14,
+        fontWeight: '900',
     },
 });

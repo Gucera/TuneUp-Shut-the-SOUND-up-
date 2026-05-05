@@ -47,6 +47,8 @@ export default function LessonList({
                 const isActive = lesson.id === selectedLessonId;
                 const isCompleted = completedLessonIds.includes(lesson.id);
                 const imageSource = resolveOptionalImageAsset(lesson.imageUrl);
+                const statusLabel = isCompleted ? 'Completed' : isActive ? 'In progress' : 'Not started';
+                const actionLabel = isCompleted ? 'Review' : isActive ? 'Continue' : 'Start';
 
                 return (
                     <Animated.View
@@ -112,12 +114,10 @@ export default function LessonList({
                                             <Text style={styles.metaText}>{lesson.durationMin} min</Text>
                                             <Text style={styles.metaDivider}>•</Text>
                                             <Text style={styles.metaText}>{lesson.xpReward} XP</Text>
-                                            {isCompleted ? (
-                                                <>
-                                                    <Text style={styles.metaDivider}>•</Text>
-                                                    <Text style={styles.completedText}>Complete</Text>
-                                                </>
-                                            ) : null}
+                                            <Text style={styles.metaDivider}>•</Text>
+                                            <Text style={isCompleted ? styles.completedText : styles.metaText}>
+                                                {statusLabel}
+                                            </Text>
                                         </View>
                                     </View>
 
@@ -135,7 +135,7 @@ export default function LessonList({
                                             ))}
                                         </View>
                                         <View style={[styles.arrowOrb, isActive && styles.arrowOrbActive]}>
-                                            <Text style={styles.arrowText}>{isActive ? 'LIVE' : 'OPEN'}</Text>
+                                            <Text style={styles.arrowText}>{actionLabel}</Text>
                                         </View>
                                     </View>
                                 </View>

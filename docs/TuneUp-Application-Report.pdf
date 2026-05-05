@@ -1,0 +1,678 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+4 0 obj
+<< /Length 3343 >>
+stream
+BT /F2 22 Tf 50.00 783.89 Td (TuneUp Application Report) Tj ET
+BT /F2 10 Tf 50.00 738.89 Td (Project: TuneUp) Tj ET
+BT /F2 10 Tf 50.00 720.89 Td (Type: Final-Year Dissertation Mobile App) Tj ET
+BT /F2 10 Tf 50.00 702.89 Td (Platform: React Native / Expo mobile app with FastAPI backend) Tj ET
+BT /F2 10 Tf 50.00 684.89 Td (Author: Yavuz Sever) Tj ET
+BT /F2 10 Tf 50.00 666.89 Td (Repository: TuneUp-Shut-the-SOUND-up-) Tj ET
+BT /F2 10 Tf 50.00 648.89 Td (Date: 5 May 2026) Tj ET
+BT /F2 15 Tf 50.00 615.89 Td (1. Executive Summary) Tj ET
+BT /F1 10 Tf 50.00 582.89 Td (TuneUp is a mobile music practice assistant that combines real-time instrument tuning,) Tj ET
+BT /F1 10 Tf 50.00 566.89 Td (AI-assisted song analysis, song library management, guided lessons, and Song Flow practice in one) Tj ET
+BT /F1 10 Tf 50.00 550.89 Td (full-stack prototype. The app is inspired by the learning flow of products such as Rocksmith and) Tj ET
+BT /F1 10 Tf 50.00 534.89 Td (Yousician, but it uses its own original design, data structures, code, and demo content.) Tj ET
+BT /F1 10 Tf 50.00 507.89 Td (The project focuses on building a practical dissertation-ready prototype rather than a static) Tj ET
+BT /F1 10 Tf 50.00 491.89 Td (concept. It includes a React Native / Expo frontend, a FastAPI backend, Supabase integration,) Tj ET
+BT /F1 10 Tf 50.00 475.89 Td (native microphone handling, local song persistence, asynchronous audio analysis jobs, and a) Tj ET
+BT /F1 10 Tf 50.00 459.89 Td (polished dark/glass visual design.) Tj ET
+BT /F1 10 Tf 50.00 432.89 Td (TuneUp is deliberately honest about AI-generated music content. Generated chord charts and tabs) Tj ET
+BT /F1 10 Tf 50.00 416.89 Td (are treated as AI Drafts, not verified official tabs. Users review confidence values, warnings,) Tj ET
+BT /F1 10 Tf 50.00 400.89 Td (tuning metadata, chord counts, tab counts, and BPM before saving or practising a generated chart.) Tj ET
+BT /F2 15 Tf 50.00 365.89 Td (2. Project Aim and Motivation) Tj ET
+BT /F1 10 Tf 50.00 332.89 Td (The aim of TuneUp is to support musicians as they move from preparation to practice:) Tj ET
+BT /F1 10 Tf 50.00 305.89 Td (- Tune the instrument.) Tj ET
+BT /F1 10 Tf 50.00 288.89 Td (- Learn technique and theory.) Tj ET
+BT /F1 10 Tf 50.00 271.89 Td (- Upload or import a song.) Tj ET
+BT /F1 10 Tf 50.00 254.89 Td (- Convert audio into a playable draft chart.) Tj ET
+BT /F1 10 Tf 50.00 237.89 Td (- Review and save the chart.) Tj ET
+BT /F1 10 Tf 50.00 220.89 Td (- Practise through Song Flow.) Tj ET
+BT /F1 10 Tf 50.00 203.89 Td (- Track progress through XP, streaks, badges, and profile shelves.) Tj ET
+BT /F1 10 Tf 50.00 179.89 Td (Many beginner and intermediate musicians use separate tools for tuning, tabs, lessons, and) Tj ET
+BT /F1 10 Tf 50.00 163.89 Td (practice tracking. TuneUp explores whether these workflows can be combined into a single) Tj ET
+BT /F1 10 Tf 50.00 147.89 Td (mobile-first learning assistant with a consistent user experience.) Tj ET
+BT /F2 10 Tf 50.00 120.89 Td (The project also investigates real implementation constraints: native audio input, mobile) Tj ET
+BT /F2 10 Tf 50.00 104.89 Td (permissions, asynchronous backend processing, Supabase storage, manifest validation, unreliable) Tj ET
+BT /F2 10 Tf 50.00 88.89 Td (AI transcription, and local demo reliability for a dissertation viva.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 2831 >>
+stream
+BT /F2 15 Tf 50.00 787.89 Td (3. Target Users) Tj ET
+BT /F1 10 Tf 50.00 754.89 Td (TuneUp is aimed at:) Tj ET
+BT /F1 10 Tf 50.00 727.89 Td (- Guitarists and bassists who need quick tuning and guided practice.) Tj ET
+BT /F1 10 Tf 50.00 710.89 Td (- Learners who want short structured lessons and theory drills.) Tj ET
+BT /F1 10 Tf 50.00 693.89 Td (- Students preparing songs for practice without manually building every chart.) Tj ET
+BT /F1 10 Tf 50.00 676.89 Td (- Dissertation evaluators who need to see a reliable end-to-end prototype.) Tj ET
+BT /F1 10 Tf 50.00 659.89 Td (- Developers or future maintainers who need clear local setup and diagnostic tools.) Tj ET
+BT /F1 10 Tf 50.00 635.89 Td (The current prototype is strongest for guitar, bass, Song Flow practice, AI draft import, and) Tj ET
+BT /F1 10 Tf 50.00 619.89 Td (offline demo reliability.) Tj ET
+BT /F2 15 Tf 50.00 584.89 Td (4. Core User Journey) Tj ET
+BT /F1 10 Tf 50.00 551.89 Td (The main product journey is:) Tj ET
+BT /F3 8 Tf 50.00 520.89 Td (Open TuneUp) Tj ET
+BT /F3 8 Tf 50.00 507.89 Td (  -> Tune guitar or bass) Tj ET
+BT /F3 8 Tf 50.00 494.89 Td (  -> Open Songs) Tj ET
+BT /F3 8 Tf 50.00 481.89 Td (  -> Upload audio, import a manifest, or use Demo Song) Tj ET
+BT /F3 8 Tf 50.00 468.89 Td (  -> Choose instrument and tuning before AI analysis) Tj ET
+BT /F3 8 Tf 50.00 455.89 Td (  -> Backend creates an async analysis job) Tj ET
+BT /F3 8 Tf 50.00 442.89 Td (  -> App polls job status) Tj ET
+BT /F3 8 Tf 50.00 429.89 Td (  -> Review AI Draft with warnings and confidence) Tj ET
+BT /F3 8 Tf 50.00 416.89 Td (  -> Save to Library) Tj ET
+BT /F3 8 Tf 50.00 403.89 Td (  -> Launch Song Flow practice) Tj ET
+BT /F3 8 Tf 50.00 390.89 Td (  -> Track progress in Profile) Tj ET
+BT /F1 10 Tf 50.00 366.89 Td (The learning journey is:) Tj ET
+BT /F3 8 Tf 50.00 335.89 Td (Open Lessons) Tj ET
+BT /F3 8 Tf 50.00 322.89 Td (  -> Choose instrument or Theory path) Tj ET
+BT /F3 8 Tf 50.00 309.89 Td (  -> Browse grouped lessons) Tj ET
+BT /F3 8 Tf 50.00 296.89 Td (  -> Open lesson content) Tj ET
+BT /F3 8 Tf 50.00 283.89 Td (  -> Complete lesson) Tj ET
+BT /F3 8 Tf 50.00 270.89 Td (  -> Earn XP and update progress) Tj ET
+BT /F2 15 Tf 50.00 238.89 Td (5. System Architecture) Tj ET
+BT /F1 10 Tf 50.00 205.89 Td (TuneUp is split into a mobile frontend, a Python backend, and Supabase-backed persistence.) Tj ET
+BT /F3 8 Tf 50.00 174.89 Td (Mobile App) Tj ET
+BT /F3 8 Tf 50.00 161.89 Td (  |-- Tuner) Tj ET
+BT /F3 8 Tf 50.00 148.89 Td (  |-- Songs Library) Tj ET
+BT /F3 8 Tf 50.00 135.89 Td (  |-- Song Flow) Tj ET
+BT /F3 8 Tf 50.00 122.89 Td (  |-- Lessons / Theory) Tj ET
+BT /F3 8 Tf 50.00 109.89 Td (  |-- Profile / Settings) Tj ET
+BT /F3 8 Tf 50.00 96.89 Td (        |) Tj ET
+BT /F3 8 Tf 50.00 83.89 Td (        v) Tj ET
+BT /F3 8 Tf 50.00 70.89 Td (FastAPI Backend) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 3271 >>
+stream
+BT /F3 8 Tf 50.00 787.89 Td (  |-- Health and readiness endpoints) Tj ET
+BT /F3 8 Tf 50.00 774.89 Td (  |-- Upload endpoints) Tj ET
+BT /F3 8 Tf 50.00 761.89 Td (  |-- Async analysis jobs) Tj ET
+BT /F3 8 Tf 50.00 748.89 Td (  |-- Manifest generation) Tj ET
+BT /F3 8 Tf 50.00 735.89 Td (  |-- Pitch/BPM analysis helpers) Tj ET
+BT /F3 8 Tf 50.00 722.89 Td (  |-- Supabase Storage integration) Tj ET
+BT /F3 8 Tf 50.00 709.89 Td (        |) Tj ET
+BT /F3 8 Tf 50.00 696.89 Td (        v) Tj ET
+BT /F3 8 Tf 50.00 683.89 Td (Supabase) Tj ET
+BT /F3 8 Tf 50.00 670.89 Td (  |-- Auth) Tj ET
+BT /F3 8 Tf 50.00 657.89 Td (  |-- Storage bucket for uploaded audio) Tj ET
+BT /F3 8 Tf 50.00 644.89 Td (  |-- Analysis job rows) Tj ET
+BT /F3 8 Tf 50.00 631.89 Td (  |-- Track and marker rows) Tj ET
+BT /F3 8 Tf 50.00 618.89 Td (  |-- Leaderboard/progress rows) Tj ET
+BT /F1 10 Tf 50.00 594.89 Td (Frontend responsibilities:) Tj ET
+BT /F1 10 Tf 50.00 567.89 Td (- Render the mobile app screens.) Tj ET
+BT /F1 10 Tf 50.00 550.89 Td (- Handle navigation and local UI state.) Tj ET
+BT /F1 10 Tf 50.00 533.89 Td (- Manage tuner microphone lifecycle.) Tj ET
+BT /F1 10 Tf 50.00 516.89 Td (- Upload files and poll backend jobs.) Tj ET
+BT /F1 10 Tf 50.00 499.89 Td (- Validate imported/generated manifests before save.) Tj ET
+BT /F1 10 Tf 50.00 482.89 Td (- Store saved songs locally on device.) Tj ET
+BT /F1 10 Tf 50.00 465.89 Td (- Present progress, badges, settings, and diagnostics.) Tj ET
+BT /F1 10 Tf 50.00 441.89 Td (Backend responsibilities:) Tj ET
+BT /F1 10 Tf 50.00 414.89 Td (- Validate environment configuration at startup.) Tj ET
+BT /F1 10 Tf 50.00 397.89 Td (- Accept uploaded audio.) Tj ET
+BT /F1 10 Tf 50.00 380.89 Td (- Store uploaded audio in Supabase Storage using safe object keys.) Tj ET
+BT /F1 10 Tf 50.00 363.89 Td (- Create and update asynchronous analysis jobs.) Tj ET
+BT /F1 10 Tf 50.00 346.89 Td (- Generate BPM, section markers, chord events, tab notes, confidence, and warnings.) Tj ET
+BT /F1 10 Tf 50.00 329.89 Td (- Return safe structured errors.) Tj ET
+BT /F1 10 Tf 50.00 312.89 Td (- Expose health and readiness endpoints for local demos.) Tj ET
+BT /F2 15 Tf 50.00 280.89 Td (6. Frontend Architecture) Tj ET
+BT /F1 10 Tf 50.00 247.89 Td (The frontend is in `MusicAIApp/` and uses React Native, Expo, TypeScript, React Navigation,) Tj ET
+BT /F1 10 Tf 50.00 231.89 Td (Reanimated, Skia, Expo AV, Supabase JS, and local filesystem persistence.) Tj ET
+BT /F1 10 Tf 50.00 204.89 Td (Important frontend areas:) Tj ET
+BT /F1 10 Tf 50.00 177.89 Td (- `MusicAIApp/App.tsx` defines the main app shell and navigation.) Tj ET
+BT /F1 10 Tf 50.00 160.89 Td (- `MusicAIApp/src/screens/` contains the primary screens: Home, Tuner, Songs, Lessons/Theory,) Tj ET
+BT /F1 10 Tf 50.00 144.89 Td (  Lesson Detail, Profile, Traffic/Studio, and Auth.) Tj ET
+BT /F1 10 Tf 50.00 127.89 Td (- `MusicAIApp/src/components/` contains reusable UI components such as premium backdrops,) Tj ET
+BT /F1 10 Tf 50.00 111.89 Td (  carousel cards, lesson lists, hero strips, settings buttons, and error boundaries.) Tj ET
+BT /F1 10 Tf 50.00 94.89 Td (- `MusicAIApp/src/hooks/` contains stateful audio and polling hooks, including tuner and analysis) Tj ET
+BT /F1 10 Tf 50.00 78.89 Td (  job hooks.) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 8 0 R >>
+endobj
+10 0 obj
+<< /Length 3592 >>
+stream
+BT /F1 10 Tf 50.00 787.89 Td (- `MusicAIApp/src/services/` contains API clients, Supabase client setup, local song library) Tj ET
+BT /F1 10 Tf 50.00 771.89 Td (  persistence, app settings, gamification, diagnostics, and lesson catalog access.) Tj ET
+BT /F1 10 Tf 50.00 754.89 Td (- `MusicAIApp/src/utils/` contains validation, tuning, tuner math, song library view helpers,) Tj ET
+BT /F1 10 Tf 50.00 738.89 Td (  song display-name cleanup, and Song Flow string-label utilities.) Tj ET
+BT /F1 10 Tf 50.00 721.89 Td (- `MusicAIApp/src/data/` contains built-in lesson content, theory exercises, traffic studies, and) Tj ET
+BT /F1 10 Tf 50.00 705.89 Td (  demo songs.) Tj ET
+BT /F1 10 Tf 50.00 681.89 Td (The app follows a screen-based architecture. Large features are implemented in dedicated screens) Tj ET
+BT /F1 10 Tf 50.00 665.89 Td (while shared behavior is extracted into hooks and services. Recent work has focused on making) Tj ET
+BT /F1 10 Tf 50.00 649.89 Td (core flows explicit: Start/Stop controls for the tuner, Upload/Library sections in Songs, and) Tj ET
+BT /F1 10 Tf 50.00 633.89 Td (Instrument -> Lessons -> Lesson Content in Lessons.) Tj ET
+BT /F2 15 Tf 50.00 598.89 Td (7. Backend Architecture) Tj ET
+BT /F1 10 Tf 50.00 565.89 Td (The backend is in `backend/` and uses FastAPI with Supabase, librosa, numpy, scikit-learn,) Tj ET
+BT /F1 10 Tf 50.00 549.89 Td (soundfile, Pydantic, and python-dotenv.) Tj ET
+BT /F1 10 Tf 50.00 522.89 Td (Important backend files:) Tj ET
+BT /F1 10 Tf 50.00 495.89 Td (- `backend/main.py` defines the FastAPI app, endpoints, storage upload helpers, analysis) Tj ET
+BT /F1 10 Tf 50.00 479.89 Td (  pipeline, job lifecycle, tuning metadata handling, tab mapping, health checks, and) Tj ET
+BT /F1 10 Tf 50.00 463.89 Td (  leaderboard/traffic endpoints.) Tj ET
+BT /F1 10 Tf 50.00 446.89 Td (- `backend/config.py` loads and validates environment variables.) Tj ET
+BT /F1 10 Tf 50.00 429.89 Td (- `backend/tests/` contains pytest coverage for API behavior, config validation, async jobs,) Tj ET
+BT /F1 10 Tf 50.00 413.89 Td (  storage object keys, tab mapping, and audio accuracy fixtures.) Tj ET
+BT /F1 10 Tf 50.00 396.89 Td (- `backend/requirements.txt` defines the Python runtime dependencies.) Tj ET
+BT /F1 10 Tf 50.00 372.89 Td (Key backend endpoints include:) Tj ET
+BT /F1 10 Tf 50.00 345.89 Td (- `GET /health` for fast process liveness.) Tj ET
+BT /F1 10 Tf 50.00 328.89 Td (- `GET /ready` for safe readiness structure.) Tj ET
+BT /F1 10 Tf 50.00 311.89 Td (- `GET /healthz` for deeper Supabase connectivity.) Tj ET
+BT /F1 10 Tf 50.00 294.89 Td (- `POST /upload-audio` for Studio/traffic analysis jobs.) Tj ET
+BT /F1 10 Tf 50.00 277.89 Td (- `POST /analyze-audio` for AI song import jobs.) Tj ET
+BT /F1 10 Tf 50.00 260.89 Td (- `GET /task-status/{task_id}` for async job polling.) Tj ET
+BT /F1 10 Tf 50.00 243.89 Td (- `POST /detect-pitch` for backend pitch assist.) Tj ET
+BT /F1 10 Tf 50.00 226.89 Td (- `POST /analyze-full` as a synchronous fallback analysis endpoint.) Tj ET
+BT /F1 10 Tf 50.00 209.89 Td (- `POST /save-traffic` and `GET /get-traffic` for saved Studio analysis.) Tj ET
+BT /F1 10 Tf 50.00 192.89 Td (- `POST /sync-leaderboard` and `GET /leaderboard` for progress sync.) Tj ET
+BT /F2 15 Tf 50.00 160.89 Td (8. Data Model and Song Manifest Structure) Tj ET
+BT /F1 10 Tf 50.00 127.89 Td (Song Flow uses manifest-like song objects. The frontend type in) Tj ET
+BT /F1 10 Tf 50.00 111.89 Td (`MusicAIApp/src/data/songLessons.ts` includes:) Tj ET
+BT /F1 10 Tf 50.00 84.89 Td (- `id`) Tj ET
+BT /F1 10 Tf 50.00 67.89 Td (- `title`) Tj ET
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 10 0 R >>
+endobj
+12 0 obj
+<< /Length 2431 >>
+stream
+BT /F1 10 Tf 50.00 787.89 Td (- `artist`) Tj ET
+BT /F1 10 Tf 50.00 770.89 Td (- `difficulty`) Tj ET
+BT /F1 10 Tf 50.00 753.89 Td (- `bpm`) Tj ET
+BT /F1 10 Tf 50.00 736.89 Td (- `durationSec`) Tj ET
+BT /F1 10 Tf 50.00 719.89 Td (- `chordEvents`) Tj ET
+BT /F1 10 Tf 50.00 702.89 Td (- `tabNotes`) Tj ET
+BT /F1 10 Tf 50.00 685.89 Td (- `markers`) Tj ET
+BT /F1 10 Tf 50.00 668.89 Td (- `instrument`) Tj ET
+BT /F1 10 Tf 50.00 651.89 Td (- `tuning`) Tj ET
+BT /F1 10 Tf 50.00 634.89 Td (- `aiDraft`) Tj ET
+BT /F1 10 Tf 50.00 617.89 Td (- `confidence`) Tj ET
+BT /F1 10 Tf 50.00 600.89 Td (- `warnings`) Tj ET
+BT /F1 10 Tf 50.00 583.89 Td (- `isDemo`) Tj ET
+BT /F1 10 Tf 50.00 566.89 Td (- `isVerified`) Tj ET
+BT /F1 10 Tf 50.00 549.89 Td (- `isFavorite`) Tj ET
+BT /F1 10 Tf 50.00 525.89 Td (Chord events use timing and lane metadata:) Tj ET
+BT /F3 8 Tf 50.00 494.89 Td ({) Tj ET
+BT /F3 8 Tf 50.00 481.89 Td (  "timeSec": 0,) Tj ET
+BT /F3 8 Tf 50.00 468.89 Td (  "chord": "Em",) Tj ET
+BT /F3 8 Tf 50.00 455.89 Td (  "laneRow": 2) Tj ET
+BT /F3 8 Tf 50.00 442.89 Td (}) Tj ET
+BT /F1 10 Tf 50.00 418.89 Td (Tab notes use timing, string, fret, and optional duration:) Tj ET
+BT /F3 8 Tf 50.00 387.89 Td ({) Tj ET
+BT /F3 8 Tf 50.00 374.89 Td (  "timeSec": 0.5,) Tj ET
+BT /F3 8 Tf 50.00 361.89 Td (  "stringIndex": 0,) Tj ET
+BT /F3 8 Tf 50.00 348.89 Td (  "fret": 2,) Tj ET
+BT /F3 8 Tf 50.00 335.89 Td (  "durationSec": 0.35) Tj ET
+BT /F3 8 Tf 50.00 322.89 Td (}) Tj ET
+BT /F1 10 Tf 50.00 298.89 Td (Tuning metadata is preserved with generated and saved songs:) Tj ET
+BT /F3 8 Tf 50.00 267.89 Td ({) Tj ET
+BT /F3 8 Tf 50.00 254.89 Td (  "instrument": "guitar",) Tj ET
+BT /F3 8 Tf 50.00 241.89 Td (  "tuning": {) Tj ET
+BT /F3 8 Tf 50.00 228.89 Td (    "id": "guitar_drop_c_sharp",) Tj ET
+BT /F3 8 Tf 50.00 215.89 Td (    "name": "Drop C#",) Tj ET
+BT /F3 8 Tf 50.00 202.89 Td (    "stringNotes": ["C#2", "G#2", "C#3", "F#3", "A#3", "D#4"]) Tj ET
+BT /F3 8 Tf 50.00 189.89 Td (  }) Tj ET
+BT /F3 8 Tf 50.00 176.89 Td (}) Tj ET
+BT /F1 10 Tf 50.00 152.89 Td (The frontend manifest validator treats imported JSON as unknown input until it passes validation.) Tj ET
+BT /F1 10 Tf 50.00 136.89 Td (It rejects malformed top-level shapes, invalid timing, invalid chord lane rows, invalid tab) Tj ET
+BT /F1 10 Tf 50.00 120.89 Td (string indexes, invalid frets, and manifests with no playable content.) Tj ET
+BT /F2 15 Tf 50.00 85.89 Td (9. Core Features) Tj ET
+endstream
+endobj
+13 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 12 0 R >>
+endobj
+14 0 obj
+<< /Length 2816 >>
+stream
+BT /F2 12 Tf 50.00 787.89 Td (9.1 Tuner) Tj ET
+BT /F1 10 Tf 50.00 759.89 Td (TuneUp includes a real-time tuner with Guitar and Bass modes. It uses a shared tuner detector) Tj ET
+BT /F1 10 Tf 50.00 743.89 Td (abstraction around `react-native-pitchy`, microphone permission handling, Expo AV audio-mode) Tj ET
+BT /F1 10 Tf 50.00 727.89 Td (setup, and a clear Start/Stop lifecycle.) Tj ET
+BT /F1 10 Tf 50.00 700.89 Td (Implemented tuner behavior includes:) Tj ET
+BT /F1 10 Tf 50.00 673.89 Td (- Guitar and Bass internal modes.) Tj ET
+BT /F1 10 Tf 50.00 656.89 Td (- Guided and Manual guitar tuning.) Tj ET
+BT /F1 10 Tf 50.00 639.89 Td (- Standard guitar string targets: E2, A2, D3, G3, B3, E4.) Tj ET
+BT /F1 10 Tf 50.00 622.89 Td (- Standard bass string targets: E1, A1, D2, G2.) Tj ET
+BT /F1 10 Tf 50.00 605.89 Td (- Visible Start Listening, Stop Listening, and Try Again controls.) Tj ET
+BT /F1 10 Tf 50.00 588.89 Td (- Native module unavailable fallback for Expo Go.) Tj ET
+BT /F1 10 Tf 50.00 571.89 Td (- iOS Simulator startup failure fallback.) Tj ET
+BT /F1 10 Tf 50.00 554.89 Td (- Microphone denied/blocked/unavailable states.) Tj ET
+BT /F1 10 Tf 50.00 537.89 Td (- Duplicate-start prevention and cleanup on unmount.) Tj ET
+BT /F1 10 Tf 50.00 520.89 Td (- Frequency smoothing and no-signal handling.) Tj ET
+BT /F1 10 Tf 50.00 496.89 Td (The tuner uses cents for pitch comparison:) Tj ET
+BT /F3 8 Tf 50.00 465.89 Td (cents = 1200 * log2\(detectedFrequency / targetFrequency\)) Tj ET
+BT /F2 12 Tf 50.00 436.89 Td (9.2 Songs Library) Tj ET
+BT /F1 10 Tf 50.00 408.89 Td (The Songs tab has been developed into a polished practice-library flow. It now has internal) Tj ET
+BT /F1 10 Tf 50.00 392.89 Td (Upload and Library sections.) Tj ET
+BT /F1 10 Tf 50.00 365.89 Td (Upload section:) Tj ET
+BT /F1 10 Tf 50.00 338.89 Td (- Upload Song.) Tj ET
+BT /F1 10 Tf 50.00 321.89 Td (- Import Manifest.) Tj ET
+BT /F1 10 Tf 50.00 304.89 Td (- Demo Song.) Tj ET
+BT /F1 10 Tf 50.00 287.89 Td (- Instrument and tuning selection.) Tj ET
+BT /F1 10 Tf 50.00 270.89 Td (- AI Draft review.) Tj ET
+BT /F1 10 Tf 50.00 253.89 Td (- Save to Library.) Tj ET
+BT /F1 10 Tf 50.00 236.89 Td (- Practice Now.) Tj ET
+BT /F1 10 Tf 50.00 219.89 Td (- Retry, discard, and re-analysis handling where supported.) Tj ET
+BT /F1 10 Tf 50.00 195.89 Td (Library section:) Tj ET
+BT /F1 10 Tf 50.00 168.89 Td (- Search.) Tj ET
+BT /F1 10 Tf 50.00 151.89 Td (- Clear search.) Tj ET
+BT /F1 10 Tf 50.00 134.89 Td (- Filters including Favorites.) Tj ET
+BT /F1 10 Tf 50.00 117.89 Td (- Sort modes: Recently Added, Title A-Z, BPM, AI Draft First, Verified First.) Tj ET
+BT /F1 10 Tf 50.00 100.89 Td (- Song count and filtered count.) Tj ET
+BT /F1 10 Tf 50.00 83.89 Td (- Compact grid/tile song cards.) Tj ET
+BT /F1 10 Tf 50.00 66.89 Td (- Tap card to practise.) Tj ET
+endstream
+endobj
+15 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 14 0 R >>
+endobj
+16 0 obj
+<< /Length 3136 >>
+stream
+BT /F1 10 Tf 50.00 787.89 Td (- Long press or overflow actions for Favorite, Edit, and Delete.) Tj ET
+BT /F1 10 Tf 50.00 770.89 Td (- BPM display.) Tj ET
+BT /F1 10 Tf 50.00 753.89 Td (- Tuning badges.) Tj ET
+BT /F1 10 Tf 50.00 736.89 Td (- AI Draft, Verified, Demo, Imported, and Favorite badges.) Tj ET
+BT /F1 10 Tf 50.00 719.89 Td (- Local duplicate-save prevention.) Tj ET
+BT /F1 10 Tf 50.00 695.89 Td (Saved songs are stored locally through `MusicAIApp/src/services/songLibrary.ts`. The built-in) Tj ET
+BT /F1 10 Tf 50.00 679.89 Td (Demo Song remains available offline and does not require backend, Supabase, or upload.) Tj ET
+BT /F2 12 Tf 50.00 647.89 Td (9.3 AI Song Analysis) Tj ET
+BT /F1 10 Tf 50.00 619.89 Td (The AI analysis flow allows a user to upload audio and receive a generated practice chart. The) Tj ET
+BT /F1 10 Tf 50.00 603.89 Td (pipeline is asynchronous and reviewed before saving.) Tj ET
+BT /F1 10 Tf 50.00 576.89 Td (Implemented behavior includes:) Tj ET
+BT /F1 10 Tf 50.00 549.89 Td (- File upload to `POST /analyze-audio`.) Tj ET
+BT /F1 10 Tf 50.00 532.89 Td (- Optional user ID.) Tj ET
+BT /F1 10 Tf 50.00 515.89 Td (- Instrument selection: guitar or bass.) Tj ET
+BT /F1 10 Tf 50.00 498.89 Td (- Tuning presets for standard, drop, half-step-down, and custom/unknown cases.) Tj ET
+BT /F1 10 Tf 50.00 481.89 Td (- Backend job creation.) Tj ET
+BT /F1 10 Tf 50.00 464.89 Td (- Frontend polling through `GET /task-status/{task_id}`.) Tj ET
+BT /F1 10 Tf 50.00 447.89 Td (- Terminal failed/timed-out states.) Tj ET
+BT /F1 10 Tf 50.00 430.89 Td (- AI Draft confidence and warnings.) Tj ET
+BT /F1 10 Tf 50.00 413.89 Td (- Tuning-aware tab mapping.) Tj ET
+BT /F1 10 Tf 50.00 396.89 Td (- Position-aware fret mapping that reduces open-string/low-fret bias.) Tj ET
+BT /F1 10 Tf 50.00 379.89 Td (- Original filename preserved separately from safe storage object key.) Tj ET
+BT /F1 10 Tf 50.00 362.89 Td (- Safe display-name cleanup for URL-encoded filenames.) Tj ET
+BT /F1 10 Tf 50.00 338.89 Td (TuneUp intentionally does not claim generated tabs are official or verified. This is important) Tj ET
+BT /F1 10 Tf 50.00 322.89 Td (because automatic transcription is difficult with distorted audio, dense mixes, non-standard) Tj ET
+BT /F1 10 Tf 50.00 306.89 Td (tunings, and complex arrangements.) Tj ET
+BT /F2 12 Tf 50.00 274.89 Td (9.4 Song Flow Practice Mode) Tj ET
+BT /F1 10 Tf 50.00 246.89 Td (Song Flow is the app's playable practice mode. It supports:) Tj ET
+BT /F1 10 Tf 50.00 219.89 Td (- Chords mode.) Tj ET
+BT /F1 10 Tf 50.00 202.89 Td (- Tabs mode.) Tj ET
+BT /F1 10 Tf 50.00 185.89 Td (- Guide mode.) Tj ET
+BT /F1 10 Tf 50.00 168.89 Td (- Tuning-aware string labels.) Tj ET
+BT /F1 10 Tf 50.00 151.89 Td (- Backing tracks.) Tj ET
+BT /F1 10 Tf 50.00 134.89 Td (- Chord and tab event rendering.) Tj ET
+BT /F1 10 Tf 50.00 117.89 Td (- Timing-based practice flow.) Tj ET
+BT /F1 10 Tf 50.00 100.89 Td (- Live microphone scoring support.) Tj ET
+BT /F1 10 Tf 50.00 83.89 Td (- Launching from saved library items, AI Draft review, imported manifests, and the built-in demo) Tj ET
+BT /F1 10 Tf 50.00 67.89 Td (  song.) Tj ET
+endstream
+endobj
+17 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 16 0 R >>
+endobj
+18 0 obj
+<< /Length 3296 >>
+stream
+BT /F1 10 Tf 50.00 787.89 Td (For non-standard tunings, Song Flow uses manifest tuning metadata instead of always displaying) Tj ET
+BT /F1 10 Tf 50.00 771.89 Td (standard E A D G B e labels. For example, a Drop C# guitar manifest displays the high-to-low) Tj ET
+BT /F1 10 Tf 50.00 755.89 Td (labels D#, A#, F#, C#, G#, C#.) Tj ET
+BT /F2 12 Tf 50.00 723.89 Td (9.5 Lessons / Theory) Tj ET
+BT /F1 10 Tf 50.00 695.89 Td (The Lessons/Theory experience now follows a premium three-step flow:) Tj ET
+BT /F3 8 Tf 50.00 664.89 Td (Instrument selection -> Lessons -> Lesson content) Tj ET
+BT /F1 10 Tf 50.00 640.89 Td (Implemented behavior includes:) Tj ET
+BT /F1 10 Tf 50.00 613.89 Td (- Animated instrument/path carousel.) Tj ET
+BT /F1 10 Tf 50.00 596.89 Td (- Guitar, Bass, Piano, Drums, and Theory paths.) Tj ET
+BT /F1 10 Tf 50.00 579.89 Td (- Lesson list grouped into Beginner, Intermediate, and Advanced.) Tj ET
+BT /F1 10 Tf 50.00 562.89 Td (- Polished lesson cards with XP, duration, difficulty, status, and tags.) Tj ET
+BT /F1 10 Tf 50.00 545.89 Td (- Lesson detail pages with hero content, objectives, media area, guided steps, quiz/checkpoint) Tj ET
+BT /F1 10 Tf 50.00 529.89 Td (  area, and completion CTA.) Tj ET
+BT /F1 10 Tf 50.00 512.89 Td (- Existing progress and XP behavior preserved.) Tj ET
+BT /F1 10 Tf 50.00 495.89 Td (- Empty-state handling for paths with no catalog rows.) Tj ET
+BT /F1 10 Tf 50.00 471.89 Td (The current bundled lesson data includes guitar, piano, and drum lesson packs. Bass is) Tj ET
+BT /F1 10 Tf 50.00 455.89 Td (represented as a path with a safe empty state until bass content is added.) Tj ET
+BT /F2 12 Tf 50.00 423.89 Td (9.6 Profile / Progress) Tj ET
+BT /F1 10 Tf 50.00 395.89 Td (The Profile screen summarizes user identity, progress, settings, completed lessons, songs,) Tj ET
+BT /F1 10 Tf 50.00 379.89 Td (badges, streaks, XP, and leaderboard-related data. Progress is handled through local persistence) Tj ET
+BT /F1 10 Tf 50.00 363.89 Td (and optional Supabase-backed sync. Settings include controls for theory display, songs behavior,) Tj ET
+BT /F1 10 Tf 50.00 347.89 Td (pitch assist preferences, profile shelves, and app-level practice settings.) Tj ET
+BT /F2 12 Tf 50.00 315.89 Td (9.7 Demo and Viva Reliability Features) Tj ET
+BT /F1 10 Tf 50.00 287.89 Td (The project includes several features specifically designed to make live assessment safer:) Tj ET
+BT /F1 10 Tf 50.00 260.89 Td (- Built-in verified Demo Song.) Tj ET
+BT /F1 10 Tf 50.00 243.89 Td (- Offline demo chart with original synthetic content.) Tj ET
+BT /F1 10 Tf 50.00 226.89 Td (- Backend `/health` and `/ready` endpoints.) Tj ET
+BT /F1 10 Tf 50.00 209.89 Td (- In-app backend diagnostics utility.) Tj ET
+BT /F1 10 Tf 50.00 192.89 Td (- Viva demo checklist in `docs/viva-demo-checklist.md`.) Tj ET
+BT /F1 10 Tf 50.00 175.89 Td (- Demo startup scripts under `scripts/`.) Tj ET
+BT /F1 10 Tf 50.00 158.89 Td (- Clear development-build guidance for native tuner support.) Tj ET
+BT /F1 10 Tf 50.00 141.89 Td (- Safe fallback messaging for backend, microphone, and native-module failures.) Tj ET
+BT /F2 15 Tf 50.00 109.89 Td (10. Songs Tab Deep Dive) Tj ET
+BT /F1 10 Tf 50.00 76.89 Td (The Songs tab is one of the strongest parts of the application because it links upload, analysis,) Tj ET
+endstream
+endobj
+19 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 18 0 R >>
+endobj
+20 0 obj
+<< /Length 2952 >>
+stream
+BT /F1 10 Tf 50.00 787.89 Td (review, local persistence, and practice.) Tj ET
+BT /F1 10 Tf 50.00 760.89 Td (The upload flow is:) Tj ET
+BT /F3 8 Tf 50.00 729.89 Td (Songs tab) Tj ET
+BT /F3 8 Tf 50.00 716.89 Td (  -> Upload) Tj ET
+BT /F3 8 Tf 50.00 703.89 Td (  -> Choose audio file) Tj ET
+BT /F3 8 Tf 50.00 690.89 Td (  -> Choose instrument and tuning) Tj ET
+BT /F3 8 Tf 50.00 677.89 Td (  -> Start AI analysis) Tj ET
+BT /F3 8 Tf 50.00 664.89 Td (  -> Poll backend job status) Tj ET
+BT /F3 8 Tf 50.00 651.89 Td (  -> Review AI Draft) Tj ET
+BT /F3 8 Tf 50.00 638.89 Td (  -> Save to Library or Practice Now) Tj ET
+BT /F1 10 Tf 50.00 614.89 Td (The library flow is:) Tj ET
+BT /F3 8 Tf 50.00 583.89 Td (Songs tab) Tj ET
+BT /F3 8 Tf 50.00 570.89 Td (  -> Library) Tj ET
+BT /F3 8 Tf 50.00 557.89 Td (  -> Search/filter/sort/favorite) Tj ET
+BT /F3 8 Tf 50.00 544.89 Td (  -> Tap song card) Tj ET
+BT /F3 8 Tf 50.00 531.89 Td (  -> Open Song Flow) Tj ET
+BT /F1 10 Tf 50.00 507.89 Td (The AI Draft review step is a deliberate safety decision. TuneUp treats generated tabs as AI) Tj ET
+BT /F1 10 Tf 50.00 491.89 Td (Drafts. This is intentional because automatic guitar transcription is difficult, especially with) Tj ET
+BT /F1 10 Tf 50.00 475.89 Td (distorted audio, non-standard tunings, and complex arrangements. The app therefore includes) Tj ET
+BT /F1 10 Tf 50.00 459.89 Td (review, confidence, warnings, and manual library management instead of pretending that generated) Tj ET
+BT /F1 10 Tf 50.00 443.89 Td (tabs are perfect.) Tj ET
+BT /F1 10 Tf 50.00 416.89 Td (The Songs tab also supports manual JSON import. Imported manifests are validated before being) Tj ET
+BT /F1 10 Tf 50.00 400.89 Td (saved or opened, so malformed JSON cannot corrupt the library or crash Song Flow.) Tj ET
+BT /F1 10 Tf 50.00 373.89 Td (Saved songs can be edited, renamed, favorited, sorted, searched, and deleted. BPM is displayed) Tj ET
+BT /F1 10 Tf 50.00 357.89 Td (where available, and the app avoids duplicate local saves when it can identify an equivalent) Tj ET
+BT /F1 10 Tf 50.00 341.89 Td (song.) Tj ET
+BT /F2 15 Tf 50.00 306.89 Td (11. Tuner Deep Dive) Tj ET
+BT /F1 10 Tf 50.00 273.89 Td (The tuner is built around a small detector abstraction in) Tj ET
+BT /F1 10 Tf 50.00 257.89 Td (`MusicAIApp/src/services/tunerDetector.ts`. The UI uses the `useTuner` hook rather than directly) Tj ET
+BT /F1 10 Tf 50.00 241.89 Td (coupling the screen to the native module.) Tj ET
+BT /F1 10 Tf 50.00 214.89 Td (Key lifecycle states include:) Tj ET
+BT /F1 10 Tf 50.00 187.89 Td (- `idle`) Tj ET
+BT /F1 10 Tf 50.00 170.89 Td (- `checking_permission`) Tj ET
+BT /F1 10 Tf 50.00 153.89 Td (- `starting`) Tj ET
+BT /F1 10 Tf 50.00 136.89 Td (- `listening`) Tj ET
+BT /F1 10 Tf 50.00 119.89 Td (- `no_signal`) Tj ET
+BT /F1 10 Tf 50.00 102.89 Td (- `error`) Tj ET
+BT /F1 10 Tf 50.00 78.89 Td (The native detector uses `react-native-pitchy`, so it cannot run inside Expo Go. TuneUp handles) Tj ET
+endstream
+endobj
+21 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 20 0 R >>
+endobj
+22 0 obj
+<< /Length 3407 >>
+stream
+BT /F1 10 Tf 50.00 787.89 Td (this by showing a friendly message that a development or production native build is required.) Tj ET
+BT /F1 10 Tf 50.00 760.89 Td (Microphone permission is checked before detector startup. If access is denied or blocked, the app) Tj ET
+BT /F1 10 Tf 50.00 744.89 Td (shows a user-facing fallback rather than crashing or silently failing. Startup errors are caught,) Tj ET
+BT /F1 10 Tf 50.00 728.89 Td (partial listeners are cleaned up, and Stop Listening returns the tuner to idle.) Tj ET
+BT /F1 10 Tf 50.00 701.89 Td (Bass support was chosen over Drum Tuner because bass notes are sustained and better suited to) Tj ET
+BT /F1 10 Tf 50.00 685.89 Td (pitch detection. Drum hits are short, noisy, and overtone-heavy, which makes them less reliable) Tj ET
+BT /F1 10 Tf 50.00 669.89 Td (for this architecture without a specialised drum-tuning model.) Tj ET
+BT /F2 15 Tf 50.00 634.89 Td (12. AI Analysis Pipeline) Tj ET
+BT /F1 10 Tf 50.00 601.89 Td (The AI song-analysis pipeline is:) Tj ET
+BT /F3 8 Tf 50.00 570.89 Td (User selects audio) Tj ET
+BT /F3 8 Tf 50.00 557.89 Td (  -> Frontend uploads file to backend) Tj ET
+BT /F3 8 Tf 50.00 544.89 Td (  -> Backend validates upload) Tj ET
+BT /F3 8 Tf 50.00 531.89 Td (  -> Backend stores audio in Supabase Storage) Tj ET
+BT /F3 8 Tf 50.00 518.89 Td (  -> Backend creates analysis job row) Tj ET
+BT /F3 8 Tf 50.00 505.89 Td (  -> Worker builds BPM/chords/tabs/manifest) Tj ET
+BT /F3 8 Tf 50.00 492.89 Td (  -> Frontend polls task status) Tj ET
+BT /F3 8 Tf 50.00 479.89 Td (  -> Backend returns generated manifest) Tj ET
+BT /F3 8 Tf 50.00 466.89 Td (  -> Frontend validates result) Tj ET
+BT /F3 8 Tf 50.00 453.89 Td (  -> User reviews AI Draft) Tj ET
+BT /F3 8 Tf 50.00 440.89 Td (  -> User saves or practises) Tj ET
+BT /F1 10 Tf 50.00 416.89 Td (Important implementation improvements include:) Tj ET
+BT /F1 10 Tf 50.00 389.89 Td (- Supabase Storage keys use safe UUID-based paths:) Tj ET
+BT /F3 8 Tf 50.00 361.89 Td (analysis/YYYY/MM/DD/<uuid>.<safe_extension>) Tj ET
+BT /F1 10 Tf 50.00 337.89 Td (- Original filenames are preserved separately for display and metadata.) Tj ET
+BT /F1 10 Tf 50.00 320.89 Td (- Unsafe filename characters are not used in storage object keys.) Tj ET
+BT /F1 10 Tf 50.00 303.89 Td (- URL-encoded filenames are decoded and cleaned for user-facing display.) Tj ET
+BT /F1 10 Tf 50.00 286.89 Td (- Selected tuning metadata is sent to the backend.) Tj ET
+BT /F1 10 Tf 50.00 269.89 Td (- Tab mapping uses selected tuning string notes.) Tj ET
+BT /F1 10 Tf 50.00 252.89 Td (- Position-aware fret mapping prefers coherent, playable regions rather than always choosing the) Tj ET
+BT /F1 10 Tf 50.00 236.89 Td (  lowest fret.) Tj ET
+BT /F1 10 Tf 50.00 219.89 Td (- Confidence and warnings are returned with generated results.) Tj ET
+BT /F1 10 Tf 50.00 202.89 Td (- Unknown/custom tuning lowers tab confidence and warns the user.) Tj ET
+BT /F1 10 Tf 50.00 178.89 Td (The current AI analysis is a draft-generation system. It is not equivalent to official Songsterr,) Tj ET
+BT /F1 10 Tf 50.00 162.89 Td (Ultimate Guitar, or professionally authored tabs. Future work should add manual correction tools) Tj ET
+BT /F1 10 Tf 50.00 146.89 Td (and stronger transcription models.) Tj ET
+BT /F2 15 Tf 50.00 111.89 Td (13. Validation and Error Handling) Tj ET
+BT /F1 10 Tf 50.00 78.89 Td (Validation exists at several layers.) Tj ET
+endstream
+endobj
+23 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 22 0 R >>
+endobj
+24 0 obj
+<< /Length 3339 >>
+stream
+BT /F1 10 Tf 50.00 787.89 Td (Frontend validation:) Tj ET
+BT /F1 10 Tf 50.00 760.89 Td (- Manifest JSON is parsed safely.) Tj ET
+BT /F1 10 Tf 50.00 743.89 Td (- Top-level manifests must be objects.) Tj ET
+BT /F1 10 Tf 50.00 726.89 Td (- `chordEvents` and `tabNotes` must have valid shapes.) Tj ET
+BT /F1 10 Tf 50.00 709.89 Td (- At least one playable content array is required.) Tj ET
+BT /F1 10 Tf 50.00 692.89 Td (- Timing values must be finite and non-negative.) Tj ET
+BT /F1 10 Tf 50.00 675.89 Td (- `laneRow`, `stringIndex`, and `fret` values are validated.) Tj ET
+BT /F1 10 Tf 50.00 658.89 Td (- Tuning metadata is accepted and checked.) Tj ET
+BT /F1 10 Tf 50.00 641.89 Td (- Invalid imports are rejected before save/navigation.) Tj ET
+BT /F1 10 Tf 50.00 617.89 Td (Backend validation:) Tj ET
+BT /F1 10 Tf 50.00 590.89 Td (- Required environment variables are checked at startup.) Tj ET
+BT /F1 10 Tf 50.00 573.89 Td (- Supabase URL format is validated.) Tj ET
+BT /F1 10 Tf 50.00 556.89 Td (- CORS origins are parsed, trimmed, and validated.) Tj ET
+BT /F1 10 Tf 50.00 539.89 Td (- Wildcard CORS is rejected in production.) Tj ET
+BT /F1 10 Tf 50.00 522.89 Td (- Storage bucket/prefix values reject surrounding quotes and accidental spaces.) Tj ET
+BT /F1 10 Tf 50.00 505.89 Td (- Upload file types/extensions are checked.) Tj ET
+BT /F1 10 Tf 50.00 488.89 Td (- Tuning metadata is validated for instrument and string count.) Tj ET
+BT /F1 10 Tf 50.00 471.89 Td (- Analysis jobs return terminal failed/timed-out states instead of polling forever.) Tj ET
+BT /F1 10 Tf 50.00 447.89 Td (Error handling:) Tj ET
+BT /F1 10 Tf 50.00 420.89 Td (- Backend API errors use structured safe envelopes.) Tj ET
+BT /F1 10 Tf 50.00 403.89 Td (- Stack traces and secrets are not returned to the frontend.) Tj ET
+BT /F1 10 Tf 50.00 386.89 Td (- Storage upload errors return a safe structured response.) Tj ET
+BT /F1 10 Tf 50.00 369.89 Td (- Frontend polling has timeout and network retry limits.) Tj ET
+BT /F1 10 Tf 50.00 352.89 Td (- Microphone and native-module errors show user-readable fallback states.) Tj ET
+BT /F2 15 Tf 50.00 320.89 Td (14. Security Considerations) Tj ET
+BT /F1 10 Tf 50.00 287.89 Td (Security work implemented in the repository includes:) Tj ET
+BT /F1 10 Tf 50.00 260.89 Td (- Real `.env` files are ignored by Git.) Tj ET
+BT /F1 10 Tf 50.00 243.89 Td (- `.env.example` files document required variables with placeholders only.) Tj ET
+BT /F1 10 Tf 50.00 226.89 Td (- Backend `SUPABASE_KEY` remains server-side.) Tj ET
+BT /F1 10 Tf 50.00 209.89 Td (- Frontend uses `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.) Tj ET
+BT /F1 10 Tf 50.00 192.89 Td (- Backend CORS uses `CORS_ALLOW_ORIGINS`.) Tj ET
+BT /F1 10 Tf 50.00 175.89 Td (- Production wildcard CORS is rejected.) Tj ET
+BT /F1 10 Tf 50.00 158.89 Td (- Secrets are not printed in health endpoints.) Tj ET
+BT /F1 10 Tf 50.00 141.89 Td (- Health and readiness endpoints do not expose Supabase keys.) Tj ET
+BT /F1 10 Tf 50.00 124.89 Td (- Storage object keys do not include raw user filenames.) Tj ET
+BT /F1 10 Tf 50.00 107.89 Td (- Uploaded audio paths use safe UUID names.) Tj ET
+BT /F1 10 Tf 50.00 90.89 Td (- Service keys, Apple credentials, provisioning profiles, and private tokens are excluded from) Tj ET
+BT /F1 10 Tf 50.00 74.89 Td (  committed files.) Tj ET
+endstream
+endobj
+25 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 24 0 R >>
+endobj
+26 0 obj
+<< /Length 2620 >>
+stream
+BT /F1 10 Tf 50.00 787.89 Td (The report deliberately does not include real keys, local machine paths, private tokens, Apple) Tj ET
+BT /F1 10 Tf 50.00 771.89 Td (credentials, or real production URLs.) Tj ET
+BT /F2 15 Tf 50.00 736.89 Td (15. Testing Strategy) Tj ET
+BT /F1 10 Tf 50.00 703.89 Td (The repository contains both frontend and backend tests.) Tj ET
+BT /F1 10 Tf 50.00 676.89 Td (Frontend checks include:) Tj ET
+BT /F1 10 Tf 50.00 649.89 Td (- TypeScript compilation with `npx tsc --noEmit`.) Tj ET
+BT /F1 10 Tf 50.00 632.89 Td (- Jest tests with `npx jest --runInBand`.) Tj ET
+BT /F1 10 Tf 50.00 615.89 Td (- App bootstrap tests.) Tj ET
+BT /F1 10 Tf 50.00 598.89 Td (- Tuner screen and tuner utility tests.) Tj ET
+BT /F1 10 Tf 50.00 581.89 Td (- Microphone permission tests.) Tj ET
+BT /F1 10 Tf 50.00 564.89 Td (- Song screen tests.) Tj ET
+BT /F1 10 Tf 50.00 547.89 Td (- Song library persistence tests.) Tj ET
+BT /F1 10 Tf 50.00 530.89 Td (- Manifest validation tests.) Tj ET
+BT /F1 10 Tf 50.00 513.89 Td (- Song display-name cleanup tests.) Tj ET
+BT /F1 10 Tf 50.00 496.89 Td (- Song Flow string-label tests.) Tj ET
+BT /F1 10 Tf 50.00 479.89 Td (- API diagnostics tests.) Tj ET
+BT /F1 10 Tf 50.00 462.89 Td (- Lessons/Theory screen tests.) Tj ET
+BT /F1 10 Tf 50.00 438.89 Td (Backend checks include:) Tj ET
+BT /F1 10 Tf 50.00 411.89 Td (- Pytest API tests.) Tj ET
+BT /F1 10 Tf 50.00 394.89 Td (- Backend config validation tests.) Tj ET
+BT /F1 10 Tf 50.00 377.89 Td (- Health/readiness tests.) Tj ET
+BT /F1 10 Tf 50.00 360.89 Td (- Task status and async job lifecycle tests.) Tj ET
+BT /F1 10 Tf 50.00 343.89 Td (- Storage key safety tests.) Tj ET
+BT /F1 10 Tf 50.00 326.89 Td (- Tuning metadata and tab mapping tests.) Tj ET
+BT /F1 10 Tf 50.00 309.89 Td (- Audio accuracy baseline tests using synthetic fixtures.) Tj ET
+BT /F1 10 Tf 50.00 292.89 Td (- Manifest shape tests.) Tj ET
+BT /F1 10 Tf 50.00 268.89 Td (Example frontend commands:) Tj ET
+BT /F3 8 Tf 50.00 237.89 Td (cd MusicAIApp) Tj ET
+BT /F3 8 Tf 50.00 224.89 Td (npx tsc --noEmit) Tj ET
+BT /F3 8 Tf 50.00 211.89 Td (npx jest --runInBand) Tj ET
+BT /F1 10 Tf 50.00 187.89 Td (Example backend command:) Tj ET
+BT /F3 8 Tf 50.00 156.89 Td (cd backend) Tj ET
+BT /F3 8 Tf 50.00 143.89 Td (python -m pytest) Tj ET
+BT /F1 10 Tf 50.00 119.89 Td (The audio accuracy tests are regression checks, not proof of perfect transcription. They use) Tj ET
+BT /F1 10 Tf 50.00 103.89 Td (synthetic/generated signals and tolerance-based assertions to catch obvious regressions in BPM,) Tj ET
+BT /F1 10 Tf 50.00 87.89 Td (pitch, chord, marker, and manifest output.) Tj ET
+endstream
+endobj
+27 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 26 0 R >>
+endobj
+28 0 obj
+<< /Length 2912 >>
+stream
+BT /F2 15 Tf 50.00 787.89 Td (16. Viva Demo Workflow) Tj ET
+BT /F1 10 Tf 50.00 754.89 Td (The viva/demo workflow is documented in `docs/viva-demo-checklist.md`.) Tj ET
+BT /F1 10 Tf 50.00 727.89 Td (The expected local demo setup is:) Tj ET
+BT /F3 8 Tf 50.00 696.89 Td (# Terminal 1) Tj ET
+BT /F3 8 Tf 50.00 683.89 Td (cd backend) Tj ET
+BT /F3 8 Tf 50.00 670.89 Td (source .venv/bin/activate) Tj ET
+BT /F3 8 Tf 50.00 657.89 Td (python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000) Tj ET
+BT /F3 8 Tf 50.00 629.89 Td (# Terminal 2) Tj ET
+BT /F3 8 Tf 50.00 616.89 Td (cd MusicAIApp) Tj ET
+BT /F3 8 Tf 50.00 603.89 Td (npx expo start --dev-client -c --host lan) Tj ET
+BT /F1 10 Tf 50.00 579.89 Td (Backend verification:) Tj ET
+BT /F3 8 Tf 50.00 548.89 Td (curl http://localhost:8000/health) Tj ET
+BT /F1 10 Tf 50.00 524.89 Td (The app is intended to be demonstrated using a local backend, local Expo Metro server, and a) Tj ET
+BT /F1 10 Tf 50.00 508.89 Td (development build on iPhone or iOS Simulator. It is not dependent on TestFlight or App Store) Tj ET
+BT /F1 10 Tf 50.00 492.89 Td (distribution for the viva.) Tj ET
+BT /F1 10 Tf 50.00 465.89 Td (The verified Demo Song provides an offline fallback if backend upload or AI analysis is) Tj ET
+BT /F1 10 Tf 50.00 449.89 Td (unavailable during the assessment. A backup screen recording is still recommended for high-risk) Tj ET
+BT /F1 10 Tf 50.00 433.89 Td (live demonstrations.) Tj ET
+BT /F2 15 Tf 50.00 398.89 Td (17. Known Limitations) Tj ET
+BT /F1 10 Tf 50.00 365.89 Td (Known limitations include:) Tj ET
+BT /F1 10 Tf 50.00 338.89 Td (- AI-generated tabs are drafts, not verified official tabs.) Tj ET
+BT /F1 10 Tf 50.00 321.89 Td (- Automatic transcription accuracy varies with audio quality, distortion, mix density, and) Tj ET
+BT /F1 10 Tf 50.00 305.89 Td (  tuning.) Tj ET
+BT /F1 10 Tf 50.00 288.89 Td (- Heavy rock/metal arrangements remain difficult to transcribe accurately.) Tj ET
+BT /F1 10 Tf 50.00 271.89 Td (- Real-time tuner functionality requires a native development or production build.) Tj ET
+BT /F1 10 Tf 50.00 254.89 Td (- Expo Go cannot load the native tuner module.) Tj ET
+BT /F1 10 Tf 50.00 237.89 Td (- iOS Simulator microphone/audio input can be unreliable.) Tj ET
+BT /F1 10 Tf 50.00 220.89 Td (- Upload-based AI analysis requires the backend to be running.) Tj ET
+BT /F1 10 Tf 50.00 203.89 Td (- Supabase connectivity is required for upload/storage-backed analysis jobs.) Tj ET
+BT /F1 10 Tf 50.00 186.89 Td (- Manual tab editing is not yet implemented.) Tj ET
+BT /F1 10 Tf 50.00 169.89 Td (- External song recognition and legal chord lookup are optional future work.) Tj ET
+BT /F1 10 Tf 50.00 152.89 Td (- Bass lessons currently have a path and empty state, but no bundled bass lesson pack.) Tj ET
+BT /F2 15 Tf 50.00 120.89 Td (18. Future Improvements) Tj ET
+BT /F1 10 Tf 50.00 87.89 Td (Recommended future improvements:) Tj ET
+endstream
+endobj
+29 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 28 0 R >>
+endobj
+30 0 obj
+<< /Length 2433 >>
+stream
+BT /F1 10 Tf 50.00 787.89 Td (- Manual tab editor for correcting AI Drafts.) Tj ET
+BT /F1 10 Tf 50.00 770.89 Td (- Section loop practice and focused rehearsal loops.) Tj ET
+BT /F1 10 Tf 50.00 753.89 Td (- Count-in, pause/resume, and latency calibration improvements.) Tj ET
+BT /F1 10 Tf 50.00 736.89 Td (- More detailed practice history and analytics.) Tj ET
+BT /F1 10 Tf 50.00 719.89 Td (- Cloud sync for saved songs.) Tj ET
+BT /F1 10 Tf 50.00 702.89 Td (- Better AI transcription model or specialised music transcription service.) Tj ET
+BT /F1 10 Tf 50.00 685.89 Td (- Optional legal music recognition metadata integration.) Tj ET
+BT /F1 10 Tf 50.00 668.89 Td (- MIDI, MusicXML, or Guitar Pro import.) Tj ET
+BT /F1 10 Tf 50.00 651.89 Td (- More complete Bass lesson path.) Tj ET
+BT /F1 10 Tf 50.00 634.89 Td (- More interactive quizzes and checkpoint scoring.) Tj ET
+BT /F1 10 Tf 50.00 617.89 Td (- Deployment-ready backend hosting and production monitoring.) Tj ET
+BT /F1 10 Tf 50.00 600.89 Td (- Role-based Supabase policies and full production schema documentation.) Tj ET
+BT /F1 10 Tf 50.00 583.89 Td (- Improved audio diagnostics for device-specific microphone issues.) Tj ET
+BT /F2 15 Tf 50.00 551.89 Td (19. Conclusion) Tj ET
+BT /F1 10 Tf 50.00 518.89 Td (TuneUp is a working full-stack final-year project that brings together mobile UI design, native) Tj ET
+BT /F1 10 Tf 50.00 502.89 Td (audio handling, backend audio analysis, Supabase integration, local persistence, validation,) Tj ET
+BT /F1 10 Tf 50.00 486.89 Td (testing, and demo readiness.) Tj ET
+BT /F2 10 Tf 50.00 459.89 Td (The app demonstrates a coherent practice assistant experience: tune the instrument, learn through) Tj ET
+BT /F2 10 Tf 50.00 443.89 Td (lessons, upload or import songs, review AI-generated draft charts, save them to a library, and) Tj ET
+BT /F2 10 Tf 50.00 427.89 Td (practise in Song Flow. It is not a finished commercial transcription product, but it is a strong) Tj ET
+BT /F2 10 Tf 50.00 411.89 Td (prototype with realistic technical safeguards and honest handling of AI limitations.) Tj ET
+BT /F1 10 Tf 50.00 386.89 Td (The project is dissertation-appropriate because it shows implementation depth across frontend) Tj ET
+BT /F1 10 Tf 50.00 370.89 Td (architecture, backend services, native capability constraints, validation, security, testing, and) Tj ET
+BT /F1 10 Tf 50.00 354.89 Td (user-centered reliability for a live viva.) Tj ET
+endstream
+endobj
+31 0 obj
+<< /Type /Page /Parent 32 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 30 0 R >>
+endobj
+32 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R 9 0 R 11 0 R 13 0 R 15 0 R 17 0 R 19 0 R 21 0 R 23 0 R 25 0 R 27 0 R 29 0 R 31 0 R] /Count 14 >>
+endobj
+33 0 obj
+<< /Type /Catalog /Pages 32 0 R >>
+endobj
+xref
+0 34
+0000000000 65535 f 
+0000000009 00000 n 
+0000000079 00000 n 
+0000000154 00000 n 
+0000000222 00000 n 
+0000003616 00000 n 
+0000003769 00000 n 
+0000006651 00000 n 
+0000006804 00000 n 
+0000010126 00000 n 
+0000010279 00000 n 
+0000013923 00000 n 
+0000014078 00000 n 
+0000016561 00000 n 
+0000016716 00000 n 
+0000019584 00000 n 
+0000019739 00000 n 
+0000022927 00000 n 
+0000023082 00000 n 
+0000026430 00000 n 
+0000026585 00000 n 
+0000029589 00000 n 
+0000029744 00000 n 
+0000033203 00000 n 
+0000033358 00000 n 
+0000036749 00000 n 
+0000036904 00000 n 
+0000039576 00000 n 
+0000039731 00000 n 
+0000042695 00000 n 
+0000042850 00000 n 
+0000045335 00000 n 
+0000045490 00000 n 
+0000045638 00000 n 
+trailer
+<< /Size 34 /Root 33 0 R >>
+startxref
+45689
+%%EOF
